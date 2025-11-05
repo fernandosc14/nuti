@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { Send } from "lucide-react";
+import { Send, Globe } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,6 +19,7 @@ export const AIChat = () => {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const [language, setLanguage] = useState("pt");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -84,6 +86,7 @@ export const AIChat = () => {
           messages: messages.map(m => ({ role: m.role, content: m.content })).concat([
             { role: 'user', content: userMessage.content }
           ]),
+          language,
         }),
       });
 
@@ -173,8 +176,22 @@ export const AIChat = () => {
   return (
     <div className="flex flex-col h-screen max-w-md mx-auto">
       <div className="p-6 border-b border-border bg-background">
-        <h1 className="text-2xl font-bold text-foreground">Chat com IA</h1>
-        <p className="text-sm text-muted-foreground">Peça sugestões e feedback</p>
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-2xl font-bold text-foreground">Chat com IA</h1>
+          <Select value={language} onValueChange={setLanguage}>
+            <SelectTrigger className="w-[130px] h-9 rounded-xl border-border">
+              <Globe className="h-4 w-4 mr-1" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pt">🇵🇹 PT</SelectItem>
+              <SelectItem value="en">🇬🇧 EN</SelectItem>
+              <SelectItem value="es">🇪🇸 ES</SelectItem>
+              <SelectItem value="fr">🇫🇷 FR</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <p className="text-sm text-muted-foreground">Peça sugestões personalizadas</p>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-muted/30">
