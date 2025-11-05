@@ -1,95 +1,208 @@
+import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { User, Target, Activity } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { getUserBadges, type Badge } from "@/services/gamification";
+import { LogOut, Award, Crown } from "lucide-react";
 
 export const Profile = () => {
+  const { user, signOut } = useAuth();
+  const { toast } = useToast();
+  const [name, setName] = useState("");
+  const [weight, setWeight] = useState("");
+  const [height, setHeight] = useState("");
+  const [goal, setGoal] = useState<string>("maintain");
+  const [plan, setPlan] = useState<'free' | 'premium'>('free');
+  const [badges, setBadges] = useState<Badge[]>([]);
+  const [streak, setStreak] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchProfile = async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (data) {
+        setName(data.name);
+        setWeight(data.weight?.toString() || "");
+        setHeight(data.height?.toString() || "");
+        setGoal(data.goal || "maintain");
+        setPlan((data.plan as 'free' | 'premium') || 'free');
+        setStreak(data.streak || 0);
+      }
+
+      const userBadges = await getUserBadges(user.id);
+      setBadges(userBadges);
+    };
+
+    fetchProfile();
+  }, [user]);
+
+  const handleSave = async () => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          name,
+          weight: weight ? parseFloat(weight) : null,
+          height: height ? parseInt(height) : null,
+          goal,
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Perfil atualizado!',
+        description: 'As tuas alterações foram guardadas.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Erro',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+  };
+
   return (
     <div className="p-6 pb-24 space-y-6 max-w-md mx-auto">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground mb-2">Perfil</h1>
-        <p className="text-muted-foreground">Gerir os seus dados e preferências</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Perfil</h1>
+          <p className="text-sm text-muted-foreground">Gere a tua informação</p>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleSignOut}
+          className="rounded-full"
+        >
+          <LogOut className="h-5 w-5" />
+        </Button>
       </div>
 
-      <Card className="p-6 shadow-soft-md border-border space-y-6">
-        <div className="flex items-center gap-3 pb-4 border-b border-border">
-          <div className="w-16 h-16 rounded-full bg-gradient-primary flex items-center justify-center">
-            <User className="h-8 w-8 text-primary-foreground" />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold text-foreground">João Silva</h2>
-            <p className="text-sm text-muted-foreground">Utilizador desde Jan 2025</p>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="age" className="text-foreground">Idade</Label>
-            <Input id="age" type="number" defaultValue="28" className="mt-1.5 h-11 rounded-xl" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="weight" className="text-foreground">Peso (kg)</Label>
-              <Input id="weight" type="number" defaultValue="75" className="mt-1.5 h-11 rounded-xl" />
-            </div>
-            <div>
-              <Label htmlFor="height" className="text-foreground">Altura (cm)</Label>
-              <Input id="height" type="number" defaultValue="178" className="mt-1.5 h-11 rounded-xl" />
+      {plan === 'free' && (
+        <Card className="p-6 bg-gradient-to-r from-primary/10 to-primary/5 border-primary/20 shadow-soft-md rounded-2xl">
+          <div className="flex items-start gap-4">
+            <Crown className="h-8 w-8 text-primary" />
+            <div className="flex-1">
+              <h3 className="font-semibold text-foreground mb-2">NutriMate Premium</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Chat IA ilimitado, relatórios semanais, planos de refeição personalizados e muito mais!
+              </p>
+              <Button size="sm" className="rounded-xl">
+                Subscrever Premium
+              </Button>
             </div>
           </div>
+        </Card>
+      )}
 
-          <div>
-            <Label htmlFor="goal" className="text-foreground">Objetivo</Label>
-            <Select defaultValue="maintain">
-              <SelectTrigger id="goal" className="mt-1.5 h-11 rounded-xl">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="lose">Perder peso</SelectItem>
-                <SelectItem value="maintain">Manter peso</SelectItem>
-                <SelectItem value="gain">Ganhar peso</SelectItem>
-              </SelectContent>
-            </Select>
+      {streak > 0 && (
+        <Card className="p-4 border-border shadow-soft-sm rounded-2xl">
+          <div className="flex items-center gap-3">
+            <span className="text-4xl">🔥</span>
+            <div>
+              <p className="font-semibold text-foreground text-lg">{streak} dias</p>
+              <p className="text-sm text-muted-foreground">Streak atual</p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {badges.length > 0 && (
+        <Card className="p-6 border-border shadow-soft-sm rounded-2xl">
+          <div className="flex items-center gap-2 mb-4">
+            <Award className="h-5 w-5 text-primary" />
+            <h3 className="font-semibold text-foreground">As Minhas Badges</h3>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {badges.map((badge) => (
+              <div
+                key={badge.id}
+                className="flex flex-col items-center gap-2 p-3 bg-muted rounded-xl"
+              >
+                <span className="text-3xl">{badge.icon}</span>
+                <span className="text-xs text-center text-muted-foreground">
+                  {badge.name}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <Card className="p-6 border-border shadow-soft-sm rounded-2xl space-y-4">
+        <h3 className="font-semibold text-foreground">Informação Pessoal</h3>
+        
+        <div className="space-y-2">
+          <Label htmlFor="name">Nome</Label>
+          <Input
+            id="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="h-12 rounded-2xl"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="weight">Peso (kg)</Label>
+            <Input
+              id="weight"
+              type="number"
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+              className="h-12 rounded-2xl"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="height">Altura (cm)</Label>
+            <Input
+              id="height"
+              type="number"
+              value={height}
+              onChange={(e) => setHeight(e.target.value)}
+              className="h-12 rounded-2xl"
+            />
           </div>
         </div>
-      </Card>
 
-      <Card className="p-5 shadow-soft-sm border-border">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 rounded-2xl bg-accent flex items-center justify-center">
-            <Target className="h-5 w-5 text-accent-foreground" />
-          </div>
-          <div>
-            <div className="font-semibold text-foreground">Meta Diária</div>
-            <div className="text-sm text-muted-foreground">2000 kcal</div>
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor="goal">Objetivo</Label>
+          <Select value={goal} onValueChange={setGoal}>
+            <SelectTrigger className="h-12 rounded-2xl">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="lose">Perder Peso</SelectItem>
+              <SelectItem value="maintain">Manter Peso</SelectItem>
+              <SelectItem value="gain">Ganhar Peso</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-      </Card>
 
-      <Card className="p-5 shadow-soft-sm border-border">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 rounded-2xl bg-accent flex items-center justify-center">
-            <Activity className="h-5 w-5 text-accent-foreground" />
-          </div>
-          <div>
-            <div className="font-semibold text-foreground">Nível de Atividade</div>
-            <div className="text-sm text-muted-foreground">Moderado</div>
-          </div>
-        </div>
+        <Button onClick={handleSave} className="w-full h-12 rounded-2xl shadow-soft-md">
+          Guardar Alterações
+        </Button>
       </Card>
-
-      <Button className="w-full h-12 rounded-2xl shadow-soft-md">
-        Guardar Alterações
-      </Button>
     </div>
   );
 };

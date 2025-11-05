@@ -1,50 +1,173 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Send } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Message {
   id: string;
   content: string;
-  sender: "user" | "ai";
+  role: "user" | "assistant";
   timestamp: string;
 }
 
 export const AIChat = () => {
+  const { user } = useAuth();
   const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      content: "Olá! Sou o NutriMate 🌱 Como posso ajudar hoje?",
-      sender: "ai",
-      timestamp: "10:00",
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const handleSend = () => {
-    if (!message.trim()) return;
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchMessages = async () => {
+      const { data } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true })
+        .limit(50);
+
+      if (data) {
+        const formattedMessages = data.map(msg => ({
+          id: msg.id,
+          content: msg.content,
+          role: msg.role as "user" | "assistant",
+          timestamp: new Date(msg.created_at).toLocaleTimeString('pt-PT', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          }),
+        }));
+        setMessages(formattedMessages);
+      }
+    };
+
+    fetchMessages();
+  }, [user]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSend = async () => {
+    if (!message.trim() || !user || loading) return;
     
-    const newMessage: Message = {
+    const userMessage: Message = {
       id: Date.now().toString(),
       content: message,
-      sender: "user",
-      timestamp: new Date().toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" }),
+      role: "user",
+      timestamp: new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }),
     };
     
-    setMessages([...messages, newMessage]);
+    setMessages(prev => [...prev, userMessage]);
     setMessage("");
+    setLoading(true);
+
+    // Save user message
+    await supabase.from('chat_messages').insert({
+      user_id: user.id,
+      role: 'user',
+      content: userMessage.content,
+    });
     
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        content: "Boa escolha! 👏 As suas refeições estão equilibradas. Faltam-lhe proteínas hoje. Que tal um iogurte grego?",
-        sender: "ai",
-        timestamp: new Date().toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" }),
+    try {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          messages: messages.map(m => ({ role: m.role, content: m.content })).concat([
+            { role: 'user', content: userMessage.content }
+          ]),
+        }),
+      });
+
+      if (!response.ok || !response.body) throw new Error('Failed to start stream');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let assistantContent = "";
+      let assistantId = (Date.now() + 1).toString();
+
+      const updateAssistantMessage = (content: string) => {
+        assistantContent = content;
+        setMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (last?.role === "assistant" && last.id === assistantId) {
+            return prev.map((m, i) => 
+              i === prev.length - 1 ? { ...m, content: assistantContent } : m
+            );
+          }
+          return [...prev, {
+            id: assistantId,
+            role: "assistant",
+            content: assistantContent,
+            timestamp: new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }),
+          }];
+        });
       };
-      setMessages(prev => [...prev, aiResponse]);
-    }, 1000);
+
+      let textBuffer = "";
+      let streamDone = false;
+
+      while (!streamDone) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        textBuffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+          let line = textBuffer.slice(0, newlineIndex);
+          textBuffer = textBuffer.slice(newlineIndex + 1);
+
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (line.startsWith(":") || line.trim() === "") continue;
+          if (!line.startsWith("data: ")) continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === "[DONE]") {
+            streamDone = true;
+            break;
+          }
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (content) {
+              assistantContent += content;
+              updateAssistantMessage(assistantContent);
+            }
+          } catch {
+            textBuffer = line + "\n" + textBuffer;
+            break;
+          }
+        }
+      }
+
+      // Save assistant message
+      if (assistantContent) {
+        await supabase.from('chat_messages').insert({
+          user_id: user.id,
+          role: 'assistant',
+          content: assistantContent,
+        });
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: "Desculpa, ocorreu um erro. Por favor, tenta novamente.",
+        timestamp: new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }),
+      }]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -55,27 +178,33 @@ export const AIChat = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-muted/30">
+        {messages.length === 0 && (
+          <div className="text-center text-muted-foreground py-8">
+            <p className="text-lg mb-2">👋 Olá!</p>
+            <p>Sou o NutriBot. Como posso ajudar hoje?</p>
+          </div>
+        )}
         {messages.map((msg) => (
           <div
             key={msg.id}
             className={cn(
               "flex",
-              msg.sender === "user" ? "justify-end" : "justify-start"
+              msg.role === "user" ? "justify-end" : "justify-start"
             )}
           >
             <div
               className={cn(
                 "max-w-[80%] rounded-3xl px-4 py-3 shadow-soft-sm",
-                msg.sender === "user"
+                msg.role === "user"
                   ? "bg-primary text-primary-foreground"
                   : "bg-card text-card-foreground border border-border"
               )}
             >
-              <p className="text-sm leading-relaxed">{msg.content}</p>
+              <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
               <p
                 className={cn(
                   "text-xs mt-1",
-                  msg.sender === "user" ? "text-primary-foreground/70" : "text-muted-foreground"
+                  msg.role === "user" ? "text-primary-foreground/70" : "text-muted-foreground"
                 )}
               >
                 {msg.timestamp}
@@ -83,6 +212,18 @@ export const AIChat = () => {
             </div>
           </div>
         ))}
+        {loading && (
+          <div className="flex justify-start">
+            <div className="bg-card text-card-foreground border border-border rounded-3xl px-4 py-3">
+              <div className="flex gap-2">
+                <div className="w-2 h-2 rounded-full bg-primary animate-bounce" />
+                <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0.1s' }} />
+                <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0.2s' }} />
+              </div>
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
       </div>
 
       <div className="p-4 border-t border-border bg-background pb-20">
@@ -91,11 +232,13 @@ export const AIChat = () => {
             placeholder="Escreva a sua mensagem..."
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            onKeyPress={(e) => e.key === "Enter" && handleSend()}
+            onKeyPress={(e) => e.key === "Enter" && !loading && handleSend()}
+            disabled={loading}
             className="flex-1 h-12 rounded-2xl border-border"
           />
           <Button
             onClick={handleSend}
+            disabled={loading}
             size="icon"
             className="h-12 w-12 rounded-2xl shadow-soft-md"
           >

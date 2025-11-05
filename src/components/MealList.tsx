@@ -1,51 +1,110 @@
-import { Coffee, Salad, Moon, Apple } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Coffee, Utensils, Moon, Apple } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Meal {
   id: string;
-  type: string;
   name: string;
   calories: number;
-  time: string;
+  meal_type: string;
+  created_at: string;
 }
 
 const mealIcons = {
-  "Pequeno-almoço": Coffee,
-  "Almoço": Salad,
-  "Jantar": Moon,
-  "Snack": Apple,
+  breakfast: Coffee,
+  lunch: Utensils,
+  dinner: Moon,
+  snack: Apple,
 };
 
 export const MealList = () => {
-  const meals: Meal[] = [
-    { id: "1", type: "Pequeno-almoço", name: "Aveia com fruta", calories: 320, time: "08:30" },
-    { id: "2", type: "Snack", name: "Iogurte grego", calories: 150, time: "11:00" },
-    { id: "3", type: "Almoço", name: "Frango grelhado com arroz", calories: 580, time: "13:30" },
-  ];
+  const { user } = useAuth();
+  const [meals, setMeals] = useState<Meal[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchMeals = async () => {
+      const today = new Date().toISOString().split('T')[0];
+      const { data } = await supabase
+        .from('meals')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('created_at', `${today}T00:00:00`)
+        .lte('created_at', `${today}T23:59:59`)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (data) {
+        setMeals(data);
+      }
+    };
+
+    fetchMeals();
+
+    // Subscribe to realtime updates
+    const channel = supabase
+      .channel('meal-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'meals',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          fetchMeals();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
+  if (meals.length === 0) {
+    return (
+      <Card className="p-6 text-center border-border shadow-soft-sm rounded-2xl">
+        <p className="text-muted-foreground">
+          Ainda não registaste refeições hoje.
+        </p>
+        <p className="text-sm text-muted-foreground mt-2">
+          Adiciona a tua primeira refeição! 🍽️
+        </p>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-3">
-      <h3 className="text-lg font-semibold text-foreground">Refeições de Hoje</h3>
-      
+      <h2 className="text-lg font-semibold text-foreground">Refeições de Hoje</h2>
       {meals.map((meal) => {
-        const Icon = mealIcons[meal.type as keyof typeof mealIcons];
+        const Icon = mealIcons[meal.meal_type as keyof typeof mealIcons] || Apple;
         
         return (
-          <Card key={meal.id} className="p-4 shadow-soft-sm border-border">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-accent flex items-center justify-center">
-                  <Icon className="h-5 w-5 text-accent-foreground" />
-                </div>
-                <div>
-                  <div className="font-medium text-foreground">{meal.name}</div>
-                  <div className="text-sm text-muted-foreground">{meal.type} • {meal.time}</div>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="font-semibold text-primary">{meal.calories}</div>
-                <div className="text-xs text-muted-foreground">kcal</div>
-              </div>
+          <Card
+            key={meal.id}
+            className="p-4 flex items-center gap-4 border-border shadow-soft-sm rounded-2xl hover:shadow-soft-md transition-smooth"
+          >
+            <div className="bg-muted rounded-xl p-3">
+              <Icon className="h-5 w-5 text-primary" />
+            </div>
+            <div className="flex-1">
+              <p className="font-medium text-foreground">{meal.name}</p>
+              <p className="text-sm text-muted-foreground">
+                {new Date(meal.created_at).toLocaleTimeString('pt-PT', { 
+                  hour: '2-digit', 
+                  minute: '2-digit' 
+                })}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="font-semibold text-primary">{meal.calories}</p>
+              <p className="text-xs text-muted-foreground">kcal</p>
             </div>
           </Card>
         );

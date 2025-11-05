@@ -14,13 +14,173 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      badges: {
+        Row: {
+          description: string
+          icon: string
+          id: string
+          name: string
+          requirement: string
+        }
+        Insert: {
+          description: string
+          icon: string
+          id?: string
+          name: string
+          requirement: string
+        }
+        Update: {
+          description?: string
+          icon?: string
+          id?: string
+          name?: string
+          requirement?: string
+        }
+        Relationships: []
+      }
+      chat_messages: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      meals: {
+        Row: {
+          calories: number
+          carbs: number | null
+          created_at: string | null
+          fat: number | null
+          id: string
+          image_url: string | null
+          meal_type: string | null
+          name: string
+          protein: number | null
+          user_id: string
+        }
+        Insert: {
+          calories: number
+          carbs?: number | null
+          created_at?: string | null
+          fat?: number | null
+          id?: string
+          image_url?: string | null
+          meal_type?: string | null
+          name: string
+          protein?: number | null
+          user_id: string
+        }
+        Update: {
+          calories?: number
+          carbs?: number | null
+          created_at?: string | null
+          fat?: number | null
+          id?: string
+          image_url?: string | null
+          meal_type?: string | null
+          name?: string
+          protein?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          dietary_restrictions: string[] | null
+          email: string
+          goal: string | null
+          height: number | null
+          id: string
+          last_activity_date: string | null
+          name: string
+          plan: string | null
+          streak: number | null
+          updated_at: string | null
+          weight: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          dietary_restrictions?: string[] | null
+          email: string
+          goal?: string | null
+          height?: number | null
+          id: string
+          last_activity_date?: string | null
+          name: string
+          plan?: string | null
+          streak?: number | null
+          updated_at?: string | null
+          weight?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          dietary_restrictions?: string[] | null
+          email?: string
+          goal?: string | null
+          height?: number | null
+          id?: string
+          last_activity_date?: string | null
+          name?: string
+          plan?: string | null
+          streak?: number | null
+          updated_at?: string | null
+          weight?: number | null
+        }
+        Relationships: []
+      }
+      user_badges: {
+        Row: {
+          badge_id: string
+          earned_at: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          badge_id: string
+          earned_at?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          badge_id?: string
+          earned_at?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_badges_badge_id_fkey"
+            columns: ["badge_id"]
+            isOneToOne: false
+            referencedRelation: "badges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      update_streak: { Args: { p_user_id: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
