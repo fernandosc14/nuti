@@ -1,12 +1,36 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from "react";
+import { TabBar } from "@/components/TabBar";
+import { Dashboard } from "@/components/Dashboard";
+import { AddMeal } from "@/components/AddMeal";
+import { AIChat } from "@/components/AIChat";
+import { Profile } from "@/components/Profile";
 
 const Index = () => {
+  const [activeTab, setActiveTab] = useState("home");
+
+  const handleAddMeal = () => {
+    setActiveTab("meals");
+  };
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case "home":
+        return <Dashboard onAddMeal={handleAddMeal} />;
+      case "meals":
+        return <AddMeal onBack={() => setActiveTab("home")} />;
+      case "chat":
+        return <AIChat />;
+      case "profile":
+        return <Profile />;
+      default:
+        return <Dashboard onAddMeal={handleAddMeal} />;
+    }
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
+    <div className="min-h-screen bg-gradient-subtle">
+      {renderContent()}
+      <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
   );
 };
