@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { ArrowLeft, Search, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,9 @@ export const AddMeal = ({ onBack }: AddMealProps) => {
   const [foodResults, setFoodResults] = useState<FoodItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState<string>("breakfast");
+  const [uploading, setUploading] = useState(false);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -32,6 +35,49 @@ export const AddMeal = ({ onBack }: AddMealProps) => {
     setLoading(false);
   };
 
+  const handleCameraCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    setUploading(true);
+    try {
+      // Create a preview URL
+      const previewUrl = URL.createObjectURL(file);
+      setCapturedImage(previewUrl);
+
+      // Upload to Supabase Storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('meal-images')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('meal-images')
+        .getPublicUrl(fileName);
+
+      toast({
+        title: 'Foto capturada!',
+        description: 'Agora pesquisa ou adiciona os detalhes da refeição.',
+      });
+
+      // Store the image URL to use when adding meal
+      setCapturedImage(publicUrl);
+    } catch (error: any) {
+      toast({
+        title: 'Erro ao capturar foto',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleAddMeal = async (food: FoodItem) => {
     if (!user) return;
 
@@ -39,7 +85,7 @@ export const AddMeal = ({ onBack }: AddMealProps) => {
       // Update streak
       await supabase.rpc('update_streak', { p_user_id: user.id });
 
-      // Insert meal
+      // Insert meal with captured image if available
       const { error } = await supabase.from('meals').insert({
         user_id: user.id,
         name: food.name,
@@ -47,7 +93,7 @@ export const AddMeal = ({ onBack }: AddMealProps) => {
         protein: food.protein,
         carbs: food.carbs,
         fat: food.fat,
-        image_url: food.image,
+        image_url: capturedImage || food.image,
         meal_type: selectedMealType,
       });
 
@@ -68,6 +114,7 @@ export const AddMeal = ({ onBack }: AddMealProps) => {
         description: `${food.name} foi adicionado ao teu diário.`,
       });
 
+      setCapturedImage(null);
       onBack();
     } catch (error: any) {
       toast({
@@ -128,6 +175,29 @@ export const AddMeal = ({ onBack }: AddMealProps) => {
           </Button>
         </div>
 
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleCameraCapture}
+          className="hidden"
+        />
+        
+        <Button
+          variant="outline"
+          className="w-full h-12 rounded-2xl border-border"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+        >
+          {uploading ? (
+            <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+          ) : (
+            <Camera className="h-5 w-5 mr-2" />
+          )}
+          {uploading ? "A capturar..." : "📸 Tirar Foto"}
+        </Button>
+
         <Button
           variant="outline"
           className="w-full h-12 rounded-2xl border-border"
@@ -138,6 +208,12 @@ export const AddMeal = ({ onBack }: AddMealProps) => {
         </Button>
       </div>
 
+      {capturedImage && (
+        <Card className="p-4 border-border shadow-soft-sm rounded-2xl">
+          <p className="text-sm text-muted-foreground mb-2">Foto capturada:</p>
+          <img src={capturedImage} alt="Refeição" className="w-full h-48 object-cover rounded-lg" />
+        </Card>
+      )}
       <div className="space-y-3">
         {foodResults.map((food) => (
           <Card key={food.id} className="p-4 border-border shadow-soft-sm rounded-2xl">
