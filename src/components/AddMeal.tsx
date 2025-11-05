@@ -41,10 +41,6 @@ export const AddMeal = ({ onBack }: AddMealProps) => {
 
     setUploading(true);
     try {
-      // Create a preview URL
-      const previewUrl = URL.createObjectURL(file);
-      setCapturedImage(previewUrl);
-
       // Upload to Supabase Storage
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/${Date.now()}.${fileExt}`;
@@ -60,19 +56,61 @@ export const AddMeal = ({ onBack }: AddMealProps) => {
         .from('meal-images')
         .getPublicUrl(fileName);
 
+      setCapturedImage(publicUrl);
+
       toast({
-        title: 'Foto capturada!',
-        description: 'Agora pesquisa ou adiciona os detalhes da refeição.',
+        title: '🤖 A analisar foto...',
+        description: 'A IA está a identificar o alimento.',
       });
 
-      // Store the image URL to use when adding meal
-      setCapturedImage(publicUrl);
+      // Analyze image with AI
+      const { data: analysisData, error: analysisError } = await supabase.functions.invoke('analyze-food', {
+        body: { imageUrl: publicUrl }
+      });
+
+      if (analysisError) throw analysisError;
+
+      // Update streak
+      await supabase.rpc('update_streak', { p_user_id: user.id });
+
+      // Add meal automatically with AI analysis
+      const { error: mealError } = await supabase.from('meals').insert({
+        user_id: user.id,
+        name: analysisData.name,
+        calories: Math.round(analysisData.calories),
+        protein: parseFloat(analysisData.protein.toFixed(1)),
+        carbs: parseFloat(analysisData.carbs.toFixed(1)),
+        fat: parseFloat(analysisData.fat.toFixed(1)),
+        image_url: publicUrl,
+        meal_type: selectedMealType,
+      });
+
+      if (mealError) throw mealError;
+
+      // Check for new badges
+      const newBadges = await checkAndAwardBadges(user.id);
+      
+      if (newBadges > 0) {
+        toast({
+          title: '🎉 Nova Badge!',
+          description: `Ganhaste ${newBadges} nova${newBadges > 1 ? 's' : ''} badge${newBadges > 1 ? 's' : ''}!`,
+        });
+      }
+
+      toast({
+        title: '✅ Refeição adicionada!',
+        description: `${analysisData.name} - ${Math.round(analysisData.calories)} kcal${analysisData.confidence === 'low' ? ' (estimativa)' : ''}`,
+      });
+
+      setCapturedImage(null);
+      onBack();
     } catch (error: any) {
       toast({
-        title: 'Erro ao capturar foto',
-        description: error.message,
+        title: 'Erro',
+        description: error.message || 'Erro ao processar imagem',
         variant: 'destructive',
       });
+      setCapturedImage(null);
     } finally {
       setUploading(false);
     }
@@ -195,7 +233,7 @@ export const AddMeal = ({ onBack }: AddMealProps) => {
           ) : (
             <Camera className="h-5 w-5 mr-2" />
           )}
-          {uploading ? "A capturar..." : "📸 Tirar Foto"}
+          {uploading ? "A analisar com IA..." : "📸 Tirar Foto e Adicionar"}
         </Button>
 
         <Button
@@ -208,12 +246,6 @@ export const AddMeal = ({ onBack }: AddMealProps) => {
         </Button>
       </div>
 
-      {capturedImage && (
-        <Card className="p-4 border-border shadow-soft-sm rounded-2xl">
-          <p className="text-sm text-muted-foreground mb-2">Foto capturada:</p>
-          <img src={capturedImage} alt="Refeição" className="w-full h-48 object-cover rounded-lg" />
-        </Card>
-      )}
       <div className="space-y-3">
         {foodResults.map((food) => (
           <Card key={food.id} className="p-4 border-border shadow-soft-sm rounded-2xl">
