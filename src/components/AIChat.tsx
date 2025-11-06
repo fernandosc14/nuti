@@ -15,7 +15,7 @@ interface Message {
 }
 
 export const AIChat = () => {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
@@ -76,11 +76,15 @@ export const AIChat = () => {
     });
     
     try {
+      if (!session?.access_token) {
+        throw new Error('No access token available');
+      }
+
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           messages: messages.map(m => ({ role: m.role, content: m.content })).concat([
