@@ -27,13 +27,14 @@ Deno.serve(async (req) => {
     const token = authHeader.replace('Bearer ', '');
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       { global: { headers: { Authorization: authHeader } } }
     );
 
     // Get user profile
-    const { data: { user } } = await supabaseClient.auth.getUser(token);
-    if (!user) {
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
+    if (userError || !user) {
+      console.error('User auth error:', userError);
       throw new Error('User not found');
     }
 
