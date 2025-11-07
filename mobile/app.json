@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "nutri-mate-mobile",
+    "slug": "nutri-mate-mobile",
+    "version": "0.0.0",
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "android": {
+      "package": "com.fernandosc14.nuti"
+    }
+  }
+}

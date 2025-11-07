@@ -1,0 +1,12 @@
+{
+  "extends": "./../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-native",
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "noEmit": true,
+    "lib": ["ES2015"],
+    "types": ["react", "react-native", "node"]
+  },
+  "include": ["src", "App.tsx", "**/*.ts", "**/*.tsx"]
+}
