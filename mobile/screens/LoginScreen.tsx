@@ -1,0 +1,197 @@
+/**
+ * LoginScreen
+ * 
+ * Tela de login com email/password e Google Sign-In
+ */
+
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useUser } from '../context/UserContext';
+import { Ionicons } from '@expo/vector-icons';
+import Toast from 'react-native-toast-message';
+
+export function LoginScreen({ navigation }: any) {
+  const { signIn, signInWithGoogle } = useUser();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Por favor, preencha todos os campos',
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await signIn(email.trim(), password);
+      Toast.show({
+        type: 'success',
+        text1: 'Bem-vindo!',
+        text2: 'Login realizado com sucesso',
+      });
+    } catch (error: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Erro ao fazer login',
+        text2: error.message || 'Credenciais inválidas',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    try {
+      await signInWithGoogle();
+      Toast.show({
+        type: 'success',
+        text1: 'Bem-vindo!',
+        text2: 'Login realizado com sucesso',
+      });
+    } catch (error: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Erro ao fazer login',
+        text2: error.message || 'Erro ao fazer login com Google',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <SafeAreaView className="flex-1 bg-white dark:bg-gray-900">
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        className="flex-1"
+      >
+        <ScrollView
+          contentContainerClassName="flex-grow justify-center px-6 py-8"
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Logo */}
+          <View className="items-center mb-8">
+            <View className="w-24 h-24 bg-green-500 rounded-full items-center justify-center mb-4">
+              <Text className="text-4xl">🥗</Text>
+            </View>
+            <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+              Nuti
+            </Text>
+            <Text className="text-gray-500 dark:text-gray-400">
+              O teu assistente nutricional
+            </Text>
+          </View>
+
+          {/* Formulário */}
+          <View className="space-y-4 mb-6">
+            <View>
+              <Text className="text-gray-700 dark:text-gray-300 mb-2 font-medium">
+                Email
+              </Text>
+              <TextInput
+                className="bg-gray-100 dark:bg-gray-800 rounded-xl px-4 py-4 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700"
+                placeholder="exemplo@email.com"
+                placeholderTextColor="#9CA3AF"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoComplete="email"
+              />
+            </View>
+
+            <View>
+              <Text className="text-gray-700 dark:text-gray-300 mb-2 font-medium">
+                Password
+              </Text>
+              <View className="relative">
+                <TextInput
+                  className="bg-gray-100 dark:bg-gray-800 rounded-xl px-4 py-4 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 pr-12"
+                  placeholder="••••••••"
+                  placeholderTextColor="#9CA3AF"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-4"
+                >
+                  <Ionicons
+                    name={showPassword ? 'eye-off' : 'eye'}
+                    size={20}
+                    color="#9CA3AF"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
+          {/* Botão Login */}
+          <TouchableOpacity
+            onPress={handleLogin}
+            disabled={loading}
+            className="bg-green-500 rounded-xl py-4 items-center justify-center mb-4 shadow-lg"
+            activeOpacity={0.8}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text className="text-white font-semibold text-lg">Entrar</Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Divisor */}
+          <View className="flex-row items-center my-6">
+            <View className="flex-1 h-px bg-gray-300 dark:bg-gray-700" />
+            <Text className="mx-4 text-gray-500 dark:text-gray-400">ou</Text>
+            <View className="flex-1 h-px bg-gray-300 dark:bg-gray-700" />
+          </View>
+
+          {/* Google Sign-In */}
+          <TouchableOpacity
+            onPress={handleGoogleLogin}
+            disabled={loading}
+            className="bg-white dark:bg-gray-800 rounded-xl py-4 items-center justify-center border border-gray-300 dark:border-gray-700 flex-row shadow-sm"
+            activeOpacity={0.8}
+          >
+            <Ionicons name="logo-google" size={20} color="#4285F4" />
+            <Text className="text-gray-900 dark:text-white font-semibold ml-2">
+              Continuar com Google
+            </Text>
+          </TouchableOpacity>
+
+          {/* Link para Registro */}
+          <View className="flex-row justify-center mt-6">
+            <Text className="text-gray-500 dark:text-gray-400">
+              Não tens conta?{' '}
+            </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+              <Text className="text-green-500 font-semibold">Regista-te</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+

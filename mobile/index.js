@@ -1,2 +1,5 @@
-// Use Expo Router entry which bootstraps the file-based routing system.
-import 'expo-router/entry';
+import { registerRootComponent } from 'expo';
+import App from './App';
+
+registerRootComponent(App);
+

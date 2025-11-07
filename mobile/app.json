@@ -1,14 +1,68 @@
 {
   "expo": {
-    "name": "nutri-mate-mobile",
-    "slug": "nutri-mate-mobile",
-    "version": "0.0.0",
-    "platforms": [
-      "ios",
-      "android"
+    "name": "Nuti",
+    "slug": "nuti",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#3BB273"
+    },
+    "assetBundlePatterns": [
+      "**/*"
     ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nuti.app"
+    },
     "android": {
-      "package": "com.fernandosc14.nuti"
+      "adaptiveIcon": {
+        "backgroundColor": "#3BB273"
+      },
+      "package": "com.nuti.app",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {},
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permitir acesso à câmera para tirar fotos de refeições."
+        }
+      ],
+      [
+        "expo-barcode-scanner",
+        {
+          "cameraPermission": "Permitir acesso à câmera para ler códigos de barras."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permitir acesso às fotos para adicionar imagens de refeições."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#3BB273"
+        }
+      ],
+      "expo-font"
+    ],
+    "updates": {
+      "enabled": false,
+      "fallbackToCacheTimeout": 0
+    },
+    "extra": {
+      "eas": {
+        "projectId": "your-project-id"
+      }
     }
   }
 }

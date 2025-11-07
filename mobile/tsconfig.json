@@ -1,12 +1,16 @@
 {
-  "extends": "./../tsconfig.json",
+  "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "jsx": "react-native",
-    "skipLibCheck": true,
-    "esModuleInterop": true,
-    "noEmit": true,
-    "lib": ["ES2015"],
-    "types": ["react", "react-native", "node"]
+    "strict": true,
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    }
   },
-  "include": ["src", "App.tsx", "**/*.ts", "**/*.tsx"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "nativewind-env.d.ts"
+  ]
 }
