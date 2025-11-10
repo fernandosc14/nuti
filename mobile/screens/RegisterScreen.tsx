@@ -21,7 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 
 export function RegisterScreen({ navigation }: any) {
-  const { signUp, signInWithGoogle } = useUser();
+  const { signUp, signInWithGoogleNative } = useUser();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -77,10 +77,10 @@ export function RegisterScreen({ navigation }: any) {
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleRegister = async () => {
     setLoading(true);
     try {
-      await signInWithGoogle();
+      await signInWithGoogleNative();
       Toast.show({
         type: 'success',
         text1: 'Conta criada!',
@@ -230,7 +230,7 @@ export function RegisterScreen({ navigation }: any) {
 
           {/* Google Sign-In */}
           <TouchableOpacity
-            onPress={handleGoogleLogin}
+            onPress={handleGoogleRegister}
             disabled={loading}
             className="bg-white dark:bg-gray-800 rounded-xl py-4 items-center justify-center border border-gray-300 dark:border-gray-700 flex-row shadow-sm"
             activeOpacity={0.8}

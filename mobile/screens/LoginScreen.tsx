@@ -22,7 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 
 export function LoginScreen({ navigation }: any) {
-  const { signIn, signInWithGoogle } = useUser();
+  const { signIn, signInWithGoogle, signInWithGoogleNative } = useUser();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -169,7 +169,26 @@ export function LoginScreen({ navigation }: any) {
 
           {/* Google Sign-In */}
           <TouchableOpacity
-            onPress={handleGoogleLogin}
+            onPress={async () => {
+              setLoading(true);
+              try {
+                await signInWithGoogleNative();
+                Toast.show({
+                  type: 'success',
+                  text1: 'Bem-vindo!',
+                  text2: 'Login Google (nativo) realizado com sucesso',
+                });
+              } catch (error: any) {
+                // Se nativo não estiver disponível, mostra erro claro (evitar fallback silencioso para web)
+                Toast.show({
+                  type: 'error',
+                  text1: 'Erro ao fazer login (nativo)',
+                  text2: error?.message || 'Google Sign-In nativo indisponível. Garante dev client e credenciais.',
+                });
+              } finally {
+                setLoading(false);
+              }
+            }}
             disabled={loading}
             className="bg-white dark:bg-gray-800 rounded-xl py-4 items-center justify-center border border-gray-300 dark:border-gray-700 flex-row shadow-sm"
             activeOpacity={0.8}
@@ -179,6 +198,7 @@ export function LoginScreen({ navigation }: any) {
               Continuar com Google
             </Text>
           </TouchableOpacity>
+
 
           {/* Link para Registro */}
           <View className="flex-row justify-center mt-6">

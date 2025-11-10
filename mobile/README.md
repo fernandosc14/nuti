@@ -41,8 +41,23 @@ EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
 EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=123456789
 EXPO_PUBLIC_FIREBASE_APP_ID=your-app-id
 EXPO_PUBLIC_GROQ_API_KEY=your-groq-api-key
-EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=your-google-client-id
+EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=your-google-web-client-id.apps.googleusercontent.com
 ```
+
+**Importante - Configuração do Google Sign-In:**
+1. Acesse o [Google Cloud Console](https://console.cloud.google.com/)
+2. Crie um projeto ou selecione um existente
+3. Ative a API "Google+ API" ou "Google Identity"
+4. Vá em "Credenciais" > "Criar credenciais" > "ID do cliente OAuth 2.0"
+5. Selecione "Aplicativo Web" como tipo
+6. Adicione os URIs de redirecionamento autorizados:
+   - Para Expo Go: `https://auth.expo.io/@your-expo-username/nuti`
+   - Para desenvolvimento local: `https://auth.expo.io/@anonymous/nuti`
+   - (O Expo gera automaticamente o URI correto no runtime)
+7. Copie o "ID do cliente" e cole em `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` no `.env`
+8. No Firebase Console, vá em Authentication > Sign-in method > Google
+9. Ative o método de login do Google e use o mesmo Client ID do passo 7
+10. Adicione o mesmo Client ID em "Web SDK configuration"
 
 3. Iniciar o projeto:
 ```bash
@@ -119,39 +134,83 @@ mobile/
 - Ver streak e badges
 - Ativar Premium (simulação)
 
-## 🏗️ Build para Android
+## 🏗️ Testar no Android
 
-1. Instalar EAS CLI:
+### Opção 1: Expo Go (Mais Rápido - Recomendado para começar)
+
+1. **Instala Expo Go no teu telefone Android** (Google Play Store)
+
+2. **Inicia o servidor:**
+```bash
+cd mobile
+npm start
+```
+
+3. **Conecta o telefone:**
+   - Certifica-te que telefone e computador estão na mesma rede Wi-Fi
+   - Escaneia o QR code com Expo Go OU
+   - Digita o URL manualmente no Expo Go
+
+4. **Google Sign-In funciona automaticamente** via web proxy (não precisa de SHA-1)
+
+### Opção 2: Dev Client (Mais Completo - Para produção)
+
+**Para Google Sign-In nativo funcionar, precisas do SHA-1:**
+
+**Windows:**
+```powershell
+cd mobile/android
+.\get-sha1.ps1
+```
+
+**Linux/Mac:**
+```bash
+cd mobile/android
+chmod +x get-sha1.sh
+./get-sha1.sh
+```
+
+**Manual:**
+```bash
+cd mobile/android/app
+keytool -list -v -keystore debug.keystore -alias androiddebugkey -storepass android -keypass android
+```
+
+**Depois configura no Google Cloud Console:**
+1. Cria OAuth 2.0 Client ID (tipo Android)
+2. Package name: `com.nuti.app`
+3. SHA-1: (colar o SHA-1 obtido)
+4. Adiciona `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` no `.env`
+
+**Build do Dev Client:**
+
+**Local (requer Android Studio):**
+```bash
+cd mobile
+npx expo run:android
+```
+
+**Com EAS (mais fácil):**
 ```bash
 npm install -g eas-cli
-```
-
-2. Fazer login:
-```bash
 eas login
+cd mobile
+eas build --platform android --profile development
 ```
 
-3. Configurar projeto:
-```bash
-eas build:configure
-```
-
-4. Build para Android:
-```bash
-eas build --platform android
-```
-
-Ou usar Expo CLI:
-```bash
-npx expo build:android
-```
+📖 **Guia completo:** Ver `TESTE_ANDROID.md` para instruções detalhadas
 
 ## 📝 Notas Importantes
 
 1. **Firebase**: Configurar projeto Firebase e adicionar credenciais no `.env`
 2. **Groq API**: Obter API key em https://console.groq.com
-3. **Google Sign-In**: Configurar OAuth no Firebase Console
+3. **Google Sign-In**: 
+   - Para Expo Go: Usa o proxy do Expo (`auth.expo.io`) - funciona automaticamente com `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`
+   - Para dev-client/standalone: Pode usar login nativo (requer configuração adicional no Google Console)
+   - O redirect URI é gerado automaticamente pelo Expo no runtime
+   - Certifique-se de que o mesmo Client ID está configurado no Firebase Console
 4. **Badges**: As badges são inicializadas automaticamente na primeira execução
+5. **Variáveis de Ambiente**: Nunca commitar o ficheiro `.env` - usar `.env.example` como referência
 
 ## 🎨 Tema
 
