@@ -74,7 +74,12 @@ export async function updateStreak(userId: string): Promise<number> {
     const userSnap = await getDoc(userRef);
     
     return userSnap.data()?.streak || 0;
-  } catch (error) {
+  } catch (error: any) {
+    // Ignorar erros de permissões silenciosamente (pode ser que o utilizador não esteja autenticado)
+    if (error?.code === 'permission-denied') {
+      console.log('Streak: Permission denied, user may not be authenticated');
+      return 0;
+    }
     console.error('Error updating streak:', error);
     return 0;
   }
@@ -89,7 +94,12 @@ export async function getStreak(userId: string): Promise<number> {
     const userSnap = await getDoc(userRef);
     
     return userSnap.data()?.streak || 0;
-  } catch (error) {
+  } catch (error: any) {
+    // Ignorar erros de permissões silenciosamente
+    if (error?.code === 'permission-denied') {
+      console.log('Streak: Permission denied, user may not be authenticated');
+      return 0;
+    }
     console.error('Error getting streak:', error);
     return 0;
   }

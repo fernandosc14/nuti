@@ -52,21 +52,49 @@ export function DashboardScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
+    // Se não houver user, limpar estado e não carregar dados
+    if (!user) {
+      setLoading(false);
+      setMeals([]);
+      setBadges([]);
+      setConsumed(0);
+      return;
+    }
+
+    // Só carregar dados se houver user e profile
     if (user && profile) {
       loadDashboardData();
     }
   }, [user, profile]);
 
   const loadDashboardData = async () => {
-    if (!user) return;
+    // Verificar user antes de qualquer operação
+    if (!user || !profile) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
+    // Guardar uid para verificar depois se ainda é o mesmo user
+    const currentUserId = user.uid;
 
     try {
+      // Verificar novamente antes de aceder ao Firestore
+      if (!user || user.uid !== currentUserId) {
+        return;
+      }
+
       // Calcular meta de calorias baseada no perfil
       if (profile?.weight && profile?.height) {
         const bmr = 10 * profile.weight + 6.25 * profile.height - 5 * 30 + 5;
         const goalMultiplier =
           profile.goal === 'lose' ? 0.8 : profile.goal === 'gain' ? 1.2 : 1;
         setGoal(Math.round(bmr * 1.5 * goalMultiplier));
+      }
+
+      // Verificar novamente antes de query
+      if (!user || user.uid !== currentUserId) {
+        return;
       }
 
       // Buscar refeições de hoje
@@ -84,6 +112,12 @@ export function DashboardScreen({ navigation }: any) {
       );
 
       const snapshot = await getDocs(q);
+      
+      // Verificar novamente após query
+      if (!user || user.uid !== currentUserId) {
+        return;
+      }
+
       const mealsData: Meal[] = [];
       let totalCalories = 0;
 
@@ -100,6 +134,11 @@ export function DashboardScreen({ navigation }: any) {
         totalCalories += data.calories;
       });
 
+      // Verificar novamente antes de setState
+      if (!user || user.uid !== currentUserId) {
+        return;
+      }
+
       setMeals(mealsData.sort((a, b) => b.date.getTime() - a.date.getTime()));
       setConsumed(totalCalories);
 
@@ -109,6 +148,11 @@ export function DashboardScreen({ navigation }: any) {
         const badgesData: Badge[] = [];
 
         for (const badgeId of profile.badges.slice(0, 3)) {
+          // Verificar antes de cada query
+          if (!user || user.uid !== currentUserId) {
+            return;
+          }
+
           const badgeDoc = await getDocs(
             query(badgesRef, where('__name__', '==', badgeId))
           );
@@ -123,13 +167,23 @@ export function DashboardScreen({ navigation }: any) {
           }
         }
 
-        setBadges(badgesData);
+        // Verificar antes de setState
+        if (user && user.uid === currentUserId) {
+          setBadges(badgesData);
+        }
       }
 
-      // Atualizar streak
-      await updateStreak(user.uid);
-      await refreshProfile();
-    } catch (error) {
+      // Verificar antes de atualizar streak
+      if (user && user.uid === currentUserId) {
+        await updateStreak(user.uid);
+        await refreshProfile();
+      }
+    } catch (error: any) {
+      // Se for erro de permissões e não houver user, ignorar silenciosamente (logout em progresso)
+      if (!user || error?.code === 'permission-denied') {
+        // Logout em progresso, ignorar erro silenciosamente
+        return;
+      }
       console.error('Error loading dashboard:', error);
       Toast.show({
         type: 'error',
@@ -137,15 +191,24 @@ export function DashboardScreen({ navigation }: any) {
         text2: 'Erro ao carregar dados',
       });
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      // Só atualizar loading se ainda for o mesmo user
+      if (user && user.uid === currentUserId) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
   const onRefresh = () => {
+    if (!user) return;
     setRefreshing(true);
     loadDashboardData();
   };
+
+  // Se não houver user, não renderizar nada (navegação vai redirecionar)
+  if (!user) {
+    return null;
+  }
 
   if (loading) {
     return (

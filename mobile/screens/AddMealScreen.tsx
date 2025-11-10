@@ -20,7 +20,6 @@ import { useUser } from '../context/UserContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Camera } from 'expo-camera';
-import { BarCodeScanner } from 'expo-barcode-scanner';
 import { searchFood, getFoodByBarcode, FoodItem } from '../services/api';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -36,7 +35,6 @@ export function AddMealScreen({ navigation }: any) {
   const [selectedMealType, setSelectedMealType] = useState<
     'breakfast' | 'lunch' | 'dinner' | 'snack'
   >('breakfast');
-  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
 
   const mealTypes = [
@@ -111,30 +109,13 @@ export function AddMealScreen({ navigation }: any) {
     }
   };
 
-  const handleBarcodeScan = async (data: string) => {
-    setShowBarcodeScanner(false);
-    setLoading(true);
-
-    try {
-      const food = await getFoodByBarcode(data);
-      if (food) {
-        await addMeal(food);
-      } else {
-        Toast.show({
-          type: 'error',
-          text1: 'Produto não encontrado',
-          text2: 'Tenta pesquisar manualmente',
-        });
-      }
-    } catch (error) {
-      Toast.show({
-        type: 'error',
-        text1: 'Erro',
-        text2: 'Erro ao ler código de barras',
-      });
-    } finally {
-      setLoading(false);
-    }
+  // Barcode scanning temporarily disabled to avoid native build issues.
+  const handleBarcodeScan = async (_data: string) => {
+    Toast.show({
+      type: 'info',
+      text1: 'Funcionalidade temporariamente desativada',
+      text2: 'Ler código de barras foi desativado para esta versão.',
+    });
   };
 
   const addMeal = async (food: FoodItem) => {
@@ -173,60 +154,7 @@ export function AddMealScreen({ navigation }: any) {
     }
   };
 
-  if (showBarcodeScanner) {
-    if (hasPermission === null) {
-      return (
-        <SafeAreaView className="flex-1 bg-black items-center justify-center">
-          <ActivityIndicator size="large" color="#FFFFFF" />
-          <Text className="text-white mt-4">A solicitar permissão...</Text>
-        </SafeAreaView>
-      );
-    }
-
-    if (hasPermission === false) {
-      return (
-        <SafeAreaView className="flex-1 bg-black items-center justify-center px-6">
-          <Ionicons name="camera-outline" size={64} color="#FFFFFF" />
-          <Text className="text-white text-xl font-semibold mt-4 text-center">
-            Permissão de câmera necessária
-          </Text>
-          <Text className="text-gray-400 text-center mt-2">
-            Precisas de permitir acesso à câmera para ler códigos de barras
-          </Text>
-          <TouchableOpacity
-            onPress={() => setShowBarcodeScanner(false)}
-            className="bg-green-500 rounded-xl px-6 py-3 mt-6"
-          >
-            <Text className="text-white font-semibold">Voltar</Text>
-          </TouchableOpacity>
-        </SafeAreaView>
-      );
-    }
-
-    return (
-      <SafeAreaView className="flex-1 bg-black">
-        <BarCodeScanner
-          onBarCodeScanned={({ data }) => handleBarcodeScan(data)}
-          className="flex-1"
-        />
-        <View className="absolute top-6 left-6">
-          <TouchableOpacity
-            onPress={() => setShowBarcodeScanner(false)}
-            className="bg-black/50 rounded-full p-3"
-          >
-            <Ionicons name="close" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-        <View className="absolute bottom-10 left-0 right-0 items-center">
-          <View className="bg-black/50 rounded-xl px-6 py-3">
-            <Text className="text-white text-center">
-              Aponta a câmera para o código de barras
-            </Text>
-          </View>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  // Note: barcode scanning UI has been removed temporarily.
 
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-gray-900">
@@ -322,7 +250,13 @@ export function AddMealScreen({ navigation }: any) {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() => setShowBarcodeScanner(true)}
+            onPress={() => {
+              Toast.show({
+                type: 'info',
+                text1: 'Funcionalidade temporariamente desativada',
+                text2: 'Ler código de barras foi desativado para esta versão.',
+              });
+            }}
             className="bg-gray-100 dark:bg-gray-800 rounded-xl py-4 flex-row items-center justify-center border border-gray-200 dark:border-gray-700"
           >
             <Ionicons name="barcode" size={20} color="#3BB273" />

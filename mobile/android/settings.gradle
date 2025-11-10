@@ -1,0 +1,83 @@
+pluginManagement {
+  // Debug prints to help diagnose Unsupported class file major version errors
+  try {
+    println "DEBUG: settings.gradle starting - java.version=${System.getProperty('java.version')} java.class.version=${System.getProperty('java.class.version')} JAVA_HOME=${System.getenv('JAVA_HOME')}"
+  } catch (e) {
+    // ignore debug failures
+  }
+  repositories {
+    // Ensure plugin resolution can find the React Native and Expo Gradle plugins
+    gradlePluginPortal()
+    mavenCentral()
+    google()
+  }
+  repositories {
+    // Ensure plugin resolution can find the React Native and Expo Gradle plugins
+    gradlePluginPortal()
+    mavenCentral()
+    google()
+  }
+  def reactNativeGradlePlugin = new File(
+    providers.exec {
+      workingDir(rootDir)
+      commandLine("node", "--print", "require.resolve('@react-native/gradle-plugin/package.json', { paths: [require.resolve('react-native/package.json')] })")
+    }.standardOutput.asText.get().trim()
+  ).getParentFile().absolutePath
+  includeBuild(reactNativeGradlePlugin)
+  
+  def expoPluginsPath = new File(
+    providers.exec {
+      workingDir(rootDir)
+      commandLine("node", "--print", "require.resolve('expo-modules-autolinking/package.json', { paths: [require.resolve('expo/package.json')] })")
+    }.standardOutput.asText.get().trim(),
+    "../android/expo-gradle-plugin"
+  ).absolutePath
+  includeBuild(expoPluginsPath)
+}
+
+plugins {
+  id("com.facebook.react.settings")
+  id("expo-autolinking-settings")
+}
+
+extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
+  if (System.getenv('EXPO_USE_COMMUNITY_AUTOLINKING') == '1') {
+    ex.autolinkLibrariesFromCommand()
+  } else {
+    ex.autolinkLibrariesFromCommand(expoAutolinking.rnConfigCommand)
+  }
+}
+expoAutolinking.useExpoModules()
+
+rootProject.name = 'Nuti'
+
+expoAutolinking.useExpoVersionCatalog()
+
+include ':app'
+includeBuild(expoAutolinking.reactNativeGradlePlugin)
+
+// Explicit projectDir mappings to override stale absolute paths produced by autolinking
+// This ensures Gradle loads the android library modules from the current workspace
+// (useful when autolinking resolved modules to a different filesystem path).
+// Low-risk: these mappings point to node_modules locations relative to the android folder.
+try {
+  project(':react-native-async-storage_async-storage').projectDir = file('../node_modules/@react-native-async-storage/async-storage/android')
+} catch (ignored) {}
+try {
+  project(':react-native-gesture-handler').projectDir = file('../node_modules/react-native-gesture-handler/android')
+} catch (ignored) {}
+try {
+  project(':react-native-reanimated').projectDir = file('../node_modules/react-native-reanimated/android')
+} catch (ignored) {}
+try {
+  project(':react-native-safe-area-context').projectDir = file('../node_modules/react-native-safe-area-context/android')
+} catch (ignored) {}
+try {
+  project(':react-native-screens').projectDir = file('../node_modules/react-native-screens/android')
+} catch (ignored) {}
+try {
+  project(':react-native-svg').projectDir = file('../node_modules/react-native-svg/android')
+} catch (ignored) {}
+try {
+  project(':react-native-worklets').projectDir = file('../node_modules/react-native-worklets/android')
+} catch (ignored) {}

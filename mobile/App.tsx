@@ -9,9 +9,11 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { UserProvider, useUser } from './context/UserContext';
 import { LoginScreen } from './screens/LoginScreen';
 import { RegisterScreen } from './screens/RegisterScreen';
+import { OnboardingScreen } from './screens/OnboardingScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { AddMealScreen } from './screens/AddMealScreen';
 import { ChatScreen } from './screens/ChatScreen';
@@ -20,6 +22,9 @@ import { PremiumScreen } from './screens/PremiumScreen';
 import Toast from 'react-native-toast-message';
 import './global.css';
 import { initializeBadges } from './services/gamification';
+
+// Garantir que o OAuth flow pode completar (importante para deep linking)
+WebBrowser.maybeCompleteAuthSession();
 
 const Stack = createNativeStackNavigator();
 
@@ -40,6 +45,7 @@ function AppStack() {
         animation: 'slide_from_right',
       }}
     >
+      <Stack.Screen name="Onboarding" component={OnboardingScreen} />
       <Stack.Screen name="Dashboard" component={DashboardScreen} />
       <Stack.Screen name="AddMeal" component={AddMealScreen} />
       <Stack.Screen name="Chat" component={ChatScreen} />
@@ -50,7 +56,7 @@ function AppStack() {
 }
 
 function RootNavigator() {
-  const { user, loading } = useUser();
+  const { user, profile, loading } = useUser();
 
   useEffect(() => {
     // Inicializar badges padrão
@@ -65,9 +71,22 @@ function RootNavigator() {
     );
   }
 
+  // Verificar se precisa de onboarding
+  const needsOnboarding = user && profile && !profile.onboardingCompleted;
+
   return (
     <NavigationContainer>
-      {user ? <AppStack /> : <AuthStack />}
+      {user ? (
+        needsOnboarding ? (
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+          </Stack.Navigator>
+        ) : (
+          <AppStack />
+        )
+      ) : (
+        <AuthStack />
+      )}
     </NavigationContainer>
   );
 }
