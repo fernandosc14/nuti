@@ -33,18 +33,18 @@ interface Badge {
 export function ProfileScreen({ navigation }: any) {
   const { user, profile, signOut, updateProfile } = useUser();
   const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(profile?.name || '');
-  const [weight, setWeight] = useState(profile?.weight?.toString() || '');
-  const [height, setHeight] = useState(profile?.height?.toString() || '');
-  const [goal, setGoal] = useState(profile?.goal || 'maintain');
+  const [name, setName] = useState('');
+  const [weight, setWeight] = useState('');
+  const [height, setHeight] = useState('');
+  const [goal, setGoal] = useState<'lose' | 'maintain' | 'gain'>('maintain');
   const [badges, setBadges] = useState<Badge[]>([]);
   const [loading, setLoading] = useState(false);
 
   React.useEffect(() => {
     if (profile) {
-      setName(profile.name);
-      setWeight(profile.weight?.toString() || '');
-      setHeight(profile.height?.toString() || '');
+      setName(profile.name || '');
+      setWeight(profile.weight ? profile.weight.toString() : '');
+      setHeight(profile.height ? profile.height.toString() : '');
       setGoal(profile.goal || 'maintain');
       loadBadges();
     }
@@ -78,14 +78,31 @@ export function ProfileScreen({ navigation }: any) {
   };
 
   const handleSave = async () => {
+    if (!user) {
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Não estás autenticado',
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      await updateProfile({
-        name,
-        weight: weight ? parseFloat(weight) : undefined,
-        height: height ? parseFloat(height) : undefined,
-        goal: goal as 'lose' | 'maintain' | 'gain',
-      });
+      const updates: any = {
+        name: name.trim() || profile?.name || '',
+        goal: goal,
+      };
+
+      // Só atualizar peso e altura se foram fornecidos valores válidos
+      if (weight && !isNaN(parseFloat(weight))) {
+        updates.weight = parseFloat(weight);
+      }
+      if (height && !isNaN(parseFloat(height))) {
+        updates.height = parseFloat(height);
+      }
+
+      await updateProfile(updates);
 
       Toast.show({
         type: 'success',
@@ -95,6 +112,7 @@ export function ProfileScreen({ navigation }: any) {
 
       setEditing(false);
     } catch (error: any) {
+      console.error('Error updating profile:', error);
       Toast.show({
         type: 'error',
         text1: 'Erro',
