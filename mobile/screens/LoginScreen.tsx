@@ -200,13 +200,13 @@ export function LoginScreen({ navigation }: any) {
           </TouchableOpacity>
 
 
-          {/* Link para Registro */}
+          {/* Link para Welcome */}
           <View className="flex-row justify-center mt-6">
             <Text className="text-gray-500 dark:text-gray-400">
               Não tens conta?{' '}
             </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text className="text-green-500 font-semibold">Regista-te</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Welcome')}>
+              <Text className="text-green-500 font-semibold">Voltar</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

@@ -6,7 +6,7 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Platform } from 'react-native';
-import { User, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut as firebaseSignOut, signInWithCredential, GoogleAuthProvider } from 'firebase/auth';
+import { User, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut as firebaseSignOut, signInWithCredential, GoogleAuthProvider, getAuth } from 'firebase/auth';
 import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../services/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -39,7 +39,10 @@ export interface UserProfile {
   triedOtherApps?: boolean;
   dateOfBirth?: Date;
   desiredWeight?: number;
+  referralCode?: string;
   onboardingCompleted?: boolean;
+  // Auth method
+  authMethod?: 'google' | 'email';
 }
 
 interface UserContextType {
@@ -47,7 +50,7 @@ interface UserContextType {
   profile: UserProfile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, name: string) => Promise<void>;
+  signUp: (email: string, password: string, name: string, onboardingData?: any) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signInWithGoogleNative: () => Promise<void>;
   signInWithGoogleWeb: () => Promise<void>;
@@ -196,7 +199,36 @@ export function UserProvider({ children }: { children: ReactNode }) {
             try {
               console.log('🔥 Fazendo login no Firebase com tokens do response...');
               const credential = GoogleAuthProvider.credential(idToken || undefined, accessToken || undefined);
-              await signInWithCredential(auth, credential);
+              const userCredential = await signInWithCredential(auth, credential);
+              
+              // Verificar se a conta foi criada com email/password
+              const userRef = doc(db, 'users', userCredential.user.uid);
+              const userSnap = await getDoc(userRef);
+              
+              if (userSnap.exists()) {
+                const data = userSnap.data();
+                if (data.authMethod === 'email') {
+                  // Fazer logout e lançar erro
+                  await firebaseSignOut(auth);
+                  throw new Error('Esta conta foi criada com email e password. Por favor, usa o login com email.');
+                }
+                // Se não tem authMethod, atualizar para google
+                if (!data.authMethod) {
+                  await setDoc(userRef, { authMethod: 'google' }, { merge: true });
+                }
+              } else {
+                // Criar perfil se não existir
+                await setDoc(userRef, {
+                  name: userCredential.user.displayName || '',
+                  email: userCredential.user.email || '',
+                  plan: 'free',
+                  streak: 0,
+                  badges: [],
+                  createdAt: Timestamp.fromDate(new Date()),
+                  authMethod: 'google',
+                });
+              }
+              
               console.log('✅ Login Google realizado automaticamente via response!');
             } catch (error: any) {
               console.error('❌ Erro ao processar resposta automática:', error);
@@ -233,7 +265,16 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
       if (userSnap.exists()) {
         const data = userSnap.data();
-        setProfile({
+        // IMPORTANTE: Verificar explicitamente se onboardingCompleted existe e é true
+        // Se não existir ou for undefined, assumir false
+        const onboardingCompleted = data.onboardingCompleted === true;
+        console.log('📋 loadProfile - userId:', userId);
+        console.log('📋 loadProfile - onboardingCompleted (raw do Firestore):', data.onboardingCompleted);
+        console.log('📋 loadProfile - onboardingCompleted (tipo):', typeof data.onboardingCompleted);
+        console.log('📋 loadProfile - onboardingCompleted (processed):', onboardingCompleted);
+        console.log('📋 loadProfile - todos os campos do perfil:', Object.keys(data));
+        
+        const loadedProfile: UserProfile = {
           id: userId,
           name: data.name || '',
           email: data.email || '',
@@ -252,10 +293,22 @@ export function UserProvider({ children }: { children: ReactNode }) {
           triedOtherApps: data.triedOtherApps,
           dateOfBirth: data.dateOfBirth?.toDate(),
           desiredWeight: data.desiredWeight,
-          onboardingCompleted: data.onboardingCompleted || false,
-        });
+          referralCode: data.referralCode,
+          onboardingCompleted: onboardingCompleted, // Garantir que é boolean (true ou false)
+          // Auth method
+          authMethod: data.authMethod,
+        };
+        
+        console.log('📋 loadProfile - profile a definir com onboardingCompleted:', loadedProfile.onboardingCompleted);
+        console.log('📋 loadProfile - profile completo (JSON):', JSON.stringify(loadedProfile, null, 2));
+        setProfile(loadedProfile);
+        
+        // Verificar se o perfil foi definido corretamente
+        console.log('📋 loadProfile - perfil definido no estado');
       } else {
         // Criar perfil se não existir
+        // Determinar método de autenticação baseado no provider
+        const authMethod = user?.providerData?.[0]?.providerId === 'google.com' ? 'google' : 'email';
         const newProfile: UserProfile = {
           id: userId,
           name: user?.displayName || '',
@@ -264,6 +317,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           streak: 0,
           badges: [],
           createdAt: new Date(),
+          authMethod,
         };
         await setDoc(userRef, {
           ...newProfile,
@@ -291,6 +345,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
         if (firebaseUser) {
           console.log('Firebase onAuthStateChanged - loading profile for', firebaseUser.uid);
           await loadProfile(firebaseUser.uid);
+          
+          // Verificar novamente após carregar perfil
+          const verifyRef = doc(db, 'users', firebaseUser.uid);
+          const verifySnap = await getDoc(verifyRef);
+          if (verifySnap.exists()) {
+            const verifyData = verifySnap.data();
+            console.log('🔍 onAuthStateChanged - verificação onboardingCompleted:', verifyData.onboardingCompleted);
+          }
+          
           await AsyncStorage.setItem('userId', firebaseUser.uid);
         } else {
           console.log('Firebase onAuthStateChanged - no user');
@@ -310,31 +373,119 @@ export function UserProvider({ children }: { children: ReactNode }) {
   // Sign in com email e password
   const signIn = async (email: string, password: string) => {
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      // Verificar se a conta existe e qual o método de autenticação
+      // Primeiro tentar fazer login para ver se a conta existe
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      
+      // Se login funcionou, verificar método de autenticação
+      const userRef = doc(db, 'users', userCredential.user.uid);
+      const userSnap = await getDoc(userRef);
+      
+      if (userSnap.exists()) {
+        const data = userSnap.data();
+        if (data.authMethod === 'google') {
+          // Fazer logout e lançar erro
+          await firebaseSignOut(auth);
+          throw new Error('Esta conta foi criada com Google. Por favor, usa "Continuar com Google" para fazer login.');
+        }
+      }
     } catch (error: any) {
+      // Se for erro de credenciais inválidas, verificar se a conta existe
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        throw new Error('Email ou password incorretos. Se não tens conta, cria uma nova.');
+      }
       throw new Error(error.message || 'Erro ao fazer login');
     }
   };
 
   // Sign up com email e password
-  const signUp = async (email: string, password: string, name: string) => {
+  const signUp = async (email: string, password: string, name: string, onboardingData?: any) => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
       // Criar perfil no Firestore
       const userRef = doc(db, 'users', user.uid);
-      await setDoc(userRef, {
+      const profileData: any = {
         name,
         email,
         plan: 'free',
         streak: 0,
         badges: [],
         createdAt: Timestamp.fromDate(new Date()),
-      });
-
+        authMethod: 'email',
+      };
+      
+      // Incluir dados do onboarding se fornecidos
+      // IMPORTANTE: Fazer isto ANTES de guardar, para garantir que tudo está no mesmo setDoc
+      if (onboardingData) {
+        console.log('✅ signUp - onboardingData recebido:', Object.keys(onboardingData));
+        console.log('✅ signUp - onboardingData.onboardingCompleted:', onboardingData.onboardingCompleted);
+        
+        // Copiar todos os dados do onboarding, mas tratar campos especiais
+        Object.keys(onboardingData).forEach(key => {
+          const value = onboardingData[key];
+          if (value !== undefined && value !== null) {
+            // Se for Timestamp, manter como está (já está no formato correto)
+            // Se for Date, converter para Timestamp
+            if (value instanceof Date) {
+              profileData[key] = Timestamp.fromDate(value);
+            } else {
+              profileData[key] = value;
+            }
+            console.log(`✅ signUp - Copiado ${key}:`, value, 'tipo:', typeof value);
+          }
+        });
+      }
+      
+      // IMPORTANTE: Garantir que onboardingCompleted é explicitamente true (boolean)
+      // Isto DEVE estar no profileData antes do setDoc para evitar race conditions
+      if (onboardingData?.onboardingCompleted === true) {
+        profileData.onboardingCompleted = true; // Forçar boolean true
+        console.log('✅ signUp - onboardingCompleted = true FORÇADO no profileData');
+      }
+      
+      console.log('✅ signUp - Perfil a guardar com onboardingCompleted:', profileData.onboardingCompleted);
+      console.log('✅ signUp - Tipo onboardingCompleted:', typeof profileData.onboardingCompleted);
+      console.log('✅ signUp - Chaves do profileData:', Object.keys(profileData));
+      console.log('✅ signUp - onboardingCompleted existe no profileData?', 'onboardingCompleted' in profileData);
+      console.log('✅ signUp - profileData.onboardingCompleted valor:', profileData.onboardingCompleted);
+      
+      // Guardar perfil no Firestore COM TUDO incluído (incluindo onboardingCompleted)
+      // Isto garante que quando o onAuthStateChanged chamar loadProfile, já tem tudo
+      await setDoc(userRef, profileData);
+      
+      console.log('✅ signUp - Perfil guardado no Firestore');
+      
+      // Verificar IMEDIATAMENTE se foi guardado
+      const checkSnap = await getDoc(userRef);
+      if (checkSnap.exists()) {
+        const checkData = checkSnap.data();
+        console.log('✅ signUp - VERIFICAÇÃO IMEDIATA - onboardingCompleted:', checkData.onboardingCompleted);
+        console.log('✅ signUp - VERIFICAÇÃO IMEDIATA - tipo:', typeof checkData.onboardingCompleted);
+        console.log('✅ signUp - VERIFICAÇÃO IMEDIATA - todas as chaves:', Object.keys(checkData));
+        
+        // Se não foi guardado, FORÇAR guardar
+        if (checkData.onboardingCompleted !== true) {
+          console.log('⚠️ signUp - onboardingCompleted NÃO foi guardado! A forçar guardar...');
+          await setDoc(userRef, { onboardingCompleted: true }, { merge: true });
+          
+          // Verificar novamente
+          const checkSnap2 = await getDoc(userRef);
+          if (checkSnap2.exists()) {
+            const checkData2 = checkSnap2.data();
+            console.log('✅ signUp - Após correção - onboardingCompleted:', checkData2.onboardingCompleted);
+          }
+        }
+      }
+      
+      // Carregar perfil imediatamente (o onAuthStateChanged também vai chamar, mas garantimos que temos os dados corretos)
       await loadProfile(user.uid);
     } catch (error: any) {
+      // Se a conta já existe com Google, informar
+      if (error.code === 'auth/email-already-in-use') {
+        throw new Error('Este email já está registado com Google. Por favor, usa "Continuar com Google" para fazer login.');
+      }
       throw new Error(error.message || 'Erro ao criar conta');
     }
   };
@@ -430,14 +581,44 @@ export function UserProvider({ children }: { children: ReactNode }) {
       const userInfo = await GS.signIn();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const idTokenNative = (userInfo as any)?.idToken;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const googleEmail = (userInfo as any)?.user?.email;
 
       if (!idTokenNative) {
         throw new Error('Google Sign-In não retornou idToken');
       }
-
+      
       // Criar credencial Firebase e fazer login
       const credentialNative = GoogleAuthProvider.credential(idTokenNative);
-      await signInWithCredential(auth, credentialNative);
+      const userCredential = await signInWithCredential(auth, credentialNative);
+      
+      // Verificar se a conta foi criada com email/password
+      const userRef = doc(db, 'users', userCredential.user.uid);
+      const userSnap = await getDoc(userRef);
+      
+      if (userSnap.exists()) {
+        const data = userSnap.data();
+        if (data.authMethod === 'email') {
+          // Fazer logout e lançar erro
+          await firebaseSignOut(auth);
+          throw new Error('Esta conta foi criada com email e password. Por favor, usa o login com email.');
+        }
+        // Se não tem authMethod, atualizar para google
+        if (!data.authMethod) {
+          await setDoc(userRef, { authMethod: 'google' }, { merge: true });
+        }
+      } else {
+        // Criar perfil se não existir
+        await setDoc(userRef, {
+          name: userCredential.user.displayName || '',
+          email: userCredential.user.email || '',
+          plan: 'free',
+          streak: 0,
+          badges: [],
+          createdAt: Timestamp.fromDate(new Date()),
+          authMethod: 'google',
+        });
+      }
     } catch (error: any) {
       console.error('Native Google sign-in error:', error);
       // Se for erro relacionado com GoogleSignin não disponível, relançar com mensagem clara
@@ -489,12 +670,41 @@ export function UserProvider({ children }: { children: ReactNode }) {
         const accessToken = authPayload?.accessToken || authPayload?.access_token;
 
         console.log('🎫 Tokens recebidos:', { hasIdToken: !!idToken, hasAccessToken: !!accessToken });
-
+        
         if (idToken || accessToken) {
           // Criar credencial Firebase e fazer login
           console.log('🔥 Fazendo login no Firebase...');
           const credential = GoogleAuthProvider.credential(idToken || undefined, accessToken || undefined);
-          await signInWithCredential(auth, credential);
+          const userCredential = await signInWithCredential(auth, credential);
+          
+          // Verificar se a conta foi criada com email/password
+          const userRef = doc(db, 'users', userCredential.user.uid);
+          const userSnap = await getDoc(userRef);
+          
+          if (userSnap.exists()) {
+            const data = userSnap.data();
+            if (data.authMethod === 'email') {
+              // Fazer logout e lançar erro
+              await firebaseSignOut(auth);
+              throw new Error('Esta conta foi criada com email e password. Por favor, usa o login com email.');
+            }
+            // Se não tem authMethod, atualizar para google
+            if (!data.authMethod) {
+              await setDoc(userRef, { authMethod: 'google' }, { merge: true });
+            }
+          } else {
+            // Criar perfil se não existir
+            await setDoc(userRef, {
+              name: userCredential.user.displayName || '',
+              email: userCredential.user.email || '',
+              plan: 'free',
+              streak: 0,
+              badges: [],
+              createdAt: Timestamp.fromDate(new Date()),
+              authMethod: 'google',
+            });
+          }
+          
           console.log('✅ Login Firebase realizado com sucesso!');
           return; // Sucesso, sair
         }
@@ -553,13 +763,75 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   // Atualizar perfil
   const updateProfile = async (updates: Partial<UserProfile>) => {
-    if (!user) return;
+    // Usar o user do contexto, mas se não estiver disponível, tentar obter do Firebase Auth diretamente
+    let currentUser = user;
+    if (!currentUser) {
+      currentUser = getAuth().currentUser;
+    }
+    
+    if (!currentUser) {
+      console.log('⚠️ updateProfile - Nenhum utilizador disponível');
+      return;
+    }
+    
+    console.log('✅ updateProfile - Utilizando user:', currentUser.uid);
 
     try {
-      const userRef = doc(db, 'users', user.uid);
-      await setDoc(userRef, updates, { merge: true });
-      await loadProfile(user.uid);
+      const userRef = doc(db, 'users', currentUser.uid);
+      
+      // Preparar dados para guardar
+      const dataToSave: any = {};
+      
+      // Copiar todos os updates, tratando campos especiais
+      Object.keys(updates).forEach(key => {
+        const value = (updates as any)[key];
+        if (value !== undefined && value !== null) {
+          // Se for Date, converter para Timestamp
+          if (value instanceof Date) {
+            dataToSave[key] = Timestamp.fromDate(value);
+          } else {
+            dataToSave[key] = value;
+          }
+        }
+      });
+      
+      // IMPORTANTE: Garantir que onboardingCompleted é boolean true
+      if (updates.onboardingCompleted === true) {
+        dataToSave.onboardingCompleted = true;
+        console.log('✅ updateProfile - Forçando onboardingCompleted = true');
+      } else if (updates.onboardingCompleted !== undefined && updates.onboardingCompleted !== false) {
+        dataToSave.onboardingCompleted = updates.onboardingCompleted === true;
+      }
+      
+      console.log('✅ updateProfile - dados a guardar:', dataToSave);
+      console.log('✅ updateProfile - onboardingCompleted:', dataToSave.onboardingCompleted);
+      
+      await setDoc(userRef, dataToSave, { merge: true });
+      console.log('✅ updateProfile - dados guardados no Firestore');
+      
+      // Verificar IMEDIATAMENTE se foi guardado
+      const verifySnap = await getDoc(userRef);
+      if (verifySnap.exists()) {
+        const verifyData = verifySnap.data();
+        console.log('✅ updateProfile - VERIFICAÇÃO IMEDIATA - onboardingCompleted:', verifyData.onboardingCompleted);
+        
+        // Se não foi guardado, FORÇAR guardar
+        if (dataToSave.onboardingCompleted === true && verifyData.onboardingCompleted !== true) {
+          console.log('⚠️ updateProfile - onboardingCompleted NÃO foi guardado! A forçar guardar...');
+          await setDoc(userRef, { onboardingCompleted: true }, { merge: true });
+          
+          // Verificar novamente
+          const verifySnap2 = await getDoc(userRef);
+          if (verifySnap2.exists()) {
+            const verifyData2 = verifySnap2.data();
+            console.log('✅ updateProfile - Após correção - onboardingCompleted:', verifyData2.onboardingCompleted);
+          }
+        }
+      }
+      
+      await loadProfile(currentUser.uid);
     } catch (error: any) {
+      console.error('❌ updateProfile - Erro:', error);
       throw new Error(error.message || 'Erro ao atualizar perfil');
     }
   };
@@ -567,6 +839,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   // Atualizar perfil
   const refreshProfile = async () => {
     if (user) {
+      console.log('🔄 refreshProfile - a carregar perfil para user:', user.uid);
       await loadProfile(user.uid);
     }
   };
