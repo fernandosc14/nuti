@@ -12,18 +12,25 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  Modal,
+  Pressable,
+  TextInput,
+  StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '../context/UserContext';
+import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
 import { ChartCircle } from '../components/ChartCircle';
 import { MealCard } from '../components/MealCard';
 import { BadgeItem } from '../components/BadgeItem';
 import { Ionicons } from '@expo/vector-icons';
-import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, Timestamp, doc, deleteDoc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { updateStreak } from '../utils/streakUtils';
 import Toast from 'react-native-toast-message';
 import { MotiView } from 'moti';
+import { Image } from 'react-native';
 
 interface Meal {
   id: string;
@@ -32,6 +39,9 @@ interface Meal {
   mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
   image?: string;
   date: Date;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
 }
 
 interface Badge {
@@ -44,12 +54,24 @@ interface Badge {
 
 export function DashboardScreen({ navigation }: any) {
   const { user, profile, refreshProfile } = useUser();
+  const { t } = useLanguage();
+  const { theme } = useTheme();
   const [consumed, setConsumed] = useState(0);
   const [goal, setGoal] = useState(2000);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [badges, setBadges] = useState<Badge[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [macros, setMacros] = useState({ protein: 0, carbs: 0, fat: 0 });
+  const [selectedMeal, setSelectedMeal] = useState<Meal | null>(null);
+  const [showMealModal, setShowMealModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [mealToDelete, setMealToDelete] = useState<string | null>(null);
+  const [waterIntake, setWaterIntake] = useState(0); // em ml
+  const [showWaterModal, setShowWaterModal] = useState(false);
+  const [showEditWaterModal, setShowEditWaterModal] = useState(false);
+  const [waterAmount, setWaterAmount] = useState('250');
+  const [editWaterAmount, setEditWaterAmount] = useState('0');
 
   useEffect(() => {
     // Se não houver user, limpar estado e não carregar dados
@@ -120,6 +142,9 @@ export function DashboardScreen({ navigation }: any) {
 
       const mealsData: Meal[] = [];
       let totalCalories = 0;
+      let totalProtein = 0;
+      let totalCarbs = 0;
+      let totalFat = 0;
 
       snapshot.forEach((doc) => {
         const data = doc.data();
@@ -130,8 +155,14 @@ export function DashboardScreen({ navigation }: any) {
           mealType: data.mealType || 'snack',
           image: data.image,
           date: data.date?.toDate() || new Date(),
+          protein: data.protein,
+          carbs: data.carbs,
+          fat: data.fat,
         });
-        totalCalories += data.calories;
+        totalCalories += data.calories || 0;
+        totalProtein += data.protein || 0;
+        totalCarbs += data.carbs || 0;
+        totalFat += data.fat || 0;
       });
 
       // Verificar novamente antes de setState
@@ -141,6 +172,11 @@ export function DashboardScreen({ navigation }: any) {
 
       setMeals(mealsData.sort((a, b) => b.date.getTime() - a.date.getTime()));
       setConsumed(totalCalories);
+      setMacros({
+        protein: Math.round(totalProtein),
+        carbs: Math.round(totalCarbs),
+        fat: Math.round(totalFat),
+      });
 
       // Buscar badges
       if (profile?.badges && profile.badges.length > 0) {
@@ -169,14 +205,19 @@ export function DashboardScreen({ navigation }: any) {
 
         // Verificar antes de setState
         if (user && user.uid === currentUserId) {
-          setBadges(badgesData);
+        setBadges(badgesData);
         }
+      }
+
+      // Carregar água do dia (só se ainda houver user)
+      if (user && user.uid === currentUserId) {
+        await loadWaterIntake();
       }
 
       // Verificar antes de atualizar streak
       if (user && user.uid === currentUserId) {
-        await updateStreak(user.uid);
-        await refreshProfile();
+      await updateStreak(user.uid);
+      await refreshProfile();
       }
     } catch (error: any) {
       // Se for erro de permissões e não houver user, ignorar silenciosamente (logout em progresso)
@@ -187,15 +228,199 @@ export function DashboardScreen({ navigation }: any) {
       console.error('Error loading dashboard:', error);
       Toast.show({
         type: 'error',
-        text1: 'Erro',
-        text2: 'Erro ao carregar dados',
+        text1: t('common.error'),
+        text2: t('common.error'),
       });
     } finally {
       // Só atualizar loading se ainda for o mesmo user
       if (user && user.uid === currentUserId) {
-        setLoading(false);
-        setRefreshing(false);
+      setLoading(false);
+      setRefreshing(false);
       }
+    }
+  };
+
+  const handleDeleteMeal = (mealId: string) => {
+    setMealToDelete(mealId);
+    setShowDeleteModal(true);
+  };
+
+  const loadWaterIntake = async () => {
+    // Verificar user antes de qualquer operação
+    if (!user) {
+      setWaterIntake(0);
+      return;
+    }
+
+    // Guardar uid para verificar depois
+    const currentUserId = user.uid;
+
+    try {
+      // Verificar novamente antes de aceder ao Firestore
+      if (!user || user.uid !== currentUserId) {
+        setWaterIntake(0);
+        return;
+      }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const dateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+      const waterDocRef = doc(db, 'water', `${user.uid}_${dateStr}`);
+      const waterDoc = await getDoc(waterDocRef);
+
+      // Verificar novamente após query
+      if (!user || user.uid !== currentUserId) {
+        setWaterIntake(0);
+        return;
+      }
+
+      if (waterDoc.exists()) {
+        const data = waterDoc.data();
+        setWaterIntake(data.amount || 0);
+      } else {
+        setWaterIntake(0);
+      }
+    } catch (error: any) {
+      // Se for erro de permissões ou não houver user, ignorar silenciosamente (logout em progresso)
+      if (!user || error?.code === 'permission-denied') {
+        setWaterIntake(0);
+        return;
+      }
+      console.error('Error loading water intake:', error);
+      setWaterIntake(0);
+    }
+  };
+
+  const addWater = async () => {
+    if (!user) return;
+
+    const amount = parseInt(waterAmount) || 0;
+    if (amount <= 0) {
+      Toast.show({
+        type: 'error',
+        text1: t('common.error'),
+        text2: t('dashboard.waterInvalidAmount'),
+      });
+      return;
+    }
+
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const dateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+      const waterDocRef = doc(db, 'water', `${user.uid}_${dateStr}`);
+      const waterDoc = await getDoc(waterDocRef);
+
+      let newAmount = amount;
+      if (waterDoc.exists()) {
+        const currentAmount = waterDoc.data().amount || 0;
+        newAmount = currentAmount + amount;
+      }
+
+      await setDoc(waterDocRef, {
+        userId: user.uid,
+        date: Timestamp.fromDate(today),
+        amount: newAmount,
+        updatedAt: Timestamp.now(),
+      });
+
+      setWaterIntake(newAmount);
+      setShowWaterModal(false);
+      setWaterAmount('250');
+
+      Toast.show({
+        type: 'success',
+        text1: t('dashboard.waterAdded'),
+        text2: `${amount}ml ${t('dashboard.waterAddedMessage')}`,
+      });
+    } catch (error) {
+      console.error('Error adding water:', error);
+      Toast.show({
+        type: 'error',
+        text1: t('common.error'),
+        text2: t('dashboard.waterError'),
+      });
+    }
+  };
+
+  const editWater = async () => {
+    if (!user) return;
+
+    const amount = parseInt(editWaterAmount) || 0;
+    if (amount < 0) {
+      Toast.show({
+        type: 'error',
+        text1: t('common.error'),
+        text2: t('dashboard.waterInvalidAmount'),
+      });
+      return;
+    }
+
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const dateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+      const waterDocRef = doc(db, 'water', `${user.uid}_${dateStr}`);
+
+      if (amount === 0) {
+        // Se a quantidade for 0, eliminar o documento
+        await deleteDoc(waterDocRef);
+        setWaterIntake(0);
+      } else {
+        await setDoc(waterDocRef, {
+          userId: user.uid,
+          date: Timestamp.fromDate(today),
+          amount: amount,
+          updatedAt: Timestamp.now(),
+        });
+        setWaterIntake(amount);
+      }
+
+      setShowEditWaterModal(false);
+      setEditWaterAmount('0');
+
+      Toast.show({
+        type: 'success',
+        text1: t('dashboard.waterUpdated'),
+        text2: t('dashboard.waterUpdatedMessage'),
+      });
+    } catch (error) {
+      console.error('Error editing water:', error);
+      Toast.show({
+        type: 'error',
+        text1: t('common.error'),
+        text2: t('dashboard.waterError'),
+      });
+    }
+  };
+
+  const confirmDeleteMeal = async () => {
+    if (!mealToDelete) return;
+    
+    try {
+      const mealRef = doc(db, 'meals', mealToDelete);
+      await deleteDoc(mealRef);
+      
+      // Fechar modais
+      setShowDeleteModal(false);
+      setShowMealModal(false);
+      setMealToDelete(null);
+      
+      // Recarregar dados para atualizar totais e macros
+      await loadDashboardData();
+      
+      Toast.show({
+        type: 'success',
+        text1: t('dashboard.mealDeleted'),
+        text2: t('dashboard.mealDeletedMessage'),
+      });
+    } catch (error: any) {
+      console.error('Error deleting meal:', error);
+      Toast.show({
+        type: 'error',
+        text1: t('common.error'),
+        text2: t('dashboard.deleteMealError'),
+      });
     }
   };
 
@@ -212,57 +437,103 @@ export function DashboardScreen({ navigation }: any) {
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-white dark:bg-gray-900 items-center justify-center">
-        <ActivityIndicator size="large" color="#3BB273" />
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color={theme.colors.primary || '#3BB273'} />
       </SafeAreaView>
     );
   }
 
+  const getGreetingEmoji = () => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) return '🌅';
+    if (hour >= 12 && hour < 18) return '☀️';
+    if (hour >= 18 && hour < 22) return '🌆';
+    return '🌙';
+  };
+
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-gray-900">
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <ScrollView
-        className="flex-1"
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh}
+            tintColor={theme.colors.primary || '#3BB273'}
+            colors={[theme.colors.primary || '#3BB273']}
+          />
         }
       >
-        <View className="px-6 py-6">
+        <View style={{ paddingHorizontal: 24, paddingTop: 20 }}>
           {/* Header */}
-          <View className="flex-row items-center justify-between mb-6">
-            <View>
-              <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
-                Olá, {profile?.name || 'Utilizador'}! 👋
+          <MotiView
+            from={{ opacity: 0, translateY: -20 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 400 }}
+          >
+            <View style={{ marginBottom: 24 }}>
+              <Text style={{
+                fontSize: 32,
+                fontWeight: '800',
+                color: theme.colors.text,
+                marginBottom: 4,
+              }}>
+                {t('dashboard.greeting').replace('{name}', profile?.name || t('common.loading'))} {getGreetingEmoji()}
               </Text>
-              <Text className="text-gray-500 dark:text-gray-400">
-                Como está a correr o teu dia?
+              <Text style={{
+                fontSize: 16,
+                color: theme.colors.textSecondary || '#9CA3AF',
+              }}>
+                {t('dashboard.howIsDay')}
               </Text>
             </View>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Profile')}
-              className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 items-center justify-center"
-            >
-              <Ionicons name="person" size={20} color="#3BB273" />
-            </TouchableOpacity>
-          </View>
+          </MotiView>
 
           {/* Streak */}
           {profile && profile.streak > 0 && (
             <MotiView
               from={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ type: 'timing', duration: 300 }}
-              className="bg-gradient-to-r from-orange-100 to-red-100 dark:from-orange-900 dark:to-red-900 rounded-2xl p-4 mb-6 flex-row items-center"
+              transition={{ type: 'timing', duration: 400 }}
               style={{
-                backgroundColor: '#FED7AA',
+                backgroundColor: theme.mode === 'dark' ? '#7C2D12' : '#FED7AA',
+                borderRadius: 20,
+                padding: 20,
+                marginBottom: 24,
+                flexDirection: 'row',
+                alignItems: 'center',
+                shadowColor: '#F97316',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.2,
+                shadowRadius: 8,
+                elevation: 5,
               }}
             >
-              <Ionicons name="flame" size={32} color="#F97316" />
-              <View className="ml-4 flex-1">
-                <Text className="font-bold text-gray-900 dark:text-white text-lg">
-                  {profile.streak} dias consecutivos!
+              <View style={{
+                width: 56,
+                height: 56,
+                borderRadius: 28,
+                backgroundColor: theme.mode === 'dark' ? '#9A3412' : '#F97316',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <Ionicons name="flame" size={32} color="#FFFFFF" />
+              </View>
+              <View style={{ marginLeft: 16, flex: 1 }}>
+                <Text style={{
+                  fontWeight: '700',
+                  color: theme.colors.text,
+                  fontSize: 20,
+                  marginBottom: 4,
+                }}>
+                  {profile.streak} {t('dashboard.streak')}! 🔥
                 </Text>
-                <Text className="text-gray-600 dark:text-gray-300 text-sm">
-                  Continua assim! 🔥
+                <Text style={{
+                  color: theme.mode === 'dark' ? '#FBBF24' : '#92400E',
+                  fontSize: 14,
+                }}>
+                  {t('common.success')} 🔥
                 </Text>
               </View>
             </MotiView>
@@ -270,86 +541,1188 @@ export function DashboardScreen({ navigation }: any) {
 
           {/* Badges */}
           {badges.length > 0 && (
-            <View className="mb-6">
-              <View className="flex-row items-center mb-3">
-                <Ionicons name="trophy" size={20} color="#3BB273" />
-                <Text className="text-lg font-semibold text-gray-900 dark:text-white ml-2">
-                  Badges Recentes
+            <MotiView
+              from={{ opacity: 0, translateX: -20 }}
+              animate={{ opacity: 1, translateX: 0 }}
+              transition={{ type: 'timing', duration: 400, delay: 100 }}
+              style={{ marginBottom: 24 }}
+            >
+              <View style={{ 
+                flexDirection: 'row', 
+                alignItems: 'center', 
+                marginBottom: 16 
+              }}>
+                <View style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: theme.colors.primary + '20',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 12,
+                }}>
+                  <Ionicons name="trophy" size={22} color={theme.colors.primary || '#3BB273'} />
+                </View>
+                <Text style={{
+                  fontSize: 20,
+                  fontWeight: '700',
+                  color: theme.colors.text,
+                }}>
+                  {t('dashboard.badges')}
                 </Text>
               </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {badges.map((badge) => (
-                  <BadgeItem key={badge.id} {...badge} size="small" />
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingRight: 8 }}
+              >
+                {badges.map((badge, index) => (
+                  <MotiView
+                    key={badge.id}
+                    from={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ type: 'timing', duration: 300, delay: index * 100 }}
+                  >
+                    <BadgeItem {...badge} size="small" />
+                  </MotiView>
                 ))}
               </ScrollView>
-            </View>
+            </MotiView>
           )}
 
           {/* Gráfico Circular */}
-          <View className="mb-6">
+          <MotiView
+            from={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: 'timing', duration: 500, delay: 200 }}
+            style={{ marginBottom: 24 }}
+          >
             <ChartCircle consumed={consumed} goal={goal} />
+          </MotiView>
+
+          {/* Macros Cards */}
+          <MotiView
+            from={{ opacity: 0, translateY: 20 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 400, delay: 250 }}
+            style={{ marginBottom: 24 }}
+          >
+            <View style={{ 
+              flexDirection: 'row', 
+              gap: 12,
+            }}>
+              {/* Proteína */}
+              <View style={{
+                flex: 1,
+                backgroundColor: theme.colors.card,
+                borderRadius: 20,
+                padding: 16,
+                alignItems: 'center',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 8,
+                elevation: 3,
+              }}>
+                  <View style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 24,
+                    backgroundColor: '#FEE2E2',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: 8,
+                  }}>
+                    <Ionicons name="nutrition" size={24} color="#EF4444" />
+                  </View>
+                  <Text style={{
+                    fontSize: 24,
+                    fontWeight: '800',
+                    color: theme.colors.text,
+                    marginBottom: 4,
+                  }}>
+                    {macros.protein}g
+                  </Text>
+                  <Text style={{
+                    fontSize: 12,
+                    color: theme.colors.textSecondary || '#9CA3AF',
+                    fontWeight: '600',
+                  }}>
+                  {t('dashboard.protein')}
+                  </Text>
           </View>
 
-          {/* Refeições de Hoje */}
-          <View className="mb-6">
-            <Text className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-              Refeições de Hoje
-            </Text>
-            {meals.length === 0 ? (
-              <View className="bg-gray-100 dark:bg-gray-800 rounded-2xl p-6 items-center">
-                <Text className="text-gray-500 dark:text-gray-400 text-center mb-2">
-                  Ainda não registaste refeições hoje.
+              {/* Carboidratos */}
+              <View style={{
+                flex: 1,
+                backgroundColor: theme.colors.card,
+                borderRadius: 20,
+                padding: 16,
+                alignItems: 'center',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 8,
+                elevation: 3,
+              }}>
+                <View style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: '#D1FAE5',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 8,
+                }}>
+                  <Ionicons name="fast-food" size={24} color="#10B981" />
+                </View>
+                <Text style={{
+                  fontSize: 24,
+                  fontWeight: '800',
+                  color: theme.colors.text,
+                  marginBottom: 4,
+                }}>
+                  {macros.carbs}g
                 </Text>
-                <Text className="text-sm text-gray-400 dark:text-gray-500 text-center">
-                  Adiciona a tua primeira refeição! 🍽️
+                <Text style={{
+                  fontSize: 12,
+                  color: theme.colors.textSecondary || '#9CA3AF',
+                  fontWeight: '600',
+                }}>
+                  {t('dashboard.carbs')}
+                </Text>
+              </View>
+
+              {/* Gordura */}
+              <View style={{
+                flex: 1,
+                backgroundColor: theme.colors.card,
+                borderRadius: 20,
+                padding: 16,
+                alignItems: 'center',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 8,
+                elevation: 3,
+              }}>
+                <View style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: '#FEF9C3',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 8,
+                }}>
+                  <Ionicons name="flame" size={24} color="#EAB308" />
+                </View>
+                <Text style={{
+                  fontSize: 24,
+                  fontWeight: '800',
+                  color: theme.colors.text,
+                  marginBottom: 4,
+                }}>
+                  {macros.fat}g
+                </Text>
+                <Text style={{
+                  fontSize: 12,
+                  color: theme.colors.textSecondary || '#9CA3AF',
+                  fontWeight: '600',
+                }}>
+                  {t('dashboard.fat')}
+                </Text>
+              </View>
+            </View>
+          </MotiView>
+
+          {/* Água */}
+          <MotiView
+            from={{ opacity: 0, translateY: 20 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 400, delay: 300 }}
+            style={{ marginBottom: 24 }}
+          >
+            <View style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              marginBottom: 16 
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: '#3B82F6' + '20',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 12,
+                }}>
+                  <Ionicons name="water" size={22} color="#3B82F6" />
+                </View>
+                <Text style={{
+                  fontSize: 20,
+                  fontWeight: '700',
+                  color: theme.colors.text,
+                }}>
+                  {t('dashboard.water')}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setEditWaterAmount(waterIntake.toString());
+                  setShowEditWaterModal(true);
+                }}
+                activeOpacity={0.7}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 12,
+                  backgroundColor: theme.colors.card,
+                  borderWidth: 1,
+                  borderColor: theme.colors.border || '#E5E7EB',
+                }}
+              >
+                <Text style={{
+                  fontSize: 18,
+                  fontWeight: '700',
+                  color: '#3B82F6',
+                  marginRight: 6,
+                }}>
+                  {waterIntake}ml
+                </Text>
+                <Ionicons name="create-outline" size={16} color="#3B82F6" />
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              onPress={() => setShowWaterModal(true)}
+              activeOpacity={0.7}
+              style={{
+                backgroundColor: theme.mode === 'dark' 
+                  ? 'rgba(59, 130, 246, 0.3)' 
+                  : 'rgba(59, 130, 246, 0.9)',
+                borderRadius: 16,
+                padding: 16,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#3B82F6',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+                elevation: 5,
+                borderWidth: 1,
+                borderColor: theme.mode === 'dark' 
+                  ? 'rgba(59, 130, 246, 0.4)' 
+                  : 'rgba(59, 130, 246, 1)',
+              }}
+            >
+              <Ionicons name="add-circle" size={24} color="#FFFFFF" />
+              <Text style={{
+                color: '#FFFFFF',
+                fontWeight: '700',
+                fontSize: 16,
+                marginLeft: 8,
+              }}>
+                {t('dashboard.addWater')}
+              </Text>
+            </TouchableOpacity>
+          </MotiView>
+
+          {/* Refeições de Hoje */}
+          <MotiView
+            from={{ opacity: 0, translateY: 20 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 400, delay: 300 }}
+            style={{ marginBottom: 24 }}
+          >
+            <View style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              marginBottom: 16 
+            }}>
+              <View style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: theme.colors.primary + '20',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: 12,
+              }}>
+                <Ionicons name="restaurant" size={22} color={theme.colors.primary || '#3BB273'} />
+              </View>
+              <Text style={{
+                fontSize: 20,
+                fontWeight: '700',
+                color: theme.colors.text,
+              }}>
+                {t('dashboard.mealsToday')}
+            </Text>
+            </View>
+            {meals.length === 0 ? (
+              <View style={{
+                backgroundColor: theme.colors.card,
+                borderRadius: 20,
+                padding: 32,
+                alignItems: 'center',
+                borderWidth: 2,
+                borderColor: theme.colors.border || '#E5E7EB',
+                borderStyle: 'dashed',
+              }}>
+                <Text style={{ fontSize: 48, marginBottom: 12 }}>🍽️</Text>
+                <Text style={{
+                  color: theme.colors.textSecondary || '#9CA3AF',
+                  fontSize: 16,
+                  textAlign: 'center',
+                  marginBottom: 8,
+                  fontWeight: '600',
+                }}>
+                  {t('dashboard.noMeals')}
+                </Text>
+                <Text style={{
+                  color: theme.colors.textSecondary || '#9CA3AF',
+                  fontSize: 14,
+                  textAlign: 'center',
+                }}>
+                  {t('dashboard.addFirstMeal')}
                 </Text>
               </View>
             ) : (
-              meals.map((meal) => (
-                <MealCard
+              <View style={{ gap: 12 }}>
+                {meals
+                  .filter(meal => meal && meal.id && meal.name) // Filtrar meals inválidos
+                  .map((meal, index) => (
+                    <MotiView
                   key={meal.id}
-                  {...meal}
-                  time={meal.date.toLocaleTimeString('pt-PT', {
+                      from={{ opacity: 0, translateX: -20 }}
+                      animate={{ opacity: 1, translateX: 0 }}
+                      transition={{ type: 'timing', duration: 300, delay: index * 100 }}
+                    >
+                      <MealCard
+                        id={meal.id}
+                        name={meal.name || 'Meal'}
+                        calories={meal.calories || 0}
+                        mealType={meal.mealType || 'snack'}
+                        image={meal.image}
+                        time={meal.date?.toLocaleTimeString('pt-PT', {
                     hour: '2-digit',
                     minute: '2-digit',
-                  })}
-                />
-              ))
-            )}
+                        }) || ''}
+                        onPress={() => {
+                          setSelectedMeal(meal);
+                          setShowMealModal(true);
+                        }}
+                        onDelete={() => handleDeleteMeal(meal.id)}
+                      />
+                    </MotiView>
+                  ))}
           </View>
+            )}
+          </MotiView>
 
           {/* Premium Banner */}
           {profile?.plan === 'free' && (
+            <MotiView
+              from={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ type: 'timing', duration: 400, delay: 400 }}
+            >
             <TouchableOpacity
               onPress={() => navigation.navigate('Premium')}
-              className="bg-gradient-to-r from-green-500 to-green-600 rounded-2xl p-4 mb-6"
-            >
-              <View className="flex-row items-center">
+                activeOpacity={0.8}
+                style={{
+                  backgroundColor: theme.mode === 'dark' ? '#065F46' : '#10B981',
+                  borderRadius: 20,
+                  padding: 20,
+                  marginBottom: 24,
+                  shadowColor: '#10B981',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 6,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 24,
+                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
                 <Ionicons name="star" size={24} color="#FFFFFF" />
-                <View className="ml-3 flex-1">
-                  <Text className="text-white font-semibold text-base">
-                    ✨ Atualiza para Premium
+                  </View>
+                  <View style={{ marginLeft: 16, flex: 1 }}>
+                    <Text style={{
+                      color: '#FFFFFF',
+                      fontWeight: '700',
+                      fontSize: 18,
+                      marginBottom: 4,
+                    }}>
+                      ✨ {t('dashboard.upgradePremium')}
                   </Text>
-                  <Text className="text-white/90 text-sm">
+                    <Text style={{
+                      color: 'rgba(255, 255, 255, 0.9)',
+                      fontSize: 14,
+                    }}>
                     Chat IA ilimitado e relatórios personalizados!
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+                  <Ionicons name="chevron-forward" size={24} color="#FFFFFF" />
               </View>
             </TouchableOpacity>
+            </MotiView>
           )}
         </View>
       </ScrollView>
 
-      {/* Botão Flutuante */}
-      <TouchableOpacity
-        onPress={() => navigation.navigate('AddMeal')}
-        className="absolute bottom-6 right-6 w-16 h-16 bg-green-500 rounded-full items-center justify-center shadow-lg"
-        style={{ elevation: 8 }}
+      {/* Modal de Detalhes da Refeição */}
+      <Modal
+        visible={showMealModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowMealModal(false)}
       >
-        <Ionicons name="add" size={32} color="#FFFFFF" />
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+          onPress={() => setShowMealModal(false)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: theme.colors.card,
+              borderRadius: 30,
+              paddingTop: 20,
+              paddingBottom: 20,
+              paddingHorizontal: 20,
+              width: '90%',
+              maxHeight: '80%',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 12,
+              elevation: 8,
+            }}
+          >
+            {selectedMeal && (
+              <>
+                {/* Header */}
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: 16,
+                }}>
+                  <Text style={{
+                    fontSize: 20,
+                    fontWeight: '700',
+                    color: theme.colors.text,
+                    flex: 1,
+                  }} numberOfLines={2}>
+                    {selectedMeal.name}
+                  </Text>
+      <TouchableOpacity
+                    onPress={() => setShowMealModal(false)}
+                    style={{
+                      padding: 8,
+                      marginLeft: 12,
+                    }}
+                  >
+                    <Ionicons name="close" size={24} color={theme.colors.text} />
       </TouchableOpacity>
-    </SafeAreaView>
+                </View>
+
+                {/* Informações */}
+                <View>
+                  {/* Imagem */}
+                  {selectedMeal.image && (
+                    <View style={{
+                      marginBottom: 16,
+                      borderRadius: 16,
+                      overflow: 'hidden',
+                    }}>
+                      <Image
+                        source={{ uri: selectedMeal.image }}
+                        style={{
+                          width: '100%',
+                          height: 150,
+                        }}
+                        resizeMode="cover"
+                      />
+                    </View>
+                  )}
+
+                  <View style={{ gap: 14 }}>
+                    {/* Tipo de Refeição */}
+                    <View>
+                      <Text style={{
+                        fontSize: 13,
+                        color: theme.colors.textSecondary || '#9CA3AF',
+                        marginBottom: 6,
+                        fontWeight: '600',
+                      }}>
+                        {t('dashboard.mealType')}
+                      </Text>
+                      <Text style={{
+                        fontSize: 16,
+                        color: theme.colors.text,
+                        fontWeight: '700',
+                      }}>
+                        {selectedMeal.mealType === 'breakfast' ? '🌅 ' + t('addMeal.breakfast') :
+                         selectedMeal.mealType === 'lunch' ? '🍽️ ' + t('addMeal.lunch') :
+                         selectedMeal.mealType === 'dinner' ? '🌙 ' + t('addMeal.dinner') :
+                         '🍎 ' + t('addMeal.snack')}
+                      </Text>
+                    </View>
+
+                    {/* Data e Hora */}
+                    <View>
+                      <Text style={{
+                        fontSize: 13,
+                        color: theme.colors.textSecondary || '#9CA3AF',
+                        marginBottom: 6,
+                        fontWeight: '600',
+                      }}>
+                        {t('dashboard.dateTime')}
+                      </Text>
+                      <Text style={{
+                        fontSize: 16,
+                        color: theme.colors.text,
+                        fontWeight: '700',
+                      }}>
+                        {selectedMeal.date.toLocaleDateString('pt-PT', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                        })} às {selectedMeal.date.toLocaleTimeString('pt-PT', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </Text>
+                    </View>
+
+                    {/* Calorias */}
+                    <View style={{
+                      backgroundColor: theme.colors.primary + '20',
+                      borderRadius: 14,
+                      padding: 12,
+                    }}>
+                      <Text style={{
+                        fontSize: 13,
+                        color: theme.colors.textSecondary || '#9CA3AF',
+                        marginBottom: 6,
+                        fontWeight: '600',
+                      }}>
+                        {t('dashboard.calories')}
+                      </Text>
+                      <Text style={{
+                        fontSize: 28,
+                        color: theme.colors.primary || '#3BB273',
+                        fontWeight: '800',
+                      }}>
+                        {selectedMeal.calories} kcal
+                      </Text>
+                    </View>
+
+                    {/* Macros */}
+                    {(selectedMeal.protein !== undefined || selectedMeal.carbs !== undefined || selectedMeal.fat !== undefined) && (
+                      <View>
+                        <Text style={{
+                          fontSize: 14,
+                          color: theme.colors.text,
+                          marginBottom: 12,
+                          fontWeight: '700',
+                        }}>
+                          {t('dashboard.macros')}
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                          {selectedMeal.protein !== undefined && (
+                            <View style={{
+                              flex: 1,
+                              backgroundColor: '#FEE2E2',
+                              borderRadius: 14,
+                              padding: 12,
+                              alignItems: 'center',
+                              borderWidth: 1,
+                              borderColor: '#FECACA',
+                            }}>
+                              <Ionicons name="nutrition" size={20} color="#EF4444" />
+                              <Text style={{
+                                fontSize: 20,
+                                fontWeight: '800',
+                                color: '#EF4444',
+                                marginTop: 6,
+                              }}>
+                                {Math.round(selectedMeal.protein)}g
+                              </Text>
+                              <Text style={{
+                                fontSize: 12,
+                                color: '#991B1B',
+                                marginTop: 3,
+                                fontWeight: '600',
+                              }}>
+                                {t('dashboard.protein')}
+                              </Text>
+                            </View>
+                          )}
+                          {selectedMeal.carbs !== undefined && (
+                            <View style={{
+                              flex: 1,
+                              backgroundColor: '#D1FAE5',
+                              borderRadius: 14,
+                              padding: 12,
+                              alignItems: 'center',
+                              borderWidth: 1,
+                              borderColor: '#A7F3D0',
+                            }}>
+                              <Ionicons name="fast-food" size={20} color="#10B981" />
+                              <Text style={{
+                                fontSize: 20,
+                                fontWeight: '800',
+                                color: '#10B981',
+                                marginTop: 6,
+                              }}>
+                                {Math.round(selectedMeal.carbs)}g
+                              </Text>
+                              <Text style={{
+                                fontSize: 12,
+                                color: '#047857',
+                                marginTop: 3,
+                                fontWeight: '600',
+                              }}>
+                                {t('dashboard.carbs')}
+                              </Text>
+                            </View>
+                          )}
+                          {selectedMeal.fat !== undefined && (
+                            <View style={{
+                              flex: 1,
+                              backgroundColor: '#FEF9C3',
+                              borderRadius: 14,
+                              padding: 12,
+                              alignItems: 'center',
+                              borderWidth: 1,
+                              borderColor: '#FDE68A',
+                            }}>
+                              <Ionicons name="flame" size={20} color="#EAB308" />
+                              <Text style={{
+                                fontSize: 20,
+                                fontWeight: '800',
+                                color: '#EAB308',
+                                marginTop: 6,
+                              }}>
+                                {Math.round(selectedMeal.fat)}g
+                              </Text>
+                              <Text style={{
+                                fontSize: 12,
+                                color: '#A16207',
+                                marginTop: 3,
+                                fontWeight: '600',
+                              }}>
+                                {t('dashboard.fat')}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Botão Eliminar */}
+                    <TouchableOpacity
+                      onPress={() => {
+                        setShowMealModal(false);
+                        setTimeout(() => {
+                          handleDeleteMeal(selectedMeal.id);
+                        }, 300);
+                      }}
+                      style={{
+                        backgroundColor: '#FEE2E2',
+                        borderRadius: 14,
+                        padding: 12,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginTop: 4,
+                      }}
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                      <Text style={{
+                        fontSize: 15,
+                        fontWeight: '600',
+                        color: '#EF4444',
+                        marginLeft: 8,
+                      }}>
+                        {t('dashboard.delete')}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Modal de Confirmação de Eliminação */}
+      <Modal
+        visible={showDeleteModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowDeleteModal(false);
+          setMealToDelete(null);
+        }}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+          onPress={() => {
+            setShowDeleteModal(false);
+            setMealToDelete(null);
+          }}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: theme.colors.card,
+              borderRadius: 24,
+              padding: 24,
+              width: '85%',
+              maxWidth: 400,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 12,
+              elevation: 8,
+            }}
+          >
+            {/* Ícone de Aviso */}
+            <View style={{
+              width: 64,
+              height: 64,
+              borderRadius: 32,
+              backgroundColor: '#FEE2E2',
+              alignItems: 'center',
+              justifyContent: 'center',
+              alignSelf: 'center',
+              marginBottom: 20,
+            }}>
+              <Ionicons name="trash" size={32} color="#EF4444" />
+            </View>
+
+            {/* Título */}
+            <Text style={{
+              fontSize: 22,
+              fontWeight: '700',
+              color: theme.colors.text,
+              textAlign: 'center',
+              marginBottom: 12,
+            }}>
+              {t('dashboard.deleteMeal')}
+            </Text>
+
+            {/* Mensagem */}
+            <Text style={{
+              fontSize: 15,
+              color: theme.colors.textSecondary || '#6B7280',
+              textAlign: 'center',
+              marginBottom: 24,
+              lineHeight: 22,
+            }}>
+              {t('dashboard.deleteMealConfirm')}
+            </Text>
+
+            {/* Botões */}
+            <View style={{
+              flexDirection: 'row',
+              gap: 12,
+            }}>
+              {/* Botão Cancelar */}
+              <TouchableOpacity
+                onPress={() => {
+                  setShowDeleteModal(false);
+                  setMealToDelete(null);
+                }}
+                style={{
+                  flex: 1,
+                  backgroundColor: theme.colors.border || '#E5E7EB',
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={{
+                  fontSize: 16,
+                  fontWeight: '600',
+                  color: theme.colors.text,
+                }}>
+                  {t('common.cancel')}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Botão Eliminar */}
+              <TouchableOpacity
+                onPress={confirmDeleteMeal}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#EF4444',
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{
+                  fontSize: 16,
+                  fontWeight: '600',
+                  color: '#FFFFFF',
+                }}>
+                  {t('dashboard.delete')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Modal de Adicionar Água */}
+      <Modal
+        visible={showWaterModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowWaterModal(false)}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+          onPress={() => setShowWaterModal(false)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: theme.colors.card,
+              borderRadius: 24,
+              padding: 24,
+              width: '85%',
+              maxWidth: 400,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 12,
+              elevation: 8,
+            }}
+          >
+            {/* Ícone de Água */}
+            <View style={{
+              width: 64,
+              height: 64,
+              borderRadius: 32,
+              backgroundColor: '#DBEAFE',
+              alignItems: 'center',
+              justifyContent: 'center',
+              alignSelf: 'center',
+              marginBottom: 20,
+            }}>
+              <Ionicons name="water" size={32} color="#3B82F6" />
+            </View>
+
+            {/* Título */}
+            <Text style={{
+              fontSize: 22,
+              fontWeight: '700',
+              color: theme.colors.text,
+              textAlign: 'center',
+              marginBottom: 12,
+            }}>
+              {t('dashboard.addWater')}
+            </Text>
+
+            {/* Botões de Quantidade Rápida */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{
+                fontSize: 14,
+                fontWeight: '600',
+                color: theme.colors.textSecondary || '#6B7280',
+                marginBottom: 8,
+              }}>
+                {t('dashboard.waterAmount')} (ml)
+              </Text>
+              <View style={{
+                flexDirection: 'row',
+                gap: 8,
+                marginBottom: 12,
+              }}>
+                {[250, 500, 750, 1000].map((amount) => (
+                  <TouchableOpacity
+                    key={amount}
+                    onPress={() => setWaterAmount(amount.toString())}
+                    style={{
+                      flex: 1,
+                      backgroundColor: waterAmount === amount.toString() 
+                        ? '#3B82F6' 
+                        : theme.colors.border || '#E5E7EB',
+                      borderRadius: 12,
+                      paddingVertical: 12,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{
+                      fontSize: 14,
+                      fontWeight: '600',
+                      color: waterAmount === amount.toString() 
+                        ? '#FFFFFF' 
+                        : theme.colors.text,
+                    }}>
+                      {amount}ml
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={{
+                backgroundColor: theme.colors.border || '#E5E7EB',
+                borderRadius: 12,
+                paddingHorizontal: 16,
+                paddingVertical: 14,
+                flexDirection: 'row',
+                alignItems: 'center',
+              }}>
+                <Text style={{
+                  fontSize: 16,
+                  fontWeight: '600',
+                  color: theme.colors.text,
+                  flex: 1,
+                }}>
+                  {waterAmount}
+                </Text>
+                <Text style={{
+                  fontSize: 14,
+                  color: theme.colors.textSecondary || '#6B7280',
+                }}>
+                  ml
+                </Text>
+              </View>
+            </View>
+
+            {/* Botões */}
+            <View style={{
+              flexDirection: 'row',
+              gap: 12,
+            }}>
+              {/* Botão Cancelar */}
+              <TouchableOpacity
+                onPress={() => {
+                  setShowWaterModal(false);
+                  setWaterAmount('250');
+                }}
+                style={{
+                  flex: 1,
+                  backgroundColor: theme.colors.border || '#E5E7EB',
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={{
+                  fontSize: 16,
+                  fontWeight: '600',
+                  color: theme.colors.text,
+                }}>
+                  {t('common.cancel')}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Botão Adicionar */}
+              <TouchableOpacity
+                onPress={addWater}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#3B82F6',
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{
+                  fontSize: 16,
+                  fontWeight: '600',
+                  color: '#FFFFFF',
+                }}>
+                  {t('dashboard.add')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Modal de Editar Água */}
+      <Modal
+        visible={showEditWaterModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowEditWaterModal(false)}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+          onPress={() => setShowEditWaterModal(false)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: theme.colors.card,
+              borderRadius: 24,
+              padding: 24,
+              width: '85%',
+              maxWidth: 400,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 12,
+              elevation: 8,
+            }}
+          >
+            {/* Ícone de Água */}
+            <View style={{
+              width: 64,
+              height: 64,
+              borderRadius: 32,
+              backgroundColor: '#DBEAFE',
+              alignItems: 'center',
+              justifyContent: 'center',
+              alignSelf: 'center',
+              marginBottom: 20,
+            }}>
+              <Ionicons name="water" size={32} color="#3B82F6" />
+            </View>
+
+            {/* Título */}
+            <Text style={{
+              fontSize: 22,
+              fontWeight: '700',
+              color: theme.colors.text,
+              textAlign: 'center',
+              marginBottom: 12,
+            }}>
+              {t('dashboard.editWater')}
+            </Text>
+
+            {/* Input de Quantidade Total */}
+            <View style={{ marginBottom: 24 }}>
+              <Text style={{
+                fontSize: 14,
+                fontWeight: '600',
+                color: theme.colors.textSecondary || '#6B7280',
+                marginBottom: 8,
+              }}>
+                {t('dashboard.waterTotal')} (ml)
+              </Text>
+              <TextInput
+                value={editWaterAmount}
+                onChangeText={setEditWaterAmount}
+                keyboardType="numeric"
+                style={{
+                  backgroundColor: theme.colors.border || '#E5E7EB',
+                  borderRadius: 12,
+                  paddingHorizontal: 16,
+                  paddingVertical: 14,
+                  fontSize: 18,
+                  fontWeight: '600',
+                  color: theme.colors.text,
+                  textAlign: 'center',
+                }}
+                placeholder="0"
+                placeholderTextColor={theme.colors.textSecondary || '#6B7280'}
+              />
+            </View>
+
+            {/* Botões */}
+            <View style={{
+              flexDirection: 'row',
+              gap: 12,
+            }}>
+              {/* Botão Cancelar */}
+              <TouchableOpacity
+                onPress={() => {
+                  setShowEditWaterModal(false);
+                  setEditWaterAmount('0');
+                }}
+                style={{
+                  flex: 1,
+                  backgroundColor: theme.colors.border || '#E5E7EB',
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={{
+                  fontSize: 16,
+                  fontWeight: '600',
+                  color: theme.colors.text,
+                }}>
+                  {t('common.cancel')}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Botão Guardar */}
+              <TouchableOpacity
+                onPress={editWater}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#3B82F6',
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{
+                  fontSize: 16,
+                  fontWeight: '600',
+                  color: '#FFFFFF',
+                }}>
+                  {t('common.save')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
   );
 }
 

@@ -40,7 +40,7 @@ export function PremiumScreen({ navigation }: any) {
     {
       icon: '🤖',
       title: 'Chat IA Ilimitado',
-      description: 'Faz quantas perguntas quiseres ao NutriBot',
+      description: 'Faz quantas perguntas quiseres à Ajuda Nuti',
     },
     {
       icon: '📊',

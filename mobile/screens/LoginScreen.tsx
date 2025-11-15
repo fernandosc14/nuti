@@ -18,11 +18,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '../context/UserContext';
+import { useLanguage } from '../context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 
 export function LoginScreen({ navigation }: any) {
   const { signIn, signInWithGoogle, signInWithGoogleNative } = useUser();
+  const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -32,8 +34,8 @@ export function LoginScreen({ navigation }: any) {
     if (!email.trim() || !password.trim()) {
       Toast.show({
         type: 'error',
-        text1: 'Erro',
-        text2: 'Por favor, preencha todos os campos',
+        text1: t('common.error'),
+        text2: t('auth.invalidCredentials'),
       });
       return;
     }
@@ -43,14 +45,14 @@ export function LoginScreen({ navigation }: any) {
       await signIn(email.trim(), password);
       Toast.show({
         type: 'success',
-        text1: 'Bem-vindo!',
-        text2: 'Login realizado com sucesso',
+        text1: t('common.success'),
+        text2: t('auth.signIn') + ' ' + t('common.success'),
       });
     } catch (error: any) {
       Toast.show({
         type: 'error',
-        text1: 'Erro ao fazer login',
-        text2: error.message || 'Credenciais inválidas',
+        text1: t('common.error'),
+        text2: error.message || t('auth.invalidCredentials'),
       });
     } finally {
       setLoading(false);
@@ -63,14 +65,14 @@ export function LoginScreen({ navigation }: any) {
       await signInWithGoogle();
       Toast.show({
         type: 'success',
-        text1: 'Bem-vindo!',
-        text2: 'Login realizado com sucesso',
+        text1: t('common.success'),
+        text2: t('auth.signIn') + ' ' + t('common.success'),
       });
     } catch (error: any) {
       Toast.show({
         type: 'error',
-        text1: 'Erro ao fazer login',
-        text2: error.message || 'Erro ao fazer login com Google',
+        text1: t('common.error'),
+        text2: error.message || t('common.error'),
       });
     } finally {
       setLoading(false);
@@ -96,7 +98,7 @@ export function LoginScreen({ navigation }: any) {
               Nuti
             </Text>
             <Text className="text-gray-500 dark:text-gray-400">
-              O teu assistente nutricional
+              {t('welcome.subtitle')}
             </Text>
           </View>
 
@@ -104,7 +106,7 @@ export function LoginScreen({ navigation }: any) {
           <View className="space-y-4 mb-6">
             <View>
               <Text className="text-gray-700 dark:text-gray-300 mb-2 font-medium">
-                Email
+                {t('auth.email')}
               </Text>
               <TextInput
                 className="bg-gray-100 dark:bg-gray-800 rounded-xl px-4 py-4 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700"
@@ -120,7 +122,7 @@ export function LoginScreen({ navigation }: any) {
 
             <View>
               <Text className="text-gray-700 dark:text-gray-300 mb-2 font-medium">
-                Password
+                {t('auth.password')}
               </Text>
               <View className="relative">
                 <TextInput
@@ -156,14 +158,14 @@ export function LoginScreen({ navigation }: any) {
             {loading ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text className="text-white font-semibold text-lg">Entrar</Text>
+              <Text className="text-white font-semibold text-lg">{t('auth.signIn')}</Text>
             )}
           </TouchableOpacity>
 
           {/* Divisor */}
           <View className="flex-row items-center my-6">
             <View className="flex-1 h-px bg-gray-300 dark:bg-gray-700" />
-            <Text className="mx-4 text-gray-500 dark:text-gray-400">ou</Text>
+            <Text className="mx-4 text-gray-500 dark:text-gray-400">{t('auth.or')}</Text>
             <View className="flex-1 h-px bg-gray-300 dark:bg-gray-700" />
           </View>
 
@@ -175,15 +177,14 @@ export function LoginScreen({ navigation }: any) {
                 await signInWithGoogleNative();
                 Toast.show({
                   type: 'success',
-                  text1: 'Bem-vindo!',
-                  text2: 'Login Google (nativo) realizado com sucesso',
+                  text1: t('common.success'),
+                  text2: t('auth.signIn') + ' ' + t('common.success'),
                 });
               } catch (error: any) {
-                // Se nativo não estiver disponível, mostra erro claro (evitar fallback silencioso para web)
                 Toast.show({
                   type: 'error',
-                  text1: 'Erro ao fazer login (nativo)',
-                  text2: error?.message || 'Google Sign-In nativo indisponível. Garante dev client e credenciais.',
+                  text1: t('common.error'),
+                  text2: error?.message || t('common.error'),
                 });
               } finally {
                 setLoading(false);
@@ -195,7 +196,7 @@ export function LoginScreen({ navigation }: any) {
           >
             <Ionicons name="logo-google" size={20} color="#4285F4" />
             <Text className="text-gray-900 dark:text-white font-semibold ml-2">
-              Continuar com Google
+              {t('auth.continueWithGoogle')}
             </Text>
           </TouchableOpacity>
 
@@ -203,10 +204,10 @@ export function LoginScreen({ navigation }: any) {
           {/* Link para Welcome */}
           <View className="flex-row justify-center mt-6">
             <Text className="text-gray-500 dark:text-gray-400">
-              Não tens conta?{' '}
+              {t('auth.noAccount')}{' '}
             </Text>
             <TouchableOpacity onPress={() => navigation.navigate('Welcome')}>
-              <Text className="text-green-500 font-semibold">Voltar</Text>
+              <Text className="text-green-500 font-semibold">{t('common.close')}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

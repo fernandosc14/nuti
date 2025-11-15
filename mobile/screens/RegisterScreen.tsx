@@ -17,11 +17,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '../context/UserContext';
+import { useLanguage } from '../context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 
 export function RegisterScreen({ navigation }: any) {
   const { signUp, signInWithGoogleNative } = useUser();
+  const { t } = useLanguage();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,8 +36,8 @@ export function RegisterScreen({ navigation }: any) {
     if (!name.trim() || !email.trim() || !password.trim() || !confirmPassword.trim()) {
       Toast.show({
         type: 'error',
-        text1: 'Erro',
-        text2: 'Por favor, preencha todos os campos',
+        text1: t('common.error'),
+        text2: t('auth.invalidCredentials'),
       });
       return;
     }
@@ -43,8 +45,8 @@ export function RegisterScreen({ navigation }: any) {
     if (password !== confirmPassword) {
       Toast.show({
         type: 'error',
-        text1: 'Erro',
-        text2: 'As passwords não coincidem',
+        text1: t('common.error'),
+        text2: t('auth.passwordMismatch'),
       });
       return;
     }
@@ -52,8 +54,8 @@ export function RegisterScreen({ navigation }: any) {
     if (password.length < 6) {
       Toast.show({
         type: 'error',
-        text1: 'Erro',
-        text2: 'A password deve ter pelo menos 6 caracteres',
+        text1: t('common.error'),
+        text2: t('auth.weakPassword'),
       });
       return;
     }
@@ -63,14 +65,14 @@ export function RegisterScreen({ navigation }: any) {
       await signUp(email.trim(), password, name.trim());
       Toast.show({
         type: 'success',
-        text1: 'Conta criada!',
-        text2: 'Bem-vindo ao Nuti!',
+        text1: t('common.success'),
+        text2: t('welcome.title'),
       });
     } catch (error: any) {
       Toast.show({
         type: 'error',
-        text1: 'Erro ao criar conta',
-        text2: error.message || 'Erro ao criar conta',
+        text1: t('common.error'),
+        text2: error.message || t('common.error'),
       });
     } finally {
       setLoading(false);
@@ -83,14 +85,14 @@ export function RegisterScreen({ navigation }: any) {
       await signInWithGoogleNative();
       Toast.show({
         type: 'success',
-        text1: 'Conta criada!',
-        text2: 'Bem-vindo ao Nuti!',
+        text1: t('common.success'),
+        text2: t('welcome.title'),
       });
     } catch (error: any) {
       Toast.show({
         type: 'error',
-        text1: 'Erro ao criar conta',
-        text2: error.message || 'Erro ao criar conta com Google',
+        text1: t('common.error'),
+        text2: error.message || t('common.error'),
       });
     } finally {
       setLoading(false);
@@ -113,10 +115,10 @@ export function RegisterScreen({ navigation }: any) {
               <Text className="text-4xl">🥗</Text>
             </View>
             <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-              Criar Conta
+              {t('auth.signUp')}
             </Text>
             <Text className="text-gray-500 dark:text-gray-400">
-              Junta-te ao Nuti hoje
+              {t('welcome.subtitle')}
             </Text>
           </View>
 
@@ -124,7 +126,7 @@ export function RegisterScreen({ navigation }: any) {
           <View className="space-y-4 mb-6">
             <View>
               <Text className="text-gray-700 dark:text-gray-300 mb-2 font-medium">
-                Nome
+                {t('auth.name')}
               </Text>
               <TextInput
                 className="bg-gray-100 dark:bg-gray-800 rounded-xl px-4 py-4 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700"
@@ -138,7 +140,7 @@ export function RegisterScreen({ navigation }: any) {
 
             <View>
               <Text className="text-gray-700 dark:text-gray-300 mb-2 font-medium">
-                Email
+                {t('auth.email')}
               </Text>
               <TextInput
                 className="bg-gray-100 dark:bg-gray-800 rounded-xl px-4 py-4 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700"
@@ -154,7 +156,7 @@ export function RegisterScreen({ navigation }: any) {
 
             <View>
               <Text className="text-gray-700 dark:text-gray-300 mb-2 font-medium">
-                Password
+                {t('auth.password')}
               </Text>
               <View className="relative">
                 <TextInput
@@ -181,7 +183,7 @@ export function RegisterScreen({ navigation }: any) {
 
             <View>
               <Text className="text-gray-700 dark:text-gray-300 mb-2 font-medium">
-                Confirmar Password
+                {t('auth.confirmPassword')}
               </Text>
               <View className="relative">
                 <TextInput
@@ -217,14 +219,14 @@ export function RegisterScreen({ navigation }: any) {
             {loading ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text className="text-white font-semibold text-lg">Criar Conta</Text>
+              <Text className="text-white font-semibold text-lg">{t('auth.signUp')}</Text>
             )}
           </TouchableOpacity>
 
           {/* Divisor */}
           <View className="flex-row items-center my-6">
             <View className="flex-1 h-px bg-gray-300 dark:bg-gray-700" />
-            <Text className="mx-4 text-gray-500 dark:text-gray-400">ou</Text>
+            <Text className="mx-4 text-gray-500 dark:text-gray-400">{t('auth.or')}</Text>
             <View className="flex-1 h-px bg-gray-300 dark:bg-gray-700" />
           </View>
 
@@ -237,17 +239,17 @@ export function RegisterScreen({ navigation }: any) {
           >
             <Ionicons name="logo-google" size={20} color="#4285F4" />
             <Text className="text-gray-900 dark:text-white font-semibold ml-2">
-              Continuar com Google
+              {t('auth.continueWithGoogle')}
             </Text>
           </TouchableOpacity>
 
           {/* Link para Welcome */}
           <View className="flex-row justify-center mt-6">
             <Text className="text-gray-500 dark:text-gray-400">
-              Já tens conta?{' '}
+              {t('auth.hasAccount')}{' '}
             </Text>
             <TouchableOpacity onPress={() => navigation.navigate('Welcome')}>
-              <Text className="text-green-500 font-semibold">Voltar</Text>
+              <Text className="text-green-500 font-semibold">{t('common.close')}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

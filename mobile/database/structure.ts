@@ -144,6 +144,13 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if false; // Apenas admins podem criar badges
     }
+    
+    // Regras para water (água bebida)
+    match /water/{waterId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create, update: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
   }
 }
 `;

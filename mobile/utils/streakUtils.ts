@@ -77,7 +77,6 @@ export async function updateStreak(userId: string): Promise<number> {
   } catch (error: any) {
     // Ignorar erros de permissões silenciosamente (pode ser que o utilizador não esteja autenticado)
     if (error?.code === 'permission-denied') {
-      console.log('Streak: Permission denied, user may not be authenticated');
       return 0;
     }
     console.error('Error updating streak:', error);
@@ -97,7 +96,6 @@ export async function getStreak(userId: string): Promise<number> {
   } catch (error: any) {
     // Ignorar erros de permissões silenciosamente
     if (error?.code === 'permission-denied') {
-      console.log('Streak: Permission denied, user may not be authenticated');
       return 0;
     }
     console.error('Error getting streak:', error);
