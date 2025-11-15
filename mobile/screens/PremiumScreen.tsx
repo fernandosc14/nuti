@@ -8,11 +8,16 @@ import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '../context/UserContext';
+import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
+import { MotiView } from 'moti';
 
 export function PremiumScreen({ navigation }: any) {
   const { profile, updateProfile } = useUser();
+  const { theme } = useTheme();
+  const { t } = useLanguage();
 
   const handleUpgrade = async () => {
     try {
@@ -70,92 +75,269 @@ export function PremiumScreen({ navigation }: any) {
   ];
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-gray-900">
-      <ScrollView className="flex-1">
-        {/* Header */}
-        <View className="flex-row items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <TouchableOpacity onPress={() => navigation.goBack()} className="mr-4">
-            <Ionicons name="arrow-back" size={24} color="#3BB273" />
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      {/* Header Fixo */}
+      <SafeAreaView edges={['top']} style={{ backgroundColor: theme.colors.card }}>
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: 20,
+          paddingVertical: 16,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.colors.border || '#E5E7EB',
+        }}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: theme.colors.background,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginRight: 12,
+            }}
+          >
+            <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
           </TouchableOpacity>
-          <Text className="text-xl font-bold text-gray-900 dark:text-white">
+          <Text style={{
+            fontSize: 20,
+            fontWeight: '700',
+            color: theme.colors.text,
+            flex: 1,
+          }}>
             Premium
           </Text>
         </View>
+      </SafeAreaView>
 
-        <View className="px-6 py-6">
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={{ paddingHorizontal: 24, paddingTop: 32 }}>
           {/* Hero Section */}
-          <View className="items-center mb-8">
-            <View className="w-32 h-32 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full items-center justify-center mb-6">
-              <Text className="text-6xl">⭐</Text>
+          <MotiView
+            from={{ opacity: 0, translateY: 20 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 400 }}
+            style={{ alignItems: 'center', marginBottom: 32 }}
+          >
+            <View style={{
+              width: 120,
+              height: 120,
+              borderRadius: 60,
+              backgroundColor: '#8B5CF6',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 20,
+              shadowColor: '#8B5CF6',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.3,
+              shadowRadius: 16,
+              elevation: 8,
+            }}>
+              <Text style={{ fontSize: 64 }}>⭐</Text>
             </View>
-            <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            <Text style={{
+              fontSize: 32,
+              fontWeight: '800',
+              color: theme.colors.text,
+              marginBottom: 8,
+              textAlign: 'center',
+            }}>
               Desbloqueia o Premium
             </Text>
-            <Text className="text-gray-500 dark:text-gray-400 text-center">
+            <Text style={{
+              fontSize: 16,
+              color: theme.colors.textSecondary || '#9CA3AF',
+              textAlign: 'center',
+            }}>
               Acesso completo a todas as funcionalidades
             </Text>
-          </View>
+          </MotiView>
 
           {/* Features */}
-          <View className="mb-8">
+          <MotiView
+            from={{ opacity: 0, translateY: 20 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 400, delay: 100 }}
+            style={{ marginBottom: 32 }}
+          >
             {features.map((feature, index) => (
-              <View
+              <MotiView
                 key={index}
-                className="bg-gray-100 dark:bg-gray-800 rounded-2xl p-4 mb-4 flex-row items-start"
+                from={{ opacity: 0, translateX: -20 }}
+                animate={{ opacity: 1, translateX: 0 }}
+                transition={{ type: 'timing', duration: 300, delay: 150 + index * 50 }}
+                style={{
+                  backgroundColor: theme.colors.card,
+                  borderRadius: 16,
+                  padding: 16,
+                  marginBottom: 12,
+                  flexDirection: 'row',
+                  alignItems: 'flex-start',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 8,
+                  elevation: 3,
+                  borderWidth: 1,
+                  borderColor: theme.colors.border || '#E5E7EB',
+                }}
               >
-                <Text className="text-3xl mr-4">{feature.icon}</Text>
-                <View className="flex-1">
-                  <Text className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                <Text style={{ fontSize: 32, marginRight: 16 }}>{feature.icon}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{
+                    fontSize: 18,
+                    fontWeight: '700',
+                    color: theme.colors.text,
+                    marginBottom: 4,
+                  }}>
                     {feature.title}
                   </Text>
-                  <Text className="text-gray-600 dark:text-gray-400 text-sm">
+                  <Text style={{
+                    fontSize: 14,
+                    color: theme.colors.textSecondary || '#9CA3AF',
+                    lineHeight: 20,
+                  }}>
                     {feature.description}
                   </Text>
                 </View>
-              </View>
+              </MotiView>
             ))}
-          </View>
+          </MotiView>
 
           {/* Pricing */}
-          <View className="bg-gradient-to-r from-green-500 to-green-600 rounded-2xl p-6 mb-6">
-            <View className="items-center">
-              <Text className="text-white text-sm mb-2">Preço Especial</Text>
-              <View className="flex-row items-baseline mb-2">
-                <Text className="text-white text-4xl font-bold">9,99€</Text>
-                <Text className="text-white/80 text-lg ml-2">/mês</Text>
-              </View>
-              <Text className="text-white/90 text-sm">
-                Cancela quando quiseres
+          <MotiView
+            from={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: 'timing', duration: 400, delay: 450 }}
+            style={{
+              backgroundColor: '#8B5CF6',
+              borderRadius: 20,
+              padding: 24,
+              marginBottom: 24,
+              alignItems: 'center',
+              shadowColor: '#8B5CF6',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.3,
+              shadowRadius: 16,
+              elevation: 8,
+            }}
+          >
+            <Text style={{
+              color: '#FFFFFF',
+              fontSize: 14,
+              fontWeight: '600',
+              marginBottom: 8,
+              opacity: 0.9,
+            }}>
+              Preço Especial
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 8 }}>
+              <Text style={{
+                color: '#FFFFFF',
+                fontSize: 48,
+                fontWeight: '900',
+              }}>
+                9,99€
+              </Text>
+              <Text style={{
+                color: '#FFFFFF',
+                fontSize: 18,
+                fontWeight: '600',
+                marginLeft: 8,
+                opacity: 0.9,
+              }}>
+                /mês
               </Text>
             </View>
-          </View>
+            <Text style={{
+              color: '#FFFFFF',
+              fontSize: 14,
+              opacity: 0.9,
+            }}>
+              Cancela quando quiseres
+            </Text>
+          </MotiView>
 
           {/* CTA Button */}
           {profile?.plan !== 'premium' ? (
-            <TouchableOpacity
-              onPress={handleUpgrade}
-              className="bg-green-500 rounded-xl py-4 items-center mb-4 shadow-lg"
+            <MotiView
+              from={{ opacity: 0, translateY: 20 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={{ type: 'timing', duration: 400, delay: 500 }}
             >
-              <Text className="text-white font-semibold text-lg">
-                Ativar Premium Agora
-              </Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleUpgrade}
+                activeOpacity={0.8}
+                style={{
+                  backgroundColor: '#8B5CF6',
+                  borderRadius: 16,
+                  paddingVertical: 18,
+                  paddingHorizontal: 24,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 16,
+                  shadowColor: '#8B5CF6',
+                  shadowOffset: { width: 0, height: 8 },
+                  shadowOpacity: 0.4,
+                  shadowRadius: 16,
+                  elevation: 8,
+                }}
+              >
+                <Text style={{
+                  color: '#FFFFFF',
+                  fontSize: 18,
+                  fontWeight: '700',
+                }}>
+                  Ativar Premium Agora
+                </Text>
+              </TouchableOpacity>
+            </MotiView>
           ) : (
-            <View className="bg-gray-100 dark:bg-gray-800 rounded-xl py-4 items-center mb-4">
-              <Text className="text-gray-700 dark:text-gray-300 font-semibold text-lg">
+            <MotiView
+              from={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ type: 'timing', duration: 400 }}
+              style={{
+                backgroundColor: theme.colors.card,
+                borderRadius: 16,
+                paddingVertical: 18,
+                paddingHorizontal: 24,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 16,
+                borderWidth: 2,
+                borderColor: '#8B5CF6',
+              }}
+            >
+              <Text style={{
+                color: '#8B5CF6',
+                fontSize: 18,
+                fontWeight: '700',
+              }}>
                 Já és Premium! ⭐
               </Text>
-            </View>
+            </MotiView>
           )}
 
           {/* Terms */}
-          <Text className="text-gray-500 dark:text-gray-400 text-xs text-center">
+          <Text style={{
+            fontSize: 12,
+            color: theme.colors.textSecondary || '#9CA3AF',
+            textAlign: 'center',
+            lineHeight: 18,
+          }}>
             Ao ativar, aceitas os termos e condições. O pagamento será processado
             através da tua conta da App Store/Play Store.
           </Text>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 

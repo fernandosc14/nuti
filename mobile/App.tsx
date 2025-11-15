@@ -25,6 +25,8 @@ import { DashboardScreen } from './screens/DashboardScreen';
 import { AddMealScreen } from './screens/AddMealScreen';
 import { ChatScreen } from './screens/ChatScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
+import { EditNameScreen } from './screens/EditNameScreen';
+import { EditPersonalDetailsScreen } from './screens/EditPersonalDetailsScreen';
 import { PremiumScreen } from './screens/PremiumScreen';
 import { ProgressScreen } from './screens/ProgressScreen';
 import { Ionicons } from '@expo/vector-icons';
@@ -381,6 +383,8 @@ function AppStack() {
     >
         <Stack.Screen name="MainTabs" component={MainTabs} />
       <Stack.Screen name="AddMeal" component={AddMealScreen} />
+      <Stack.Screen name="EditName" component={EditNameScreen} />
+      <Stack.Screen name="EditPersonalDetails" component={EditPersonalDetailsScreen} />
       <Stack.Screen name="Premium" component={PremiumScreen} />
     </Stack.Navigator>
     </View>

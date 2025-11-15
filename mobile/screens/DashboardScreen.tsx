@@ -30,7 +30,10 @@ import { db } from '../services/firebase';
 import { updateStreak } from '../utils/streakUtils';
 import Toast from 'react-native-toast-message';
 import { MotiView } from 'moti';
-import { Image } from 'react-native';
+import { Image, Dimensions } from 'react-native';
+
+const { width: screenWidth } = Dimensions.get('window');
+const WATER_SLIDE_PADDING = 24; // Padding direito do slide da água
 
 interface Meal {
   id: string;
@@ -54,7 +57,7 @@ interface Badge {
 
 export function DashboardScreen({ navigation }: any) {
   const { user, profile, refreshProfile } = useUser();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { theme } = useTheme();
   const [consumed, setConsumed] = useState(0);
   const [goal, setGoal] = useState(2000);
@@ -72,6 +75,8 @@ export function DashboardScreen({ navigation }: any) {
   const [showEditWaterModal, setShowEditWaterModal] = useState(false);
   const [waterAmount, setWaterAmount] = useState('250');
   const [editWaterAmount, setEditWaterAmount] = useState('0');
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [currentMacroIndex, setCurrentMacroIndex] = useState(0);
 
   useEffect(() => {
     // Se não houver user, limpar estado e não carregar dados
@@ -87,7 +92,8 @@ export function DashboardScreen({ navigation }: any) {
     if (user && profile) {
       loadDashboardData();
     }
-  }, [user, profile]);
+  }, [user, profile, selectedDate]);
+
 
   const loadDashboardData = async () => {
     // Verificar user antes de qualquer operação
@@ -119,18 +125,18 @@ export function DashboardScreen({ navigation }: any) {
         return;
       }
 
-      // Buscar refeições de hoje
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      // Buscar refeições do dia selecionado
+      const selectedDay = new Date(selectedDate);
+      selectedDay.setHours(0, 0, 0, 0);
+      const nextDay = new Date(selectedDay);
+      nextDay.setDate(nextDay.getDate() + 1);
 
       const mealsRef = collection(db, 'meals');
       const q = query(
         mealsRef,
         where('userId', '==', user.uid),
-        where('date', '>=', Timestamp.fromDate(today)),
-        where('date', '<', Timestamp.fromDate(tomorrow))
+        where('date', '>=', Timestamp.fromDate(selectedDay)),
+        where('date', '<', Timestamp.fromDate(nextDay))
       );
 
       const snapshot = await getDocs(q);
@@ -209,15 +215,20 @@ export function DashboardScreen({ navigation }: any) {
         }
       }
 
-      // Carregar água do dia (só se ainda houver user)
+      // Carregar água do dia selecionado (só se ainda houver user)
       if (user && user.uid === currentUserId) {
-        await loadWaterIntake();
+        await loadWaterIntake(selectedDay);
       }
 
-      // Verificar antes de atualizar streak
-      if (user && user.uid === currentUserId) {
-      await updateStreak(user.uid);
-      await refreshProfile();
+      // Verificar antes de atualizar streak (só se for o dia atual)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const selectedDayNormalized = new Date(selectedDate);
+      selectedDayNormalized.setHours(0, 0, 0, 0);
+      
+      if (user && user.uid === currentUserId && selectedDayNormalized.getTime() === today.getTime()) {
+        await updateStreak(user.uid);
+        await refreshProfile();
       }
     } catch (error: any) {
       // Se for erro de permissões e não houver user, ignorar silenciosamente (logout em progresso)
@@ -245,7 +256,7 @@ export function DashboardScreen({ navigation }: any) {
     setShowDeleteModal(true);
   };
 
-  const loadWaterIntake = async () => {
+  const loadWaterIntake = async (date: Date = selectedDate) => {
     // Verificar user antes de qualquer operação
     if (!user) {
       setWaterIntake(0);
@@ -262,9 +273,9 @@ export function DashboardScreen({ navigation }: any) {
         return;
       }
 
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const dateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+      const targetDate = new Date(date);
+      targetDate.setHours(0, 0, 0, 0);
+      const dateStr = targetDate.toISOString().split('T')[0]; // YYYY-MM-DD
       const waterDocRef = doc(db, 'water', `${user.uid}_${dateStr}`);
       const waterDoc = await getDoc(waterDocRef);
 
@@ -590,6 +601,132 @@ export function DashboardScreen({ navigation }: any) {
             </MotiView>
           )}
 
+          {/* Calendar Selector */}
+          <MotiView
+            from={{ opacity: 0, translateY: -10 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 400 }}
+            style={{ marginBottom: 20 }}
+          >
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'center',
+              alignItems: 'center',
+              paddingHorizontal: 12,
+              paddingVertical: 16,
+            }}>
+              {(() => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const selectedDateNormalized = new Date(selectedDate);
+                selectedDateNormalized.setHours(0, 0, 0, 0);
+                
+                const days = [];
+                const startOffset = -4; // Mostrar 4 dias anteriores
+                const endOffset = 0; // Até hoje
+                
+                // Gerar dias: 4 anteriores + hoje
+                for (let i = startOffset; i <= endOffset; i++) {
+                  const date = new Date();
+                  date.setDate(date.getDate() + i);
+                  date.setHours(0, 0, 0, 0);
+                  
+                  const isToday = date.getTime() === today.getTime();
+                  const isSelected = date.getTime() === selectedDateNormalized.getTime();
+                  
+                  const dayName = date.toLocaleDateString(
+                    language === 'pt' ? 'pt-PT' :
+                    language === 'es' ? 'es-ES' :
+                    language === 'fr' ? 'fr-FR' :
+                    language === 'de' ? 'de-DE' :
+                    language === 'it' ? 'it-IT' : 'en-US',
+                    { weekday: 'short' }
+                  );
+                  
+                  const dayNumber = date.getDate();
+                  
+                  days.push(
+                    <TouchableOpacity
+                      key={date.toISOString()}
+                      onPress={() => setSelectedDate(date)}
+                      activeOpacity={0.7}
+                      style={{
+                        alignItems: 'center',
+                        marginHorizontal: 4,
+                        paddingVertical: 14,
+                        paddingHorizontal: 10,
+                        borderRadius: 20,
+                        backgroundColor: isSelected
+                          ? theme.colors.card
+                          : isToday && !isSelected
+                          ? theme.colors.primary + '08' || '#3BB27308'
+                          : 'transparent',
+                        minWidth: 64,
+                        borderWidth: isToday && !isSelected ? 1.5 : 0,
+                        borderColor: isToday && !isSelected
+                          ? theme.colors.primary + '30' || '#3BB27330'
+                          : 'transparent',
+                      }}
+                    >
+                      <Text style={{
+                        fontSize: 11,
+                        fontWeight: isSelected ? '700' : isToday ? '700' : '500',
+                        color: isSelected
+                          ? theme.colors.text
+                          : isToday
+                          ? theme.colors.primary || '#3BB273'
+                          : theme.colors.textSecondary || '#9CA3AF',
+                        marginBottom: 10,
+                        textTransform: 'uppercase',
+                        letterSpacing: 0.5,
+                      }}>
+                        {dayName}
+                      </Text>
+                      <View style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 20,
+                        borderWidth: isSelected ? 3 : isToday ? 2.5 : 1.5,
+                        borderColor: isSelected
+                          ? theme.colors.primary || '#3BB273'
+                          : isToday
+                          ? theme.colors.primary || '#3BB273'
+                          : theme.colors.border || '#E5E7EB',
+                        borderStyle: isSelected || isToday ? 'solid' : 'dashed',
+                        backgroundColor: isSelected
+                          ? theme.colors.primary || '#3BB273'
+                          : isToday
+                          ? (theme.colors.primary || '#3BB273') + '20'
+                          : 'transparent',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        shadowColor: isSelected || isToday ? (theme.colors.primary || '#3BB273') : 'transparent',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: isSelected || isToday ? 0.3 : 0,
+                        shadowRadius: 4,
+                        elevation: isSelected || isToday ? 3 : 0,
+                      }}>
+                        <Text style={{
+                          fontSize: 15,
+                          fontWeight: '700',
+                          color: isSelected
+                            ? '#FFFFFF'
+                            : isToday
+                            ? theme.colors.primary || '#3BB273'
+                            : theme.colors.textSecondary || '#9CA3AF',
+                        }}>
+                          {dayNumber}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                }
+                
+                return days;
+              })()}
+            </View>
+          </MotiView>
+
           {/* Gráfico Circular */}
           <MotiView
             from={{ opacity: 0, scale: 0.9 }}
@@ -600,30 +737,47 @@ export function DashboardScreen({ navigation }: any) {
             <ChartCircle consumed={consumed} goal={goal} />
           </MotiView>
 
-          {/* Macros Cards */}
+          {/* Macros Cards com Swipe */}
           <MotiView
             from={{ opacity: 0, translateY: 20 }}
             animate={{ opacity: 1, translateY: 0 }}
             transition={{ type: 'timing', duration: 400, delay: 250 }}
             style={{ marginBottom: 24 }}
           >
-            <View style={{ 
-              flexDirection: 'row', 
-              gap: 12,
-            }}>
-              {/* Proteína */}
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={(event) => {
+                const cardWidth = screenWidth;
+                const index = Math.round(event.nativeEvent.contentOffset.x / cardWidth);
+                setCurrentMacroIndex(Math.min(1, Math.max(0, index)));
+              }}
+              contentContainerStyle={{ width: screenWidth * 2 }}
+              decelerationRate="fast"
+              snapToInterval={screenWidth}
+              snapToAlignment="start"
+            >
+              {/* Slide 1: Proteína, Carboidratos, Gordura */}
               <View style={{
-                flex: 1,
-                backgroundColor: theme.colors.card,
-                borderRadius: 20,
-                padding: 16,
-                alignItems: 'center',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 8,
-                elevation: 3,
+                width: screenWidth,
+                flexDirection: 'row',
+                paddingLeft: 0,
+                paddingRight: 24,
               }}>
+                  {/* Proteína */}
+                  <View style={{
+                    width: Math.floor((screenWidth - 48 - 24) / 3),
+                    backgroundColor: theme.colors.card,
+                    borderRadius: 20,
+                    padding: 16,
+                    alignItems: 'center',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 8,
+                    elevation: 3,
+                  }}>
                   <View style={{
                     width: 48,
                     height: 48,
@@ -648,188 +802,217 @@ export function DashboardScreen({ navigation }: any) {
                     color: theme.colors.textSecondary || '#9CA3AF',
                     fontWeight: '600',
                   }}>
-                  {t('dashboard.protein')}
+                    {t('dashboard.protein')}
                   </Text>
-          </View>
+                  </View>
 
-              {/* Carboidratos */}
-              <View style={{
-                flex: 1,
-                backgroundColor: theme.colors.card,
-                borderRadius: 20,
-                padding: 16,
-                alignItems: 'center',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 8,
-                elevation: 3,
-              }}>
-                <View style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 24,
-                  backgroundColor: '#D1FAE5',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: 8,
-                }}>
-                  <Ionicons name="fast-food" size={24} color="#10B981" />
-                </View>
-                <Text style={{
-                  fontSize: 24,
-                  fontWeight: '800',
-                  color: theme.colors.text,
-                  marginBottom: 4,
-                }}>
-                  {macros.carbs}g
-                </Text>
-                <Text style={{
-                  fontSize: 12,
-                  color: theme.colors.textSecondary || '#9CA3AF',
-                  fontWeight: '600',
-                }}>
-                  {t('dashboard.carbs')}
-                </Text>
+                  {/* Carboidratos */}
+                  <View style={{
+                    width: Math.floor((screenWidth - 48 - 24) / 3),
+                    marginLeft: 12,
+                    backgroundColor: theme.colors.card,
+                    borderRadius: 20,
+                    padding: 16,
+                    alignItems: 'center',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 8,
+                    elevation: 3,
+                  }}>
+                  <View style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 24,
+                    backgroundColor: '#D1FAE5',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: 8,
+                  }}>
+                    <Ionicons name="fast-food" size={24} color="#10B981" />
+                  </View>
+                  <Text style={{
+                    fontSize: 24,
+                    fontWeight: '800',
+                    color: theme.colors.text,
+                    marginBottom: 4,
+                  }}>
+                    {macros.carbs}g
+                  </Text>
+                  <Text style={{
+                    fontSize: 12,
+                    color: theme.colors.textSecondary || '#9CA3AF',
+                    fontWeight: '600',
+                  }}>
+                    {t('dashboard.carbs')}
+                  </Text>
+                  </View>
+
+                  {/* Gordura */}
+                  <View style={{
+                    width: Math.floor((screenWidth - 48 - 24) / 3),
+                    marginLeft: 12,
+                    backgroundColor: theme.colors.card,
+                    borderRadius: 20,
+                    padding: 16,
+                    alignItems: 'center',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 8,
+                    elevation: 3,
+                  }}>
+                  <View style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 24,
+                    backgroundColor: '#FEF9C3',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: 8,
+                  }}>
+                    <Ionicons name="flame" size={24} color="#EAB308" />
+                  </View>
+                  <Text style={{
+                    fontSize: 24,
+                    fontWeight: '800',
+                    color: theme.colors.text,
+                    marginBottom: 4,
+                  }}>
+                    {macros.fat}g
+                  </Text>
+                  <Text style={{
+                    fontSize: 12,
+                    color: theme.colors.textSecondary || '#9CA3AF',
+                    fontWeight: '600',
+                  }}>
+                    {t('dashboard.fat')}
+                  </Text>
+                  </View>
               </View>
 
-              {/* Gordura */}
+              {/* Slide 2: Água */}
               <View style={{
-                flex: 1,
-                backgroundColor: theme.colors.card,
-                borderRadius: 20,
-                padding: 16,
-                alignItems: 'center',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 8,
-                elevation: 3,
+                width: screenWidth,
+                paddingLeft: 0,
+                paddingRight: 24,
               }}>
-                <View style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 24,
-                  backgroundColor: '#FEF9C3',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: 8,
+                <View style={{ 
+                  flexDirection: 'row', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  marginBottom: 16,
+                  width: Math.floor(screenWidth - WATER_SLIDE_PADDING - WATER_SLIDE_PADDING),
                 }}>
-                  <Ionicons name="flame" size={24} color="#EAB308" />
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: '#3B82F6' + '20',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 12,
+                    }}>
+                      <Ionicons name="water" size={22} color="#3B82F6" />
+                    </View>
+                    <Text style={{
+                      fontSize: 20,
+                      fontWeight: '700',
+                      color: theme.colors.text,
+                    }}>
+                      {t('dashboard.water')}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setEditWaterAmount(waterIntake.toString());
+                      setShowEditWaterModal(true);
+                    }}
+                    activeOpacity={0.7}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 12,
+                      backgroundColor: theme.colors.card,
+                      borderWidth: 1,
+                      borderColor: theme.colors.border || '#E5E7EB',
+                    }}
+                  >
+                    <Text style={{
+                      fontSize: 18,
+                      fontWeight: '700',
+                      color: '#3B82F6',
+                      marginRight: 6,
+                    }}>
+                      {waterIntake}ml
+                    </Text>
+                    <Ionicons name="create-outline" size={16} color="#3B82F6" />
+                  </TouchableOpacity>
                 </View>
-                <Text style={{
-                  fontSize: 24,
-                  fontWeight: '800',
-                  color: theme.colors.text,
-                  marginBottom: 4,
-                }}>
-                  {macros.fat}g
-                </Text>
-                <Text style={{
-                  fontSize: 12,
-                  color: theme.colors.textSecondary || '#9CA3AF',
-                  fontWeight: '600',
-                }}>
-                  {t('dashboard.fat')}
-                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowWaterModal(true)}
+                  activeOpacity={0.7}
+                  style={{
+                    backgroundColor: theme.mode === 'dark' 
+                      ? 'rgba(59, 130, 246, 0.3)' 
+                      : 'rgba(59, 130, 246, 0.9)',
+                    borderRadius: 16,
+                    padding: 16,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    shadowColor: '#3B82F6',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 5,
+                    borderWidth: 1,
+                    borderColor: theme.mode === 'dark' 
+                      ? 'rgba(59, 130, 246, 0.4)' 
+                      : 'rgba(59, 130, 246, 1)',
+                    width: Math.floor(screenWidth - WATER_SLIDE_PADDING - WATER_SLIDE_PADDING),
+                    maxWidth: Math.floor(screenWidth - 24 - 24),
+                  }}
+                >
+                  <Ionicons name="add-circle" size={24} color="#FFFFFF" />
+                  <Text style={{
+                    color: '#FFFFFF',
+                    fontWeight: '700',
+                    fontSize: 16,
+                    marginLeft: 8,
+                  }}>
+                    {t('dashboard.addWater')}
+                  </Text>
+                </TouchableOpacity>
               </View>
-            </View>
-          </MotiView>
+            </ScrollView>
 
-          {/* Água */}
-          <MotiView
-            from={{ opacity: 0, translateY: 20 }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={{ type: 'timing', duration: 400, delay: 300 }}
-            style={{ marginBottom: 24 }}
-          >
-            <View style={{ 
-              flexDirection: 'row', 
-              alignItems: 'center', 
-              justifyContent: 'space-between',
-              marginBottom: 16 
+            {/* Indicadores de Paginação */}
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginTop: 12,
+              gap: 6,
             }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <View style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  backgroundColor: '#3B82F6' + '20',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginRight: 12,
-                }}>
-                  <Ionicons name="water" size={22} color="#3B82F6" />
-                </View>
-                <Text style={{
-                  fontSize: 20,
-                  fontWeight: '700',
-                  color: theme.colors.text,
-                }}>
-                  {t('dashboard.water')}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => {
-                  setEditWaterAmount(waterIntake.toString());
-                  setShowEditWaterModal(true);
-                }}
-                activeOpacity={0.7}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingHorizontal: 12,
-                  paddingVertical: 6,
-                  borderRadius: 12,
-                  backgroundColor: theme.colors.card,
-                  borderWidth: 1,
-                  borderColor: theme.colors.border || '#E5E7EB',
-                }}
-              >
-                <Text style={{
-                  fontSize: 18,
-                  fontWeight: '700',
-                  color: '#3B82F6',
-                  marginRight: 6,
-                }}>
-                  {waterIntake}ml
-                </Text>
-                <Ionicons name="create-outline" size={16} color="#3B82F6" />
-              </TouchableOpacity>
+              {[0, 1].map((index) => (
+                <View
+                  key={index}
+                  style={{
+                    width: currentMacroIndex === index ? 8 : 6,
+                    height: currentMacroIndex === index ? 8 : 6,
+                    borderRadius: currentMacroIndex === index ? 4 : 3,
+                    backgroundColor: currentMacroIndex === index
+                      ? theme.colors.primary || '#3BB273'
+                      : theme.colors.textSecondary || '#9CA3AF',
+                    opacity: currentMacroIndex === index ? 1 : 0.4,
+                  }}
+                />
+              ))}
             </View>
-            <TouchableOpacity
-              onPress={() => setShowWaterModal(true)}
-              activeOpacity={0.7}
-              style={{
-                backgroundColor: theme.mode === 'dark' 
-                  ? 'rgba(59, 130, 246, 0.3)' 
-                  : 'rgba(59, 130, 246, 0.9)',
-                borderRadius: 16,
-                padding: 16,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                shadowColor: '#3B82F6',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.3,
-                shadowRadius: 8,
-                elevation: 5,
-                borderWidth: 1,
-                borderColor: theme.mode === 'dark' 
-                  ? 'rgba(59, 130, 246, 0.4)' 
-                  : 'rgba(59, 130, 246, 1)',
-              }}
-            >
-              <Ionicons name="add-circle" size={24} color="#FFFFFF" />
-              <Text style={{
-                color: '#FFFFFF',
-                fontWeight: '700',
-                fontSize: 16,
-                marginLeft: 8,
-              }}>
-                {t('dashboard.addWater')}
-              </Text>
-            </TouchableOpacity>
           </MotiView>
 
           {/* Refeições de Hoje */}
@@ -923,61 +1106,6 @@ export function DashboardScreen({ navigation }: any) {
           </View>
             )}
           </MotiView>
-
-          {/* Premium Banner */}
-          {profile?.plan === 'free' && (
-            <MotiView
-              from={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ type: 'timing', duration: 400, delay: 400 }}
-            >
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Premium')}
-                activeOpacity={0.8}
-                style={{
-                  backgroundColor: theme.mode === 'dark' ? '#065F46' : '#10B981',
-                  borderRadius: 20,
-                  padding: 20,
-                  marginBottom: 24,
-                  shadowColor: '#10B981',
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 8,
-                  elevation: 6,
-                }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <View style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 24,
-                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}>
-                <Ionicons name="star" size={24} color="#FFFFFF" />
-                  </View>
-                  <View style={{ marginLeft: 16, flex: 1 }}>
-                    <Text style={{
-                      color: '#FFFFFF',
-                      fontWeight: '700',
-                      fontSize: 18,
-                      marginBottom: 4,
-                    }}>
-                      ✨ {t('dashboard.upgradePremium')}
-                  </Text>
-                    <Text style={{
-                      color: 'rgba(255, 255, 255, 0.9)',
-                      fontSize: 14,
-                    }}>
-                    Chat IA ilimitado e relatórios personalizados!
-                  </Text>
-                </View>
-                  <Ionicons name="chevron-forward" size={24} color="#FFFFFF" />
-              </View>
-            </TouchableOpacity>
-            </MotiView>
-          )}
         </View>
       </ScrollView>
 
