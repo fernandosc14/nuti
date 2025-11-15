@@ -25,6 +25,19 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if false; // Apenas admins podem criar badges
     }
+    
+    // Regras para water (água bebida)
+    match /water/{waterId} {
+      // Permitir leitura se o utilizador estiver autenticado
+      // Verificar userId apenas quando o documento existe
+      allow read: if request.auth != null && (
+        !exists(/databases/$(database)/documents/water/$(waterId)) || 
+        request.auth.uid == resource.data.userId
+      );
+      // Permitir criação/atualização se o utilizador estiver autenticado e o userId corresponder
+      allow create, update: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      // Permitir eliminação se o utilizador estiver autenticado e o userId corresponder
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
   }
 }
-

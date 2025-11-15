@@ -4,7 +4,7 @@
  * Tela para adicionar refeição com pesquisa, câmera e código de barras
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,18 +17,24 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '../context/UserContext';
+import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Camera } from 'expo-camera';
-import { searchFood, getFoodByBarcode, FoodItem } from '../services/api';
+import { searchFood, getFoodByBarcode, analyzeFoodImage, FoodItem } from '../services/api';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { db, storage } from '../services/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { updateStreak } from '../utils/streakUtils';
 import Toast from 'react-native-toast-message';
 import { MotiView } from 'moti';
 
-export function AddMealScreen({ navigation }: any) {
+export function AddMealScreen({ navigation, route }: any) {
   const { user, refreshProfile } = useUser();
+  const { t, language } = useLanguage();
+  const { theme } = useTheme();
+  const mode = route?.params?.mode || 'search';
   const [searchQuery, setSearchQuery] = useState('');
   const [foodResults, setFoodResults] = useState<FoodItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -36,6 +42,17 @@ export function AddMealScreen({ navigation }: any) {
     'breakfast' | 'lunch' | 'dinner' | 'snack'
   >('breakfast');
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [analyzedFood, setAnalyzedFood] = useState<FoodItem | null>(null);
+  const [editingFood, setEditingFood] = useState<FoodItem | null>(null);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [plateFoods, setPlateFoods] = useState<Array<{
+    name: string;
+    caloriesPer100g: number;
+    proteinPer100g: number;
+    carbsPer100g: number;
+    fatPer100g: number;
+    weight: number;
+  }>>([]);
 
   const mealTypes = [
     { value: 'breakfast', label: 'Pequeno-almoço', icon: '☕' },
@@ -51,6 +68,20 @@ export function AddMealScreen({ navigation }: any) {
       setHasPermission(cameraStatus === 'granted');
     })();
   }, []);
+
+  // Se o modo for 'camera', abrir câmera automaticamente
+  React.useEffect(() => {
+    if (mode === 'camera') {
+      handleTakePhoto();
+    } else if (mode === 'barcode') {
+      // TODO: Implementar scanner de código de barras
+      Toast.show({
+        type: 'info',
+        text1: 'Funcionalidade em desenvolvimento',
+        text2: 'Scanner de código de barras em breve!',
+      });
+    }
+  }, [mode]);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -93,12 +124,114 @@ export function AddMealScreen({ navigation }: any) {
       });
 
       if (!result.canceled && result.assets[0]) {
-        Toast.show({
-          type: 'info',
-          text1: 'Em desenvolvimento',
-          text2: 'Análise de imagem com IA em breve!',
-        });
-        // TODO: Implementar análise de imagem com IA
+        const imageUri = result.assets[0].uri;
+        setCapturedImage(imageUri);
+        setLoading(true);
+
+        try {
+          // Analisar imagem com IA
+          const analyzed = await analyzeFoodImage(imageUri, language);
+          setAnalyzedFood(analyzed);
+          
+          if (analyzed.plateFoods && analyzed.plateFoods.length > 0) {
+            setPlateFoods(analyzed.plateFoods);
+            
+            // Calcular totais iniciais
+            const totals = analyzed.plateFoods.reduce((acc, food) => {
+              const multiplier = food.weight / 100;
+              return {
+                calories: acc.calories + Math.round(food.caloriesPer100g * multiplier),
+                protein: acc.protein + parseFloat((food.proteinPer100g * multiplier).toFixed(1)),
+                carbs: acc.carbs + parseFloat((food.carbsPer100g * multiplier).toFixed(1)),
+                fat: acc.fat + parseFloat((food.fatPer100g * multiplier).toFixed(1)),
+              };
+            }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+            
+            setEditingFood({
+              ...analyzed,
+              image: imageUri,
+              calories: totals.calories,
+              protein: totals.protein,
+              carbs: totals.carbs,
+              fat: totals.fat,
+            });
+          } else {
+            // Alimento único ou múltiplos no nome (compatibilidade com formato antigo)
+            // Verificar se o nome contém múltiplos alimentos separados por vírgulas
+            const nameParts = analyzed.name.split(',').map(part => part.trim()).filter(part => part.length > 0);
+            
+            if (nameParts.length > 1) {
+              // Múltiplos alimentos no nome - dividir valores nutricionais proporcionalmente
+              
+              // Dividir valores nutricionais igualmente entre os alimentos
+              const foodsPerItem = {
+                caloriesPer100g: Math.round(analyzed.calories / nameParts.length),
+                proteinPer100g: parseFloat((analyzed.protein / nameParts.length).toFixed(1)),
+                carbsPer100g: parseFloat((analyzed.carbs / nameParts.length).toFixed(1)),
+                fatPer100g: parseFloat((analyzed.fat / nameParts.length).toFixed(1)),
+              };
+              
+              const multipleFoods = nameParts.map(name => ({
+                name: name,
+                ...foodsPerItem,
+                weight: 100,
+              }));
+              
+              setPlateFoods(multipleFoods);
+              
+              // Calcular totais iniciais
+              const totals = multipleFoods.reduce((acc, food) => {
+                const multiplier = food.weight / 100;
+                return {
+                  calories: acc.calories + Math.round(food.caloriesPer100g * multiplier),
+                  protein: acc.protein + parseFloat((food.proteinPer100g * multiplier).toFixed(1)),
+                  carbs: acc.carbs + parseFloat((food.carbsPer100g * multiplier).toFixed(1)),
+                  fat: acc.fat + parseFloat((food.fatPer100g * multiplier).toFixed(1)),
+                };
+              }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+              
+              setEditingFood({
+                ...analyzed,
+                image: imageUri,
+                calories: totals.calories,
+                protein: totals.protein,
+                carbs: totals.carbs,
+                fat: totals.fat,
+              });
+            } else {
+              // Alimento único
+              const singleFood = {
+                name: analyzed.name,
+                caloriesPer100g: analyzed.calories,
+                proteinPer100g: analyzed.protein,
+                carbsPer100g: analyzed.carbs,
+                fatPer100g: analyzed.fat,
+                weight: 100,
+              };
+              
+              setPlateFoods([singleFood]);
+              
+              setEditingFood({
+                ...analyzed,
+                image: imageUri,
+              });
+            }
+          }
+        } catch (error: any) {
+          // Verificar se é erro de "não é comida" e usar tradução
+          let errorMessage = error.message || t('addMeal.errorProcessing');
+          if (error.message?.includes('does not contain food')) {
+            errorMessage = t('addMeal.errorNotFood');
+          }
+          
+          Toast.show({
+            type: 'error',
+            text1: t('addMeal.error'),
+            text2: errorMessage,
+          });
+        } finally {
+          setLoading(false);
+        }
       }
     } catch (error) {
       Toast.show({
@@ -118,10 +251,49 @@ export function AddMealScreen({ navigation }: any) {
     });
   };
 
+  // Função para fazer upload da imagem para Firebase Storage
+  const uploadImageToStorage = async (imageUri: string): Promise<string | null> => {
+    if (!user || !imageUri) return null;
+    
+    try {
+      // Verificar se já é uma URL (não precisa upload)
+      if (imageUri.startsWith('http://') || imageUri.startsWith('https://')) {
+        return imageUri;
+      }
+
+      // Ler o ficheiro como blob
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+
+      // Criar referência no Storage
+      const timestamp = Date.now();
+      const filename = `meals/${user.uid}/${timestamp}.jpg`;
+      const storageRef = ref(storage, filename);
+
+      // Fazer upload
+      await uploadBytes(storageRef, blob);
+
+      // Obter URL pública
+      const downloadURL = await getDownloadURL(storageRef);
+      return downloadURL;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      return null;
+    }
+  };
+
   const addMeal = async (food: FoodItem) => {
     if (!user) return;
 
     try {
+      // Fazer upload da imagem se existir
+      let imageUrl = food.image || null;
+      if (food.image && food.image.startsWith('file://')) {
+        imageUrl = await uploadImageToStorage(food.image);
+        if (!imageUrl) {
+        }
+      }
+
       await addDoc(collection(db, 'meals'), {
         userId: user.uid,
         name: food.name,
@@ -129,7 +301,7 @@ export function AddMealScreen({ navigation }: any) {
         protein: food.protein,
         carbs: food.carbs,
         fat: food.fat,
-        image: food.image,
+        image: imageUrl,
         mealType: selectedMealType,
         date: Timestamp.now(),
       });
@@ -145,34 +317,431 @@ export function AddMealScreen({ navigation }: any) {
       });
 
       navigation.goBack();
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error adding meal:', error);
       Toast.show({
         type: 'error',
         text1: 'Erro',
-        text2: 'Erro ao adicionar refeição',
+        text2: error.message || 'Não foi possível adicionar a refeição',
       });
     }
   };
 
+  const handleSaveEditedFood = () => {
+    if (!editingFood) return;
+    addMeal(editingFood);
+  };
+
+  // Garantir que plateFoods sempre tem pelo menos um item quando editingFood existe
+  useEffect(() => {
+    if (editingFood && capturedImage && plateFoods.length === 0) {
+      const singleFood = {
+        name: editingFood.name,
+        caloriesPer100g: editingFood.calories,
+        proteinPer100g: editingFood.protein,
+        carbsPer100g: editingFood.carbs,
+        fatPer100g: editingFood.fat,
+        weight: 100,
+      };
+      setPlateFoods([singleFood]);
+    }
+  }, [editingFood, capturedImage, plateFoods.length]);
+
   // Note: barcode scanning UI has been removed temporarily.
 
+  // Se estiver a editar alimento analisado
+  if (editingFood && capturedImage) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: 24,
+          paddingVertical: 16,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.colors.border || '#E5E7EB',
+        }}>
+          <TouchableOpacity onPress={() => {
+            setEditingFood(null);
+            setCapturedImage(null);
+            setAnalyzedFood(null);
+            setFoodWeight(100);
+            setNutritionPer100g(null);
+          }} style={{ marginRight: 16 }}>
+            <Ionicons name="arrow-back" size={24} color={theme.colors.primary || '#3BB273'} />
+          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <Text style={{
+              fontSize: 20,
+              fontWeight: '700',
+              color: theme.colors.text,
+            }}>
+              {t('addMeal.editFood')}
+            </Text>
+            <Text style={{
+              fontSize: 13,
+              color: theme.colors.textSecondary || '#9CA3AF',
+            }}>
+              {t('addMeal.editFoodDescription')}
+            </Text>
+          </View>
+        </View>
+
+        <ScrollView style={{ flex: 1, paddingHorizontal: 24, paddingTop: 20 }}>
+          {/* Imagem */}
+          {capturedImage && (
+            <View style={{
+              marginBottom: 24,
+              borderRadius: 20,
+              overflow: 'hidden',
+              backgroundColor: theme.colors.card,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 8,
+              elevation: 3,
+            }}>
+              <Image
+                source={{ uri: capturedImage }}
+                style={{ width: '100%', height: 250 }}
+                resizeMode="cover"
+              />
+            </View>
+          )}
+
+          {/* Tipo de Refeição */}
+          <View style={{ marginBottom: 24 }}>
+            <Text style={{
+              fontSize: 16,
+              fontWeight: '600',
+              color: theme.colors.text,
+              marginBottom: 12,
+            }}>
+              {t('addMeal.mealType')}
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+              {mealTypes.map((type) => (
+                <TouchableOpacity
+                  key={type.value}
+                  onPress={() => setSelectedMealType(type.value)}
+                  style={{
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    borderRadius: 12,
+                    borderWidth: 2,
+                    borderColor: selectedMealType === type.value
+                      ? theme.colors.primary || '#3BB273'
+                      : theme.colors.border || '#E5E7EB',
+                    backgroundColor: selectedMealType === type.value
+                      ? theme.colors.primary || '#3BB273'
+                      : theme.colors.card,
+                  }}
+                >
+                  <Text style={{
+                    color: selectedMealType === type.value ? '#FFFFFF' : theme.colors.text,
+                    fontWeight: '600',
+                  }}>
+                    {type.icon} {type.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Formulário Editável */}
+          <View style={{
+            backgroundColor: theme.colors.card,
+            borderRadius: 20,
+            padding: 20,
+            marginBottom: 24,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 8,
+            elevation: 3,
+          }}>
+            {/* Nome */}
+            <View style={{ marginBottom: 20 }}>
+              <Text style={{
+                fontSize: 14,
+                fontWeight: '600',
+                color: theme.colors.text,
+                marginBottom: 8,
+              }}>
+                {t('addMeal.foodName')}
+              </Text>
+              <TextInput
+                value={editingFood.name}
+                onChangeText={(text) => {
+                  setEditingFood({ ...editingFood, name: text });
+                  // Se houver múltiplos alimentos, atualizar o nome também
+                  if (plateFoods.length > 0) {
+                    // O nome pode ser editado manualmente, mas não vamos atualizar os alimentos individuais
+                  }
+                }}
+                style={{
+                  backgroundColor: theme.colors.background,
+                  borderRadius: 12,
+                  padding: 14,
+                  fontSize: 16,
+                  color: theme.colors.text,
+                  borderWidth: 1,
+                  borderColor: theme.colors.border || '#E5E7EB',
+                }}
+                placeholder={t('addMeal.foodNamePlaceholder')}
+                placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
+              />
+            </View>
+
+            {/* Alimentos do Prato */}
+            {plateFoods && plateFoods.length > 0 && (
+              <View style={{ marginBottom: 20 }}>
+                <Text style={{
+                  fontSize: 14,
+                  fontWeight: '600',
+                  color: theme.colors.text,
+                  marginBottom: 12,
+                }}>
+                  {t('addMeal.plateFoods')}
+                </Text>
+                
+                {plateFoods.map((food, index) => (
+                  <View key={index} style={{
+                    backgroundColor: theme.colors.background,
+                    borderRadius: 12,
+                    padding: 14,
+                    marginBottom: 12,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border || '#E5E7EB',
+                  }}>
+                    <Text style={{
+                      fontSize: 15,
+                      fontWeight: '700',
+                      color: theme.colors.text,
+                      marginBottom: 8,
+                    }}>
+                      {food.name}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={{
+                        fontSize: 13,
+                        color: theme.colors.textSecondary || '#9CA3AF',
+                        flex: 1,
+                      }}>
+                        {t('addMeal.weight')} (g):
+                      </Text>
+                      <TextInput
+                        value={food.weight.toString()}
+                        onChangeText={(text) => {
+                          const weight = parseFloat(text) || 0;
+                          const updatedFoods = [...plateFoods];
+                          updatedFoods[index] = { ...food, weight };
+                          setPlateFoods(updatedFoods);
+                          
+                          // Recalcular totais
+                          const totals = updatedFoods.reduce((acc, f) => {
+                            const multiplier = f.weight / 100;
+                            return {
+                              calories: acc.calories + Math.round(f.caloriesPer100g * multiplier),
+                              protein: acc.protein + parseFloat((f.proteinPer100g * multiplier).toFixed(1)),
+                              carbs: acc.carbs + parseFloat((f.carbsPer100g * multiplier).toFixed(1)),
+                              fat: acc.fat + parseFloat((f.fatPer100g * multiplier).toFixed(1)),
+                            };
+                          }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+                          
+                          setEditingFood({
+                            ...editingFood!,
+                            calories: totals.calories,
+                            protein: totals.protein,
+                            carbs: totals.carbs,
+                            fat: totals.fat,
+                          });
+                        }}
+                        keyboardType="numeric"
+                        style={{
+                          backgroundColor: theme.colors.card,
+                          borderRadius: 8,
+                          padding: 10,
+                          fontSize: 15,
+                          color: theme.colors.text,
+                          borderWidth: 1,
+                          borderColor: theme.colors.border || '#E5E7EB',
+                          width: 100,
+                          textAlign: 'right',
+                        }}
+                        placeholder="100"
+                        placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
+                      />
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Valores Nutricionais Calculados (apenas leitura) */}
+            <View style={{
+              backgroundColor: theme.colors.primary + '10',
+              borderRadius: 12,
+              padding: 16,
+              marginBottom: 20,
+            }}>
+              <Text style={{
+                fontSize: 14,
+                fontWeight: '600',
+                color: theme.colors.text,
+                marginBottom: 12,
+              }}>
+                {t('addMeal.nutritionalValues')}
+              </Text>
+              
+              {/* Calorias */}
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{
+                  fontSize: 12,
+                  color: theme.colors.textSecondary || '#9CA3AF',
+                  marginBottom: 4,
+                }}>
+                  {t('addMeal.calories')}
+                </Text>
+                <Text style={{
+                  fontSize: 20,
+                  fontWeight: '700',
+                  color: theme.colors.primary || '#3BB273',
+                }}>
+                  {editingFood.calories} kcal
+                </Text>
+              </View>
+
+              {/* Macros */}
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                {/* Proteína */}
+                <View style={{ flex: 1 }}>
+                  <Text style={{
+                    fontSize: 11,
+                    color: theme.colors.textSecondary || '#9CA3AF',
+                    marginBottom: 4,
+                  }}>
+                    {t('addMeal.protein')}
+                  </Text>
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '700',
+                    color: theme.colors.text,
+                  }}>
+                    {Math.round(editingFood.protein)}g
+                  </Text>
+                </View>
+                {/* Carboidratos */}
+                <View style={{ flex: 1 }}>
+                  <Text style={{
+                    fontSize: 11,
+                    color: theme.colors.textSecondary || '#9CA3AF',
+                    marginBottom: 4,
+                  }}>
+                    {t('addMeal.carbs')}
+                  </Text>
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '700',
+                    color: theme.colors.text,
+                  }}>
+                    {Math.round(editingFood.carbs)}g
+                  </Text>
+                </View>
+                {/* Gordura */}
+                <View style={{ flex: 1 }}>
+                  <Text style={{
+                    fontSize: 11,
+                    color: theme.colors.textSecondary || '#9CA3AF',
+                    marginBottom: 4,
+                  }}>
+                    {t('addMeal.fat')}
+                  </Text>
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '700',
+                    color: theme.colors.text,
+                  }}>
+                    {Math.round(editingFood.fat)}g
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Botão Salvar */}
+            <TouchableOpacity
+              onPress={handleSaveEditedFood}
+              style={{
+                backgroundColor: theme.colors.primary || '#3BB273',
+                borderRadius: 16,
+                paddingVertical: 16,
+                alignItems: 'center',
+                marginTop: 8,
+              }}
+            >
+              <Text style={{
+                color: '#FFFFFF',
+                fontSize: 16,
+                fontWeight: '700',
+              }}>
+                {t('addMeal.saveMeal')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-gray-900">
-      <View className="flex-row items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-        <TouchableOpacity onPress={() => navigation.goBack()} className="mr-4">
-          <Ionicons name="arrow-back" size={24} color="#3BB273" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 24,
+        paddingVertical: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border || '#E5E7EB',
+      }}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 16 }}>
+          <Ionicons name="arrow-back" size={24} color={theme.colors.primary || '#3BB273'} />
         </TouchableOpacity>
-        <View className="flex-1">
-          <Text className="text-2xl font-bold text-gray-900 dark:text-white">
-            Adicionar Refeição
+        <View style={{ flex: 1 }}>
+          <Text style={{
+            fontSize: 20,
+            fontWeight: '700',
+            color: theme.colors.text,
+          }}>
+            {t('addMeal.title')}
           </Text>
-          <Text className="text-sm text-gray-500 dark:text-gray-400">
-            Pesquisa ou digitaliza um alimento
+          <Text style={{
+            fontSize: 13,
+            color: theme.colors.textSecondary || '#9CA3AF',
+          }}>
+            {mode === 'search' ? t('addMeal.searchDescription') : 
+             mode === 'camera' ? t('addMeal.cameraDescription') : 
+             t('addMeal.barcodeDescription')}
           </Text>
         </View>
       </View>
 
-      <ScrollView className="flex-1 px-6 py-4">
+      {loading ? (
+        <View style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}>
+          <ActivityIndicator size="large" color={theme.colors.primary || '#3BB273'} />
+          <Text style={{
+            marginTop: 16,
+            color: theme.colors.textSecondary || '#9CA3AF',
+            fontSize: 16,
+          }}>
+            {t('addMeal.analyzing')}
+          </Text>
+        </View>
+      ) : (
+      <ScrollView style={{ flex: 1, paddingHorizontal: 24, paddingTop: 20 }}>
         {/* Tipo de Refeição */}
         <View className="mb-6">
           <Text className="text-gray-700 dark:text-gray-300 mb-3 font-medium">
@@ -322,6 +891,7 @@ export function AddMealScreen({ navigation }: any) {
           </View>
         )}
       </ScrollView>
+      )}
     </SafeAreaView>
   );
 }

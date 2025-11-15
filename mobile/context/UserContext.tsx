@@ -109,20 +109,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
     expoProxyRedirect = makeRedirectUri({ scheme: 'nuti' } as any);
   }
   
-  // Debug: Log redirect URI para ajudar na configuração do Google Console
-  if (__DEV__) {
-    console.log('🔗 Redirect URI configurado:', expoProxyRedirect);
-    console.log('💡 Este URI DEVE estar no Google Cloud Console > Credentials > OAuth Client > Authorized redirect URIs');
-    console.log('💡 URI completo que o Google vai receber:', expoProxyRedirect);
-    console.log('🔍 Debug - isExpoGo:', isExpoGo);
-    console.log('🔍 Debug - useProxyByDefault:', useProxyByDefault);
-    
-    // Log também o que o makeRedirectUri retorna com diferentes opções
-    const testUri1 = makeRedirectUri({ useProxy: true });
-    const testUri2 = makeRedirectUri({ useProxy: false, scheme: 'nuti' });
-    console.log('🔍 Debug - makeRedirectUri({ useProxy: true }):', testUri1);
-    console.log('🔍 Debug - makeRedirectUri({ useProxy: false, scheme: "nuti" }):', testUri2);
-  }
 
   // Configurar Google Signin nativo quando o módulo existir (dev-client/standalone)
   useEffect(() => {
@@ -136,9 +122,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
             webClientId: webId || undefined,
             offlineAccess: true,
           });
-          console.log('GoogleSignin configurado (nativo).');
-        } else {
-          console.log('GoogleSignin módulo não disponível para configurar.');
         }
       } catch {
         // Módulo não disponível neste ambiente (por ex., Expo Go)
@@ -174,35 +157,29 @@ export function UserProvider({ children }: { children: ReactNode }) {
   // Processar resposta automática quando o OAuth retorna (importante para deep linking)
   useEffect(() => {
     if (response) {
-      console.log('📥 OAuth Response recebida (useEffect):', { 
-        type: response.type,
-        hasAuthentication: !!response.authentication,
-        hasParams: !!(response as any).params
-      });
-      
       if (response.type === 'success') {
-        // Tentar obter tokens de authentication ou params
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const authPayload: any = response.authentication || (response as any).params || {};
         const idToken = authPayload?.idToken || authPayload?.id_token;
         const accessToken = authPayload?.accessToken || authPayload?.access_token;
 
-        console.log('🎫 Tokens extraídos do response:', { 
-          hasIdToken: !!idToken, 
-          hasAccessToken: !!accessToken,
-          authPayloadKeys: Object.keys(authPayload)
-        });
-
         if (idToken || accessToken) {
-          // Processar login automaticamente quando retorna do browser
           (async () => {
             try {
-              console.log('🔥 Fazendo login no Firebase com tokens do response...');
               const credential = GoogleAuthProvider.credential(idToken || undefined, accessToken || undefined);
               const userCredential = await signInWithCredential(auth, credential);
               
+              // Verificar se userCredential e user existem
+              if (!userCredential?.user) {
+                throw new Error('Erro ao fazer login: dados do utilizador não disponíveis');
+              }
+              
+              const currentUser = userCredential.user;
+              if (!currentUser) {
+                throw new Error('Erro ao fazer login: dados do utilizador não disponíveis');
+              }
+              
               // Verificar se a conta foi criada com email/password
-              const userRef = doc(db, 'users', userCredential.user.uid);
+              const userRef = doc(db, 'users', currentUser.uid);
               const userSnap = await getDoc(userRef);
               
               if (userSnap.exists()) {
@@ -219,8 +196,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
               } else {
                 // Criar perfil se não existir
                 await setDoc(userRef, {
-                  name: userCredential.user.displayName || '',
-                  email: userCredential.user.email || '',
+                  name: (currentUser?.displayName) || '',
+                  email: (currentUser?.email) || '',
                   plan: 'free',
                   streak: 0,
                   badges: [],
@@ -228,24 +205,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
                   authMethod: 'google',
                 });
               }
-              
-              console.log('✅ Login Google realizado automaticamente via response!');
             } catch (error: any) {
               console.error('❌ Erro ao processar resposta automática:', error);
-              console.error('❌ Detalhes do erro:', error.message, error.code);
             }
           })();
-        } else {
-          console.warn('⚠️ Response success mas sem tokens:', authPayload);
-          console.warn('⚠️ Response completo:', JSON.stringify(response, null, 2));
         }
       } else if (response.type === 'error') {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const errorDetails = (response as any).error;
         console.error('❌ OAuth Response error:', errorDetails);
-        console.error('❌ Response completo:', JSON.stringify(response, null, 2));
-      } else if (response.type === 'cancel' || response.type === 'dismiss') {
-        console.log('ℹ️ OAuth cancelado ou dispensado pelo utilizador');
       }
     }
   }, [response]);
@@ -265,14 +232,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
       if (userSnap.exists()) {
         const data = userSnap.data();
-        // IMPORTANTE: Verificar explicitamente se onboardingCompleted existe e é true
-        // Se não existir ou for undefined, assumir false
         const onboardingCompleted = data.onboardingCompleted === true;
-        console.log('📋 loadProfile - userId:', userId);
-        console.log('📋 loadProfile - onboardingCompleted (raw do Firestore):', data.onboardingCompleted);
-        console.log('📋 loadProfile - onboardingCompleted (tipo):', typeof data.onboardingCompleted);
-        console.log('📋 loadProfile - onboardingCompleted (processed):', onboardingCompleted);
-        console.log('📋 loadProfile - todos os campos do perfil:', Object.keys(data));
         
         const loadedProfile: UserProfile = {
           id: userId,
@@ -299,12 +259,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           authMethod: data.authMethod,
         };
         
-        console.log('📋 loadProfile - profile a definir com onboardingCompleted:', loadedProfile.onboardingCompleted);
-        console.log('📋 loadProfile - profile completo (JSON):', JSON.stringify(loadedProfile, null, 2));
         setProfile(loadedProfile);
-        
-        // Verificar se o perfil foi definido corretamente
-        console.log('📋 loadProfile - perfil definido no estado');
       } else {
         // Criar perfil se não existir
         // Determinar método de autenticação baseado no provider
@@ -326,9 +281,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setProfile(newProfile);
       }
     } catch (error: any) {
-      // Ignorar erros de permissões silenciosamente (pode ser que o utilizador não esteja autenticado)
       if (error?.code === 'permission-denied') {
-        console.log('Profile: Permission denied, user may not be authenticated');
         return;
       }
       console.error('Error loading profile:', error);
@@ -338,25 +291,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
   // Observar mudanças de autenticação
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      console.log('Firebase onAuthStateChanged - user:', firebaseUser?.uid);
       setUser(firebaseUser);
 
       try {
         if (firebaseUser) {
-          console.log('Firebase onAuthStateChanged - loading profile for', firebaseUser.uid);
           await loadProfile(firebaseUser.uid);
-          
-          // Verificar novamente após carregar perfil
-          const verifyRef = doc(db, 'users', firebaseUser.uid);
-          const verifySnap = await getDoc(verifyRef);
-          if (verifySnap.exists()) {
-            const verifyData = verifySnap.data();
-            console.log('🔍 onAuthStateChanged - verificação onboardingCompleted:', verifyData.onboardingCompleted);
-          }
-          
           await AsyncStorage.setItem('userId', firebaseUser.uid);
         } else {
-          console.log('Firebase onAuthStateChanged - no user');
           setProfile(null);
           await AsyncStorage.removeItem('userId');
         }
@@ -416,66 +357,30 @@ export function UserProvider({ children }: { children: ReactNode }) {
         authMethod: 'email',
       };
       
-      // Incluir dados do onboarding se fornecidos
-      // IMPORTANTE: Fazer isto ANTES de guardar, para garantir que tudo está no mesmo setDoc
       if (onboardingData) {
-        console.log('✅ signUp - onboardingData recebido:', Object.keys(onboardingData));
-        console.log('✅ signUp - onboardingData.onboardingCompleted:', onboardingData.onboardingCompleted);
-        
-        // Copiar todos os dados do onboarding, mas tratar campos especiais
         Object.keys(onboardingData).forEach(key => {
           const value = onboardingData[key];
           if (value !== undefined && value !== null) {
-            // Se for Timestamp, manter como está (já está no formato correto)
-            // Se for Date, converter para Timestamp
             if (value instanceof Date) {
               profileData[key] = Timestamp.fromDate(value);
             } else {
               profileData[key] = value;
             }
-            console.log(`✅ signUp - Copiado ${key}:`, value, 'tipo:', typeof value);
           }
         });
       }
       
-      // IMPORTANTE: Garantir que onboardingCompleted é explicitamente true (boolean)
-      // Isto DEVE estar no profileData antes do setDoc para evitar race conditions
       if (onboardingData?.onboardingCompleted === true) {
-        profileData.onboardingCompleted = true; // Forçar boolean true
-        console.log('✅ signUp - onboardingCompleted = true FORÇADO no profileData');
+        profileData.onboardingCompleted = true;
       }
       
-      console.log('✅ signUp - Perfil a guardar com onboardingCompleted:', profileData.onboardingCompleted);
-      console.log('✅ signUp - Tipo onboardingCompleted:', typeof profileData.onboardingCompleted);
-      console.log('✅ signUp - Chaves do profileData:', Object.keys(profileData));
-      console.log('✅ signUp - onboardingCompleted existe no profileData?', 'onboardingCompleted' in profileData);
-      console.log('✅ signUp - profileData.onboardingCompleted valor:', profileData.onboardingCompleted);
-      
-      // Guardar perfil no Firestore COM TUDO incluído (incluindo onboardingCompleted)
-      // Isto garante que quando o onAuthStateChanged chamar loadProfile, já tem tudo
       await setDoc(userRef, profileData);
       
-      console.log('✅ signUp - Perfil guardado no Firestore');
-      
-      // Verificar IMEDIATAMENTE se foi guardado
       const checkSnap = await getDoc(userRef);
       if (checkSnap.exists()) {
         const checkData = checkSnap.data();
-        console.log('✅ signUp - VERIFICAÇÃO IMEDIATA - onboardingCompleted:', checkData.onboardingCompleted);
-        console.log('✅ signUp - VERIFICAÇÃO IMEDIATA - tipo:', typeof checkData.onboardingCompleted);
-        console.log('✅ signUp - VERIFICAÇÃO IMEDIATA - todas as chaves:', Object.keys(checkData));
-        
-        // Se não foi guardado, FORÇAR guardar
         if (checkData.onboardingCompleted !== true) {
-          console.log('⚠️ signUp - onboardingCompleted NÃO foi guardado! A forçar guardar...');
           await setDoc(userRef, { onboardingCompleted: true }, { merge: true });
-          
-          // Verificar novamente
-          const checkSnap2 = await getDoc(userRef);
-          if (checkSnap2.exists()) {
-            const checkData2 = checkSnap2.data();
-            console.log('✅ signUp - Após correção - onboardingCompleted:', checkData2.onboardingCompleted);
-          }
         }
       }
       
@@ -529,7 +434,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
           throw nativeError;
         }
         // Caso contrário, continuar para web flow
-        console.log('Native Google sign-in não disponível, usando web flow');
       }
 
       // Web/proxy flow (funciona em Expo Go e dev-client)
@@ -592,8 +496,18 @@ export function UserProvider({ children }: { children: ReactNode }) {
       const credentialNative = GoogleAuthProvider.credential(idTokenNative);
       const userCredential = await signInWithCredential(auth, credentialNative);
       
+      // Verificar se userCredential e user existem
+      if (!userCredential?.user) {
+        throw new Error('Erro ao fazer login: dados do utilizador não disponíveis');
+      }
+      
+      const currentUser = userCredential.user;
+      if (!currentUser) {
+        throw new Error('Erro ao fazer login: dados do utilizador não disponíveis');
+      }
+      
       // Verificar se a conta foi criada com email/password
-      const userRef = doc(db, 'users', userCredential.user.uid);
+      const userRef = doc(db, 'users', currentUser.uid);
       const userSnap = await getDoc(userRef);
       
       if (userSnap.exists()) {
@@ -610,8 +524,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
       } else {
         // Criar perfil se não existir
         await setDoc(userRef, {
-          name: userCredential.user.displayName || '',
-          email: userCredential.user.email || '',
+          name: (currentUser?.displayName) || '',
+          email: (currentUser?.email) || '',
           plan: 'free',
           streak: 0,
           badges: [],
@@ -641,44 +555,30 @@ export function UserProvider({ children }: { children: ReactNode }) {
       throw new Error('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID não está configurado no .env');
     }
 
-    console.log('🔐 Iniciando Google Sign-In...');
-    console.log('🔗 Redirect URI:', expoProxyRedirect);
-    console.log('📱 Request configurado:', !!request);
-    console.log('⚠️ IMPORTANTE: Este URI DEVE estar no Google Cloud Console > Credentials > OAuth Client > Authorized redirect URIs');
-    console.log('⚠️ Copia este URI EXATO e adiciona no Google Console:', expoProxyRedirect);
-
-    // No Expo Go, o promptAsync pode não retornar imediatamente
-    // A resposta será processada via useEffect quando o browser retornar
-    // Mas vamos tentar esperar pela resposta também
     try {
-      // Prompt usando o Expo proxy
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await promptAsync({ useProxy: useProxyByDefault } as any);
 
-      console.log('📥 Resultado do promptAsync (retornou):', { 
-        type: (result as any)?.type,
-        hasAuthentication: !!(result as any)?.authentication,
-        hasParams: !!(result as any)?.params
-      });
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if ((result as any).type === 'success') {
-        // Extrair tokens da resposta
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const authPayload: any = (result as any).authentication || (result as any).params || {};
         const idToken = authPayload?.idToken || authPayload?.id_token;
         const accessToken = authPayload?.accessToken || authPayload?.access_token;
-
-        console.log('🎫 Tokens recebidos:', { hasIdToken: !!idToken, hasAccessToken: !!accessToken });
         
         if (idToken || accessToken) {
-          // Criar credencial Firebase e fazer login
-          console.log('🔥 Fazendo login no Firebase...');
           const credential = GoogleAuthProvider.credential(idToken || undefined, accessToken || undefined);
           const userCredential = await signInWithCredential(auth, credential);
           
+          // Verificar se userCredential e user existem
+          if (!userCredential?.user) {
+            throw new Error('Erro ao fazer login: dados do utilizador não disponíveis');
+          }
+          
+          const currentUser = userCredential.user;
+          if (!currentUser) {
+            throw new Error('Erro ao fazer login: dados do utilizador não disponíveis');
+          }
+          
           // Verificar se a conta foi criada com email/password
-          const userRef = doc(db, 'users', userCredential.user.uid);
+          const userRef = doc(db, 'users', currentUser.uid);
           const userSnap = await getDoc(userRef);
           
           if (userSnap.exists()) {
@@ -695,8 +595,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
           } else {
             // Criar perfil se não existir
             await setDoc(userRef, {
-              name: userCredential.user.displayName || '',
-              email: userCredential.user.email || '',
+              name: (currentUser?.displayName) || '',
+              email: (currentUser?.email) || '',
               plan: 'free',
               streak: 0,
               badges: [],
@@ -705,7 +605,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
             });
           }
           
-          console.log('✅ Login Firebase realizado com sucesso!');
           return; // Sucesso, sair
         }
       }
@@ -718,7 +617,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
       
       // Se não foi success mas também não foi cancel, pode ser que a resposta venha via response
       // Nesse caso, o useEffect vai processar
-      console.log('⚠️ promptAsync não retornou success, mas pode vir via response. Aguardando...');
       
       // Se não retornou success, pode ser que a resposta venha via response (deep linking)
       // Nesse caso, o useEffect vai processar automaticamente
@@ -730,7 +628,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
         throw error;
       }
       // Outros erros podem ser que a resposta venha via response
-      console.log('⚠️ promptAsync erro, mas pode vir resposta via response:', error.message);
       // Não relançar, deixar o useEffect processar se vier resposta
     }
   };
@@ -770,11 +667,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
     
     if (!currentUser) {
-      console.log('⚠️ updateProfile - Nenhum utilizador disponível');
       return;
     }
-    
-    console.log('✅ updateProfile - Utilizando user:', currentUser.uid);
 
     try {
       const userRef = doc(db, 'users', currentUser.uid);
@@ -795,37 +689,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
         }
       });
       
-      // IMPORTANTE: Garantir que onboardingCompleted é boolean true
       if (updates.onboardingCompleted === true) {
         dataToSave.onboardingCompleted = true;
-        console.log('✅ updateProfile - Forçando onboardingCompleted = true');
       } else if (updates.onboardingCompleted !== undefined && updates.onboardingCompleted !== false) {
         dataToSave.onboardingCompleted = updates.onboardingCompleted === true;
       }
       
-      console.log('✅ updateProfile - dados a guardar:', dataToSave);
-      console.log('✅ updateProfile - onboardingCompleted:', dataToSave.onboardingCompleted);
-      
       await setDoc(userRef, dataToSave, { merge: true });
-      console.log('✅ updateProfile - dados guardados no Firestore');
       
-      // Verificar IMEDIATAMENTE se foi guardado
       const verifySnap = await getDoc(userRef);
       if (verifySnap.exists()) {
         const verifyData = verifySnap.data();
-        console.log('✅ updateProfile - VERIFICAÇÃO IMEDIATA - onboardingCompleted:', verifyData.onboardingCompleted);
-        
-        // Se não foi guardado, FORÇAR guardar
         if (dataToSave.onboardingCompleted === true && verifyData.onboardingCompleted !== true) {
-          console.log('⚠️ updateProfile - onboardingCompleted NÃO foi guardado! A forçar guardar...');
           await setDoc(userRef, { onboardingCompleted: true }, { merge: true });
-          
-          // Verificar novamente
-          const verifySnap2 = await getDoc(userRef);
-          if (verifySnap2.exists()) {
-            const verifyData2 = verifySnap2.data();
-            console.log('✅ updateProfile - Após correção - onboardingCompleted:', verifyData2.onboardingCompleted);
-          }
         }
       }
       
@@ -839,7 +715,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
   // Atualizar perfil
   const refreshProfile = async () => {
     if (user) {
-      console.log('🔄 refreshProfile - a carregar perfil para user:', user.uid);
       await loadProfile(user.uid);
     }
   };

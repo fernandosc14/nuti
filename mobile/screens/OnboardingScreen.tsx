@@ -4,7 +4,7 @@
  * Fluxo de onboarding para novos utilizadores (antes de criar conta)
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,10 +13,14 @@ import {
   TextInput,
   Platform,
   ActivityIndicator,
+  Linking,
+  Animated,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '../context/UserContext';
+import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 // import * as Clipboard from 'expo-clipboard';
@@ -35,13 +39,19 @@ type OnboardingStep =
   | 'desiredWeight'
   | 'referralCode'
   | 'calorieGoal'
+  | 'premium'
+  | 'rateApp'
   | 'createAccount';
 
-const TOTAL_STEPS = 12;
+const TOTAL_STEPS = 14;
 
-export function OnboardingScreen({ navigation }: any) {
+export function OnboardingScreen({ navigation: _navigation }: any) {
+  // Não usar navigation diretamente, apenas receber como prop para evitar erros
   const { signUp, signInWithGoogleNative, updateProfile, user, profile, refreshProfile } = useUser();
+  const { t } = useLanguage();
+  const { theme } = useTheme();
   const [currentStep, setCurrentStep] = useState<OnboardingStep>('gender');
+  
   const [loading, setLoading] = useState(false);
   const [creatingAccount, setCreatingAccount] = useState(false);
 
@@ -67,6 +77,16 @@ export function OnboardingScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [calculating, setCalculating] = useState(false);
+  const [calculatedMacros, setCalculatedMacros] = useState<{
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    bmr: number;
+    tdee: number;
+  } | null>(null);
+  const progressAnim = useRef(new Animated.Value(0)).current;
 
   const stepIndex = {
     gender: 0,
@@ -80,13 +100,15 @@ export function OnboardingScreen({ navigation }: any) {
     desiredWeight: 8,
     referralCode: 9,
     calorieGoal: 10,
-    createAccount: 11,
+    premium: 11,
+    rateApp: 12,
+    createAccount: 13,
   };
 
   const currentStepIndex = stepIndex[currentStep];
   const progress = (currentStepIndex / (TOTAL_STEPS - 1)) * 100;
 
-  // Calcular meta de calorias
+  // Calcular meta de calorias e macros
   const calculateCalorieGoal = () => {
     if (!gender || !weightKg || !heightCm || !age || !goal || !workoutsPerWeek) {
       return null;
@@ -127,7 +149,24 @@ export function OnboardingScreen({ navigation }: any) {
     }
     // Se 'maintain', usar TDEE como está
 
-    return Math.round(tdee);
+    const calories = Math.round(tdee);
+
+    // Calcular macros (distribuição padrão)
+    // Proteína: 30% das calorias (4 kcal/g)
+    const proteinGrams = Math.round((calories * 0.30) / 4);
+    // Carboidratos: 40% das calorias (4 kcal/g)
+    const carbsGrams = Math.round((calories * 0.40) / 4);
+    // Gordura: 30% das calorias (9 kcal/g)
+    const fatGrams = Math.round((calories * 0.30) / 9);
+
+    return {
+      calories,
+      protein: proteinGrams,
+      carbs: carbsGrams,
+      fat: fatGrams,
+      bmr: Math.round(bmr),
+      tdee: Math.round(bmr * activityFactor),
+    };
   };
 
   const handleNext = () => {
@@ -205,6 +244,8 @@ export function OnboardingScreen({ navigation }: any) {
       'desiredWeight',
       'referralCode',
       'calorieGoal',
+      'premium',
+      'rateApp',
       'createAccount',
     ];
 
@@ -220,12 +261,32 @@ export function OnboardingScreen({ navigation }: any) {
       
       // Se está a ir para calorieGoal, calcular primeiro
       if (nextStep === 'calorieGoal') {
-        const calculated = calculateCalorieGoal();
-        if (calculated) {
-          setCalorieGoal(calculated);
-        }
+        setCalculating(true);
+        setCalculatedMacros(null);
+        progressAnim.setValue(0);
+        
+        // Animar progress bar
+        Animated.timing(progressAnim, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: false,
+        }).start();
+        
+        // Simular cálculo com delay para mostrar animação
+        setTimeout(() => {
+          const calculated = calculateCalorieGoal();
+          if (calculated) {
+            setCalorieGoal(calculated.calories);
+            setCalculatedMacros(calculated);
+          }
+          setCalculating(false);
+        }, 2000);
       }
-      setCurrentStep(nextStep);
+      
+      // Atualizar o step usando função de callback para garantir atualização
+      setCurrentStep((prevStep) => {
+        return nextStep;
+      });
     }
   };
 
@@ -242,6 +303,8 @@ export function OnboardingScreen({ navigation }: any) {
       'desiredWeight',
       'referralCode',
       'calorieGoal',
+      'premium',
+      'rateApp',
       'createAccount',
     ];
 
@@ -361,6 +424,10 @@ export function OnboardingScreen({ navigation }: any) {
         return true; // Referral code é opcional
       case 'calorieGoal':
         return true;
+      case 'premium':
+        return true; // Premium é opcional
+      case 'rateApp':
+        return true; // Rate app é opcional
       case 'createAccount':
         return true; // Não precisa validar aqui, valida no handleCreateAccount
       default:
@@ -372,8 +439,8 @@ export function OnboardingScreen({ navigation }: any) {
     if (!name.trim() || !email.trim() || !password.trim() || !confirmPassword.trim()) {
       Toast.show({
         type: 'error',
-        text1: 'Erro',
-        text2: 'Por favor, preencha todos os campos',
+        text1: t('onboarding.error'),
+        text2: t('onboarding.errorFillAllFields'),
       });
       return;
     }
@@ -381,8 +448,8 @@ export function OnboardingScreen({ navigation }: any) {
     if (password !== confirmPassword) {
       Toast.show({
         type: 'error',
-        text1: 'Erro',
-        text2: 'As passwords não coincidem',
+        text1: t('onboarding.error'),
+        text2: t('onboarding.errorPasswordsDontMatch'),
       });
       return;
     }
@@ -390,8 +457,8 @@ export function OnboardingScreen({ navigation }: any) {
     if (password.length < 6) {
       Toast.show({
         type: 'error',
-        text1: 'Erro',
-        text2: 'A password deve ter pelo menos 6 caracteres',
+        text1: t('onboarding.error'),
+        text2: t('onboarding.errorPasswordTooShort'),
       });
       return;
     }
@@ -457,11 +524,13 @@ export function OnboardingScreen({ navigation }: any) {
   };
 
   const handleCreateAccountWithGoogle = async () => {
+    // Não bloquear se o onboarding já está completo
+    if (user && profile && profile.onboardingCompleted === true) {
+      return;
+    }
     setCreatingAccount(true);
     setLoading(true);
     try {
-      console.log('🚀 OnboardingScreen - Iniciando criação de conta com Google');
-      
       // Valores já estão em métricas (sliders sempre guardam em cm e kg)
       const height = heightCm; // cm
       const weight = weightKg; // kg
@@ -491,14 +560,9 @@ export function OnboardingScreen({ navigation }: any) {
         referralCode: referralCode.trim() || undefined, // Referral code (opcional)
         onboardingCompleted: true,
       };
-      
-      console.log('🚀 OnboardingScreen - onboardingData preparado:', Object.keys(onboardingData));
-      console.log('🚀 OnboardingScreen - onboardingCompleted:', onboardingData.onboardingCompleted);
 
       // Fazer login com Google
-      console.log('🚀 OnboardingScreen - A chamar signInWithGoogleNative...');
       await signInWithGoogleNative();
-      console.log('🚀 OnboardingScreen - signInWithGoogleNative concluído');
 
       // Aguardar um pouco para o perfil ser criado e o onAuthStateChanged processar
       await new Promise(resolve => setTimeout(resolve, 1500));
@@ -508,11 +572,7 @@ export function OnboardingScreen({ navigation }: any) {
       const firebaseAuth = getAuth();
       const currentUser = firebaseAuth.currentUser;
       
-      console.log('🚀 OnboardingScreen - A chamar updateProfile com onboardingData...');
-      console.log('🚀 OnboardingScreen - currentUser.uid:', currentUser?.uid);
-      
       if (!currentUser) {
-        console.log('⚠️ OnboardingScreen - currentUser ainda não está disponível, a aguardar mais...');
         await new Promise(resolve => setTimeout(resolve, 1000));
         // Tentar novamente
         const retryUser = getAuth().currentUser;
@@ -523,7 +583,6 @@ export function OnboardingScreen({ navigation }: any) {
       
       // Atualizar perfil com dados do onboarding
       await updateProfile(onboardingData);
-      console.log('🚀 OnboardingScreen - updateProfile concluído');
       
       Toast.show({
         type: 'success',
@@ -547,10 +606,8 @@ export function OnboardingScreen({ navigation }: any) {
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
           const data = userSnap.data();
-          console.log('🚀 OnboardingScreen - Verificação final Firestore - onboardingCompleted:', data.onboardingCompleted);
           
           if (data.onboardingCompleted !== true) {
-            console.log('⚠️ OnboardingScreen - Ainda não está completo, a forçar guardar...');
             await setDoc(userRef, { onboardingCompleted: true }, { merge: true });
             await refreshProfile();
             await new Promise(resolve => setTimeout(resolve, 300));
@@ -561,35 +618,58 @@ export function OnboardingScreen({ navigation }: any) {
         }
       }
       
+      // IMPORTANTE: Resetar creatingAccount e loading para permitir que o App.tsx redirecione
+      // Aguardar um pouco para garantir que o perfil foi atualizado no contexto
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setCreatingAccount(false);
+      setLoading(false);
+      
       // O App.tsx vai redirecionar automaticamente quando detectar onboardingCompleted = true
     } catch (error: any) {
+      console.error('❌ OnboardingScreen - Erro ao criar conta com Google:', error);
       setCreatingAccount(false);
+      setLoading(false);
       Toast.show({
         type: 'error',
         text1: 'Erro ao criar conta',
         text2: error.message || 'Erro ao criar conta com Google',
       });
-    } finally {
-      setLoading(false);
     }
   };
 
-  // Se o user já tem onboarding completo, mostrar loading e não renderizar o onboarding
+  // Se o user já tem onboarding completo, resetar creatingAccount e loading
   // (pode acontecer se o perfil foi carregado após criar conta)
   useEffect(() => {
-    // Se o utilizador já tem conta e completou onboarding, não mostrar nada
+    // Se o utilizador já tem conta e completou onboarding, resetar estados
     // O App.tsx vai redirecionar automaticamente
     if (user && profile && profile.onboardingCompleted === true) {
-      console.log('✅ OnboardingScreen - onboarding já completo, App.tsx vai redirecionar');
+      if (creatingAccount) {
+        setCreatingAccount(false);
+      }
+      if (loading) {
+        setLoading(false);
+      }
     }
-  }, [user, profile]);
+  }, [user, profile, creatingAccount, loading]);
   
-  // Se está a criar conta, no step createAccount com loading, ou o onboarding já está completo, mostrar apenas loading
-  // IMPORTANTE: Isto deve estar DEPOIS de todos os hooks
-  const shouldShowLoading = creatingAccount || 
-                            loading || 
-                            (currentStep === 'createAccount' && loading) ||
-                            (user && profile && profile.onboardingCompleted === true);
+  // Se está a criar conta, mostrar loading
+  // IMPORTANTE: Se o onboarding já está completo, NÃO mostrar loading - deixar o App.tsx redirecionar
+  const isOnboardingComplete = user && profile && profile.onboardingCompleted === true;
+  const shouldShowLoading = Boolean(creatingAccount && !isOnboardingComplete);
+  
+  // Se o onboarding está completo, não renderizar nada - o App.tsx vai redirecionar
+  if (isOnboardingComplete) {
+    return (
+      <SafeAreaView className="flex-1 bg-white dark:bg-gray-900">
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color="#3BB273" />
+          <Text style={{ marginTop: 16, color: theme.colors.textSecondary || '#9CA3AF' }}>
+            {t('onboarding.redirecting') || 'A redireccionar...'}
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
   
   if (shouldShowLoading) {
     return (
@@ -620,18 +700,21 @@ export function OnboardingScreen({ navigation }: any) {
         return (
           <View className="flex-1 px-6">
             <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-              Choose your Gender
+              👤 {t('onboarding.gender')}
             </Text>
             <Text className="text-gray-500 dark:text-gray-400 mb-8">
-              This will be used to calibrate your custom plan.
+              {t('onboarding.genderDescription')}
             </Text>
             <View className="space-y-4">
-              {(['male', 'female'] as const).map((g) => (
+              {([
+                { value: 'male' as const, label: t('onboarding.gender.male'), emoji: '👨' },
+                { value: 'female' as const, label: t('onboarding.gender.female'), emoji: '👩' },
+              ]).map((option) => (
                 <TouchableOpacity
-                  key={g}
-                  onPress={() => setGender(g)}
+                  key={option.value}
+                  onPress={() => setGender(option.value)}
                   className={`rounded-xl py-5 px-6 border-2 mb-3 ${
-                    gender === g
+                    gender === option.value
                       ? 'bg-green-500 border-green-500'
                       : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700'
                   }`}
@@ -639,10 +722,10 @@ export function OnboardingScreen({ navigation }: any) {
                 >
                   <Text
                     className={`text-lg font-semibold text-center ${
-                      gender === g ? 'text-white' : 'text-gray-900 dark:text-white'
+                      gender === option.value ? 'text-white' : 'text-gray-900 dark:text-white'
                     }`}
                   >
-                    {g === 'male' ? 'Male' : 'Female'}
+                    {option.emoji} {option.label}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -654,17 +737,17 @@ export function OnboardingScreen({ navigation }: any) {
         return (
           <View className="flex-1 px-6">
             <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-              How many workouts do you do per week?
+              💪 {t('onboarding.workoutsPerWeek')}
             </Text>
             <Text className="text-gray-500 dark:text-gray-400 mb-8">
-              This will be used to calibrate your custom plan.
+              {t('onboarding.workoutsPerWeekDescription')}
             </Text>
             <View className="space-y-4">
               {([
-                { value: '0-2', label: '0-2 Workouts/runs and Gym' },
-                { value: '3-6', label: '3-6 New workouts per week' },
-                { value: '6+', label: '6+ Dedicated athlete' },
-              ] as const).map((option) => (
+                { value: '0-2' as const, label: t('onboarding.workouts.0-2'), description: t('onboarding.workouts.0-2.description'), emoji: '🏠' },
+                { value: '3-6' as const, label: t('onboarding.workouts.3-6'), description: t('onboarding.workouts.3-6.description'), emoji: '💪' },
+                { value: '6+' as const, label: t('onboarding.workouts.6+'), description: t('onboarding.workouts.6+.description'), emoji: '🔥' },
+              ]).map((option) => (
                 <TouchableOpacity
                   key={option.value}
                   onPress={() => setWorkoutsPerWeek(option.value)}
@@ -682,7 +765,16 @@ export function OnboardingScreen({ navigation }: any) {
                         : 'text-gray-900 dark:text-white'
                     }`}
                   >
-                    {option.label}
+                    {option.emoji} {option.label}
+                  </Text>
+                  <Text
+                    className={`text-sm text-center mt-1 ${
+                      workoutsPerWeek === option.value
+                        ? 'text-white opacity-90'
+                        : 'text-gray-500 dark:text-gray-400'
+                    }`}
+                  >
+                    {option.description}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -694,7 +786,7 @@ export function OnboardingScreen({ navigation }: any) {
         return (
           <View className="flex-1 px-6">
             <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
-              Where did you hear about us?
+              {t('onboarding.heardFrom')}
             </Text>
             <ScrollView>
               <View className="space-y-3">
@@ -743,12 +835,12 @@ export function OnboardingScreen({ navigation }: any) {
         return (
           <View className="flex-1 px-6">
             <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
-              Have you tried other calorie tracking apps?
+              📱 {t('onboarding.triedOtherApps')}
             </Text>
             <View className="space-y-4">
               {[
-                { value: false, label: 'No' },
-                { value: true, label: 'Yes' },
+                { value: false, label: t('onboarding.triedOtherApps.no') },
+                { value: true, label: t('onboarding.triedOtherApps.yes') },
               ].map((option) => (
                 <TouchableOpacity
                   key={option.label}
@@ -784,10 +876,10 @@ export function OnboardingScreen({ navigation }: any) {
         return (
           <View className="flex-1 px-6">
             <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-              What is your height?
+              📏 {t('onboarding.heightQuestion')}
             </Text>
             <Text className="text-gray-500 dark:text-gray-400 mb-8">
-              This will be used to calibrate your custom plan.
+              {t('onboarding.heightDescription')}
             </Text>
 
             {/* Unit Toggle */}
@@ -803,7 +895,7 @@ export function OnboardingScreen({ navigation }: any) {
                     !isImperial ? 'text-white' : 'text-gray-600 dark:text-gray-400'
                   }`}
                 >
-                  Metric (cm)
+                  {t('onboarding.metricCm')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -817,7 +909,7 @@ export function OnboardingScreen({ navigation }: any) {
                     isImperial ? 'text-white' : 'text-gray-600 dark:text-gray-400'
                   }`}
                 >
-                  Imperial (ft/in)
+                  {t('onboarding.imperialFtIn')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -982,10 +1074,10 @@ export function OnboardingScreen({ navigation }: any) {
         return (
           <View className="flex-1 px-6">
             <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-              What is your weight?
+              ⚖️ {t('onboarding.weightQuestion')}
             </Text>
             <Text className="text-gray-500 dark:text-gray-400 mb-8">
-              This will be used to calibrate your custom plan.
+              {t('onboarding.weightDescription')}
             </Text>
 
             {/* Unit Toggle */}
@@ -1001,7 +1093,7 @@ export function OnboardingScreen({ navigation }: any) {
                     !isImperial ? 'text-white' : 'text-gray-600 dark:text-gray-400'
                   }`}
                 >
-                  Metric (kg)
+                  {t('onboarding.metricKg')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -1015,7 +1107,7 @@ export function OnboardingScreen({ navigation }: any) {
                     isImperial ? 'text-white' : 'text-gray-600 dark:text-gray-400'
                   }`}
                 >
-                  Imperial (lbs)
+                  {t('onboarding.imperialLbs')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1098,7 +1190,6 @@ export function OnboardingScreen({ navigation }: any) {
                     }
                     
                     // Atualizar (se inválido, fica 0 e botão desabilitado)
-                    console.log('🔍 Weight onBlur - weightText:', weightText, 'newWeightKg:', newWeightKg, 'isImperial:', isImperial);
                     setWeightKg(newWeightKg);
                     setWeightIsEmpty(newWeightKg === 0);
                     setWeightText('');
@@ -1177,10 +1268,10 @@ export function OnboardingScreen({ navigation }: any) {
         return (
           <View className="flex-1 px-6">
             <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-              What is your age?
+              🎂 {t('onboarding.ageQuestion')}
             </Text>
             <Text className="text-gray-500 dark:text-gray-400 mb-8">
-              This will be used to calibrate your custom plan.
+              {t('onboarding.ageDescription')}
             </Text>
 
             {/* Display Value with +/- buttons */}
@@ -1227,7 +1318,7 @@ export function OnboardingScreen({ navigation }: any) {
                 </TouchableOpacity>
               </View>
               <Text className="text-gray-500 dark:text-gray-400 mt-2">
-                years old
+                {t('onboarding.yearsOld')}
               </Text>
             </View>
           </View>
@@ -1237,16 +1328,16 @@ export function OnboardingScreen({ navigation }: any) {
         return (
           <View className="flex-1 px-6">
             <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-              What is your goal?
+              🎯 {t('onboarding.goal')}
             </Text>
             <Text className="text-gray-500 dark:text-gray-400 mb-8">
-              This helps us generate a plan for your calorie intake.
+              {t('onboarding.goalDescription')}
             </Text>
             <View className="space-y-4">
               {([
-                { value: 'lose', label: 'Lose weight' },
-                { value: 'maintain', label: 'Maintain' },
-                { value: 'gain', label: 'Gain weight' },
+                { value: 'lose', label: t('onboarding.goal.lose') },
+                { value: 'maintain', label: t('onboarding.goal.maintain') },
+                { value: 'gain', label: t('onboarding.goal.gain') },
               ] as const).map((option) => (
                 <TouchableOpacity
                   key={option.value}
@@ -1288,9 +1379,6 @@ export function OnboardingScreen({ navigation }: any) {
           ? (currentWeightValue * 2.20462).toFixed(1) 
           : currentWeightValue.toFixed(1);
         
-        // Debug: verificar valores
-        console.log('🔍 desiredWeight step - weightKg:', weightKg, 'weightIsEmpty:', weightIsEmpty, 'weightText:', weightText, 'currentWeightDisplay:', currentWeightDisplay, 'isImperial:', isImperial);
-        
         // Determinar mensagem e validação baseado no goal
         // Converter desiredWeight para kg para comparação
         let desiredWeightNumKg: number;
@@ -1305,19 +1393,19 @@ export function OnboardingScreen({ navigation }: any) {
         
         if (goal === 'gain') {
           isValidWeight = !isNaN(desiredWeightNumKg) && desiredWeightNumKg > currentWeightValue;
-          hintText = `Para ganhar peso, o peso desejado deve ser maior que ${currentWeightDisplay} ${isImperial ? 'lbs' : 'kg'}`;
+          hintText = t('onboarding.desiredWeightHintGain').replace('{weight}', currentWeightDisplay).replace('{unit}', isImperial ? 'lbs' : 'kg');
         } else if (goal === 'lose') {
           isValidWeight = !isNaN(desiredWeightNumKg) && desiredWeightNumKg < currentWeightValue;
-          hintText = `Para perder peso, o peso desejado deve ser menor que ${currentWeightDisplay} ${isImperial ? 'lbs' : 'kg'}`;
+          hintText = t('onboarding.desiredWeightHintLose').replace('{weight}', currentWeightDisplay).replace('{unit}', isImperial ? 'lbs' : 'kg');
         }
         
         return (
           <View className="flex-1 px-6">
             <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-              What is your desired weight?
+              🎯 {t('onboarding.desiredWeightQuestion')}
             </Text>
             <Text className="text-gray-500 dark:text-gray-400 mb-2">
-              Current weight: {currentWeightDisplay} {isImperial ? 'lbs' : 'kg'}
+              {t('onboarding.currentWeight')}: {currentWeightDisplay} {isImperial ? 'lbs' : 'kg'}
             </Text>
             {hintText !== '' && (
               <Text className="text-gray-400 dark:text-gray-500 mb-6 text-sm">
@@ -1342,8 +1430,8 @@ export function OnboardingScreen({ navigation }: any) {
             {desiredWeight && !isValidWeight && (
               <Text className="mt-2 text-center text-red-500 text-sm">
                 {goal === 'gain' 
-                  ? `O peso desejado deve ser maior que ${currentWeightDisplay} ${isImperial ? 'lbs' : 'kg'}`
-                  : `O peso desejado deve ser menor que ${currentWeightDisplay} ${isImperial ? 'lbs' : 'kg'}`
+                  ? t('onboarding.desiredWeightErrorGain').replace('{weight}', currentWeightDisplay).replace('{unit}', isImperial ? 'lbs' : 'kg')
+                  : t('onboarding.desiredWeightErrorLose').replace('{weight}', currentWeightDisplay).replace('{unit}', isImperial ? 'lbs' : 'kg')
                 }
               </Text>
             )}
@@ -1365,8 +1453,8 @@ export function OnboardingScreen({ navigation }: any) {
               // Se expo-clipboard não estiver disponível, mostrar mensagem
               Toast.show({
                 type: 'info',
-                text1: 'Clipboard not available',
-                text2: 'Please rebuild the app to enable clipboard paste. For now, you can type the code manually.',
+                text1: t('onboarding.referralCode.clipboardNotAvailable'),
+                text2: t('onboarding.referralCode.clipboardNotAvailableMessage'),
               });
               return;
             }
@@ -1377,21 +1465,21 @@ export function OnboardingScreen({ navigation }: any) {
               setReferralCode(upperText);
               Toast.show({
                 type: 'success',
-                text1: 'Code pasted!',
-                text2: 'Referral code has been pasted',
+                text1: t('onboarding.referralCode.pasted'),
+                text2: t('onboarding.referralCode.pastedMessage'),
               });
             } else {
               Toast.show({
                 type: 'info',
-                text1: 'No content',
-                text2: 'Clipboard is empty',
+                text1: t('onboarding.referralCode.empty'),
+                text2: t('onboarding.referralCode.emptyMessage'),
               });
             }
           } catch (error) {
             Toast.show({
               type: 'error',
-              text1: 'Error',
-              text2: 'Failed to paste from clipboard',
+              text1: t('onboarding.referralCode.error'),
+              text2: t('onboarding.referralCode.errorMessage'),
             });
           }
         };
@@ -1399,15 +1487,15 @@ export function OnboardingScreen({ navigation }: any) {
         return (
           <View className="flex-1 px-6">
             <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-              Referral Code
+              {t('onboarding.referralCode')}
             </Text>
             <Text className="text-gray-500 dark:text-gray-400 mb-8">
-              Do you have a referral code? (Optional)
+              {t('onboarding.referralCodeQuestion')}
             </Text>
             <View className="flex-row items-center">
               <TextInput
                 className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-xl px-4 py-4 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 text-lg text-center mr-2"
-                placeholder="Enter referral code"
+                placeholder={t('onboarding.referralCode.placeholder')}
                 value={referralCode}
                 onChangeText={(text) => {
                   // Permitir apenas letras, números e hífens, em maiúsculas
@@ -1426,70 +1514,667 @@ export function OnboardingScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
             <Text className="mt-2 text-center text-gray-400 dark:text-gray-500 text-sm">
-              You can skip this step if you don't have a code
+              {t('onboarding.referralCode.skip')}
             </Text>
           </View>
         );
 
       case 'calorieGoal':
-        const calculatedGoal = calorieGoal || calculateCalorieGoal();
+        const calculatedMacrosData = calculatedMacros || calculateCalorieGoal();
+        const macros = calculatedMacrosData;
+
+        if (calculating || !macros) {
+          const progressWidth = progressAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: ['0%', '100%'],
+          });
+
+          return (
+            <View className="flex-1 px-6 items-center justify-center">
+              <View style={{ width: '100%', marginBottom: 32 }}>
+                <Text style={{
+                  fontSize: 24,
+                  fontWeight: '700',
+                  color: theme.colors.text,
+                  marginBottom: 8,
+                  textAlign: 'center',
+                }}>
+                  {t('onboarding.calculating')}
+                </Text>
+                <Text style={{
+                  fontSize: 16,
+                  color: theme.colors.textSecondary || '#9CA3AF',
+                  marginBottom: 24,
+                  textAlign: 'center',
+                }}>
+                  {t('onboarding.calculatingDescription')}
+                </Text>
+                
+                {/* Progress Bar Container */}
+                <View style={{
+                  width: '100%',
+                  height: 8,
+                  backgroundColor: theme.colors.border || '#E5E7EB',
+                  borderRadius: 4,
+                  overflow: 'hidden',
+                }}>
+                  <Animated.View style={{
+                    height: '100%',
+                    width: progressWidth,
+                    backgroundColor: theme.colors.primary || '#3BB273',
+                    borderRadius: 4,
+                  }} />
+                </View>
+              </View>
+            </View>
+          );
+        }
+
+        return (
+          <View className="flex-1 px-6">
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 20 }}>
+              <Text style={{
+                fontSize: 28,
+                fontWeight: 'bold',
+                color: theme.colors.text,
+                marginBottom: 8,
+                textAlign: 'center',
+              }}>
+                {t('onboarding.calorieGoal')}
+              </Text>
+              <Text style={{
+                fontSize: 16,
+                color: theme.colors.textSecondary || '#9CA3AF',
+                marginBottom: 32,
+                textAlign: 'center',
+              }}>
+                {t('onboarding.calorieGoalDescription')}
+              </Text>
+
+              {/* Calorias Principais */}
+              <View style={{
+                backgroundColor: '#3BB273',
+                borderRadius: 24,
+                padding: 32,
+                marginBottom: 24,
+                alignItems: 'center',
+                shadowColor: '#3BB273',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.3,
+                shadowRadius: 16,
+                elevation: 8,
+              }}>
+                <Text style={{
+                  fontSize: 72,
+                  fontWeight: '900',
+                  color: '#FFFFFF',
+                  marginBottom: 8,
+                }}>
+                  {macros.calories}
+                </Text>
+                <Text style={{
+                  fontSize: 20,
+                  color: '#FFFFFF',
+                  opacity: 0.95,
+                  fontWeight: '600',
+                }}>
+                  {t('onboarding.kcalPerDay')}
+                </Text>
+              </View>
+
+              {/* Macros */}
+              <View style={{ marginBottom: 24 }}>
+                <Text style={{
+                  fontSize: 20,
+                  fontWeight: '700',
+                  color: theme.colors.text,
+                  marginBottom: 16,
+                }}>
+                  {t('onboarding.macros')}
+                </Text>
+                <View style={{ gap: 12 }}>
+                  {/* Proteína */}
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: theme.colors.card,
+                    borderRadius: 16,
+                    padding: 16,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border || '#E5E7EB',
+                  }}>
+                    <View style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 24,
+                      backgroundColor: '#EF4444' + '20',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 16,
+                    }}>
+                      <Ionicons name="nutrition" size={24} color="#EF4444" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{
+                        fontSize: 14,
+                        color: theme.colors.textSecondary || '#9CA3AF',
+                        marginBottom: 4,
+                      }}>
+                        {t('onboarding.protein')}
+                      </Text>
+                      <Text style={{
+                        fontSize: 24,
+                        fontWeight: '700',
+                        color: theme.colors.text,
+                      }}>
+                        {macros.protein}g
+                      </Text>
+                    </View>
+                    <Text style={{
+                      fontSize: 14,
+                      color: theme.colors.textSecondary || '#9CA3AF',
+                    }}>
+                      {Math.round((macros.protein * 4 / macros.calories) * 100)}%
+                    </Text>
+                  </View>
+
+                  {/* Carboidratos */}
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: theme.colors.card,
+                    borderRadius: 16,
+                    padding: 16,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border || '#E5E7EB',
+                  }}>
+                    <View style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 24,
+                      backgroundColor: '#10B981' + '20',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 16,
+                    }}>
+                      <Ionicons name="fast-food" size={24} color="#10B981" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{
+                        fontSize: 14,
+                        color: theme.colors.textSecondary || '#9CA3AF',
+                        marginBottom: 4,
+                      }}>
+                        {t('onboarding.carbs')}
+                      </Text>
+                      <Text style={{
+                        fontSize: 24,
+                        fontWeight: '700',
+                        color: theme.colors.text,
+                      }}>
+                        {macros.carbs}g
+                      </Text>
+                    </View>
+                    <Text style={{
+                      fontSize: 14,
+                      color: theme.colors.textSecondary || '#9CA3AF',
+                    }}>
+                      {Math.round((macros.carbs * 4 / macros.calories) * 100)}%
+                    </Text>
+                  </View>
+
+                  {/* Gordura */}
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: theme.colors.card,
+                    borderRadius: 16,
+                    padding: 16,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border || '#E5E7EB',
+                  }}>
+                    <View style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 24,
+                      backgroundColor: '#EAB308' + '20',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 16,
+                    }}>
+                      <Ionicons name="flame" size={24} color="#EAB308" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{
+                        fontSize: 14,
+                        color: theme.colors.textSecondary || '#9CA3AF',
+                        marginBottom: 4,
+                      }}>
+                        {t('onboarding.fat')}
+                      </Text>
+                      <Text style={{
+                        fontSize: 24,
+                        fontWeight: '700',
+                        color: theme.colors.text,
+                      }}>
+                        {macros.fat}g
+                      </Text>
+                    </View>
+                    <Text style={{
+                      fontSize: 14,
+                      color: theme.colors.textSecondary || '#9CA3AF',
+                    }}>
+                      {Math.round((macros.fat * 9 / macros.calories) * 100)}%
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Informações Adicionais */}
+              <View style={{
+                backgroundColor: theme.colors.card,
+                borderRadius: 16,
+                padding: 20,
+                borderWidth: 1,
+                borderColor: theme.colors.border || '#E5E7EB',
+              }}>
+                <Text style={{
+                  fontSize: 18,
+                  fontWeight: '700',
+                  color: theme.colors.text,
+                  marginBottom: 20,
+                }}>
+                  {t('onboarding.metabolicInfo')}
+                </Text>
+                <View style={{ gap: 20 }}>
+                  {/* BMR */}
+                  <View>
+                    <Text style={{
+                      fontSize: 13,
+                      color: theme.colors.textSecondary || '#9CA3AF',
+                      marginBottom: 8,
+                    }}>
+                      {t('onboarding.bmr')}
+                    </Text>
+                    <Text style={{
+                      fontSize: 24,
+                      fontWeight: '700',
+                      color: theme.colors.text,
+                    }}>
+                      {macros.bmr} <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.textSecondary || '#9CA3AF' }}>kcal</Text>
+                    </Text>
+                  </View>
+                  
+                  <View style={{
+                    height: 1,
+                    backgroundColor: theme.colors.border || '#E5E7EB',
+                  }} />
+                  
+                  {/* TDEE */}
+                  <View>
+                    <Text style={{
+                      fontSize: 13,
+                      color: theme.colors.textSecondary || '#9CA3AF',
+                      marginBottom: 8,
+                    }}>
+                      {t('onboarding.tdee')}
+                    </Text>
+                    <Text style={{
+                      fontSize: 24,
+                      fontWeight: '700',
+                      color: theme.colors.text,
+                    }}>
+                      {macros.tdee} <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.textSecondary || '#9CA3AF' }}>kcal</Text>
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        );
+
+      case 'premium':
+        const handleOpenPremium = async () => {
+          // TODO: Implementar compra premium
+          // Por enquanto, apenas continuar
+          handleNext();
+        };
+
+        const premiumFeatures = [
+          { icon: 'chatbubbles', text: t('onboarding.premiumFeature1') },
+          { icon: 'analytics', text: t('onboarding.premiumFeature2') },
+          { icon: 'restaurant', text: t('onboarding.premiumFeature3') },
+          { icon: 'trophy', text: t('onboarding.premiumFeature4') },
+          { icon: 'cloud', text: t('onboarding.premiumFeature5') },
+          { icon: 'shield-checkmark', text: t('onboarding.premiumFeature6') },
+        ];
+
+        const premiumColor = '#8B5CF6'; // Roxo premium
         
         return (
-          <View className="flex-1 px-6 items-center justify-center">
-            <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-4 text-center">
-              Your Daily Calorie Goal
-            </Text>
-            <View className="bg-green-500 rounded-3xl p-8 mb-6 items-center">
-              <Text className="text-6xl font-bold text-white mb-2">
-                {calculatedGoal || 2000}
+          <View className="flex-1 px-6">
+            <View style={{ backgroundColor: premiumColor, borderRadius: 24, padding: 24, marginBottom: 24, alignItems: 'center', width: '100%' }}>
+              <Ionicons name="star" size={56} color="#FFFFFF" />
+              <Text className="text-3xl font-bold text-white mb-2 text-center mt-4">
+                {t('onboarding.premiumTitle')}
               </Text>
-              <Text className="text-xl text-white opacity-90">kcal per day</Text>
+              <Text className="text-lg text-white opacity-90 text-center mb-6">
+                {t('onboarding.premiumDescription')}
+              </Text>
             </View>
-            <Text className="text-gray-500 dark:text-gray-400 text-center text-lg">
-              Baseado no teu perfil, este é o número de calorias que deves consumir diariamente para atingir o teu objetivo.
-            </Text>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+              <View style={{ marginBottom: 24 }}>
+                {premiumFeatures.map((feature, index) => (
+                  <View
+                    key={index}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: theme.colors.card,
+                      borderRadius: 16,
+                      padding: 16,
+                      marginBottom: 12,
+                      borderWidth: 1,
+                      borderColor: theme.colors.border || '#E5E7EB',
+                    }}
+                  >
+                    <View style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 24,
+                      backgroundColor: premiumColor + '20',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 16,
+                    }}>
+                      <Ionicons name={feature.icon as any} size={24} color={premiumColor} />
+                    </View>
+                    <Text style={{
+                      flex: 1,
+                      fontSize: 16,
+                      fontWeight: '600',
+                      color: theme.colors.text,
+                    }}>
+                      {feature.text}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+
+            <View style={{ marginBottom: 16 }}>
+              <TouchableOpacity
+                onPress={handleOpenPremium}
+                style={{
+                  backgroundColor: premiumColor,
+                  borderRadius: 16,
+                  paddingVertical: 18,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: premiumColor,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 5,
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 18 }}>
+                  {t('onboarding.premiumButton')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              onPress={handleNext}
+              style={{ marginBottom: 16 }}
+            >
+              <Text style={{
+                color: theme.colors.textSecondary || '#9CA3AF',
+                textAlign: 'center',
+                fontSize: 16,
+              }}>
+                {t('onboarding.premiumSkip')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        );
+
+      case 'rateApp':
+        const handleRateApp = async () => {
+          try {
+            const packageName = 'com.nuti.app'; // Substituir pelo package name real
+            const url = Platform.OS === 'android'
+              ? `market://details?id=${packageName}`
+              : `itms-apps://itunes.apple.com/app/id${packageName}`;
+            
+            const canOpen = await Linking.canOpenURL(url);
+            if (canOpen) {
+              await Linking.openURL(url);
+            } else {
+              // Fallback para web
+              const webUrl = Platform.OS === 'android'
+                ? `https://play.google.com/store/apps/details?id=${packageName}`
+                : `https://apps.apple.com/app/id${packageName}`;
+              await Linking.openURL(webUrl);
+            }
+          } catch (error) {
+            console.error('Error opening app store:', error);
+          }
+          // Continuar mesmo se houver erro
+          handleNext();
+        };
+
+        return (
+          <View className="flex-1 px-6 items-center justify-center">
+            <View style={{
+              backgroundColor: '#FBBF24',
+              borderRadius: 24,
+              padding: 32,
+              marginBottom: 32,
+              alignItems: 'center',
+              width: '100%',
+              shadowColor: '#FBBF24',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.3,
+              shadowRadius: 16,
+              elevation: 8,
+            }}>
+              <View style={{
+                width: 100,
+                height: 100,
+                borderRadius: 50,
+                backgroundColor: '#FFFFFF',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 20,
+              }}>
+                <Ionicons name="star" size={60} color="#FBBF24" />
+              </View>
+              <Text style={{
+                fontSize: 32,
+                fontWeight: 'bold',
+                color: '#FFFFFF',
+                textAlign: 'center',
+                marginBottom: 12,
+              }}>
+                {t('onboarding.rateAppTitle')}
+              </Text>
+              <Text style={{
+                fontSize: 18,
+                color: '#FFFFFF',
+                textAlign: 'center',
+                opacity: 0.95,
+                lineHeight: 24,
+              }}>
+                {t('onboarding.rateAppDescription')}
+              </Text>
+            </View>
+
+            <View style={{
+              flexDirection: 'row',
+              marginBottom: 32,
+              gap: 8,
+            }}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Ionicons
+                  key={star}
+                  name="star"
+                  size={40}
+                  color="#FBBF24"
+                />
+              ))}
+            </View>
+
+            <TouchableOpacity
+              onPress={handleRateApp}
+              style={{
+                backgroundColor: '#FBBF24',
+                borderRadius: 16,
+                paddingVertical: 18,
+                paddingHorizontal: 48,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 16,
+                shadowColor: '#FBBF24',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+                elevation: 5,
+                flexDirection: 'row',
+                gap: 8,
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="star" size={20} color="#FFFFFF" />
+              <Text style={{
+                color: '#FFFFFF',
+                fontWeight: 'bold',
+                fontSize: 18,
+              }}>
+                {t('onboarding.rateAppButton')}
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              onPress={handleNext}
+              activeOpacity={0.7}
+            >
+              <Text style={{
+                color: theme.colors.textSecondary || '#9CA3AF',
+                textAlign: 'center',
+                fontSize: 16,
+              }}>
+                {t('onboarding.rateAppSkip')}
+              </Text>
+            </TouchableOpacity>
           </View>
         );
 
       case 'createAccount':
         return (
-          <View className="flex-1 px-6">
-            <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-              Create your account
+          <View style={{ 
+            flex: 1, 
+            paddingHorizontal: 0,
+            minHeight: 500,
+            backgroundColor: 'transparent',
+          }}>
+            <Text style={{
+              fontSize: 28,
+              fontWeight: 'bold',
+              color: theme.colors.text,
+              marginBottom: 8,
+            }}>
+              {t('onboarding.createAccountTitle')}
             </Text>
-            <Text className="text-gray-500 dark:text-gray-400 mb-8">
-              Escolhe como queres criar a tua conta
+            <Text style={{
+              fontSize: 16,
+              color: theme.colors.textSecondary || '#9CA3AF',
+              marginBottom: 32,
+            }}>
+              {t('onboarding.createAccountDescription')}
             </Text>
 
             {/* Google Sign-In */}
             <TouchableOpacity
               onPress={handleCreateAccountWithGoogle}
               disabled={loading}
-              className="bg-white dark:bg-gray-800 rounded-xl py-4 items-center justify-center border border-gray-300 dark:border-gray-700 flex-row shadow-sm mb-4"
+              style={{
+                backgroundColor: theme.colors.card,
+                borderRadius: 12,
+                paddingVertical: 16,
+                paddingHorizontal: 16,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 1,
+                borderColor: theme.colors.border || '#E5E7EB',
+                flexDirection: 'row',
+                marginBottom: 16,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 4,
+                elevation: 2,
+              }}
               activeOpacity={0.8}
             >
               <Ionicons name="logo-google" size={20} color="#4285F4" />
-              <Text className="text-gray-900 dark:text-white font-semibold ml-2">
-                Continuar com Google
+              <Text style={{
+                color: theme.colors.text,
+                fontWeight: '600',
+                marginLeft: 8,
+                fontSize: 16,
+              }}>
+                  {t('auth.continueWithGoogle')}
               </Text>
             </TouchableOpacity>
 
             {/* Divisor */}
-            <View className="flex-row items-center my-6">
-              <View className="flex-1 h-px bg-gray-300 dark:bg-gray-700" />
-              <Text className="mx-4 text-gray-500 dark:text-gray-400">ou</Text>
-              <View className="flex-1 h-px bg-gray-300 dark:bg-gray-700" />
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              marginVertical: 24,
+            }}>
+              <View style={{
+                flex: 1,
+                height: 1,
+                backgroundColor: theme.colors.border || '#E5E7EB',
+              }} />
+              <Text style={{
+                marginHorizontal: 16,
+                color: theme.colors.textSecondary || '#9CA3AF',
+                fontSize: 14,
+              }}>{t('auth.or')}</Text>
+              <View style={{
+                flex: 1,
+                height: 1,
+                backgroundColor: theme.colors.border || '#E5E7EB',
+              }} />
             </View>
 
             {/* Email/Password Form */}
-            <View className="space-y-4">
+            <View style={{ gap: 16 }}>
               <View>
-                <Text className="text-gray-700 dark:text-gray-300 mb-2 font-medium">
-                  Nome
+                <Text style={{
+                  color: theme.colors.text,
+                  marginBottom: 8,
+                  fontWeight: '600',
+                  fontSize: 14,
+                }}>
+                  {t('auth.name')}
                 </Text>
                 <TextInput
-                  className="bg-gray-100 dark:bg-gray-800 rounded-xl px-4 py-4 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700"
-                  placeholder="O teu nome"
+                  style={{
+                    backgroundColor: theme.colors.card,
+                    borderRadius: 12,
+                    paddingHorizontal: 16,
+                    paddingVertical: 16,
+                    color: theme.colors.text,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border || '#E5E7EB',
+                    fontSize: 16,
+                  }}
+                  placeholder={t('auth.name')}
                   placeholderTextColor="#9CA3AF"
                   value={name}
                   onChangeText={setName}
@@ -1498,11 +2183,25 @@ export function OnboardingScreen({ navigation }: any) {
               </View>
 
               <View>
-                <Text className="text-gray-700 dark:text-gray-300 mb-2 font-medium">
-                  Email
+                <Text style={{
+                  color: theme.colors.text,
+                  marginBottom: 8,
+                  fontWeight: '600',
+                  fontSize: 14,
+                }}>
+                  {t('auth.email')}
                 </Text>
                 <TextInput
-                  className="bg-gray-100 dark:bg-gray-800 rounded-xl px-4 py-4 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700"
+                  style={{
+                    backgroundColor: theme.colors.card,
+                    borderRadius: 12,
+                    paddingHorizontal: 16,
+                    paddingVertical: 16,
+                    color: theme.colors.text,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border || '#E5E7EB',
+                    fontSize: 16,
+                  }}
                   placeholder="exemplo@email.com"
                   placeholderTextColor="#9CA3AF"
                   value={email}
@@ -1514,11 +2213,25 @@ export function OnboardingScreen({ navigation }: any) {
               </View>
 
               <View>
-                <Text className="text-gray-700 dark:text-gray-300 mb-2 font-medium">
-                  Password
+                <Text style={{
+                  color: theme.colors.text,
+                  marginBottom: 8,
+                  fontWeight: '600',
+                  fontSize: 14,
+                }}>
+                  {t('auth.password')}
                 </Text>
                 <TextInput
-                  className="bg-gray-100 dark:bg-gray-800 rounded-xl px-4 py-4 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700"
+                  style={{
+                    backgroundColor: theme.colors.card,
+                    borderRadius: 12,
+                    paddingHorizontal: 16,
+                    paddingVertical: 16,
+                    color: theme.colors.text,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border || '#E5E7EB',
+                    fontSize: 16,
+                  }}
                   placeholder="••••••••"
                   placeholderTextColor="#9CA3AF"
                   value={password}
@@ -1529,11 +2242,25 @@ export function OnboardingScreen({ navigation }: any) {
               </View>
 
               <View>
-                <Text className="text-gray-700 dark:text-gray-300 mb-2 font-medium">
-                  Confirmar Password
+                <Text style={{
+                  color: theme.colors.text,
+                  marginBottom: 8,
+                  fontWeight: '600',
+                  fontSize: 14,
+                }}>
+                  {t('auth.confirmPassword')}
                 </Text>
                 <TextInput
-                  className="bg-gray-100 dark:bg-gray-800 rounded-xl px-4 py-4 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700"
+                  style={{
+                    backgroundColor: theme.colors.card,
+                    borderRadius: 12,
+                    paddingHorizontal: 16,
+                    paddingVertical: 16,
+                    color: theme.colors.text,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border || '#E5E7EB',
+                    fontSize: 16,
+                  }}
                   placeholder="••••••••"
                   placeholderTextColor="#9CA3AF"
                   value={confirmPassword}
@@ -1546,13 +2273,24 @@ export function OnboardingScreen({ navigation }: any) {
               <TouchableOpacity
                 onPress={handleCreateAccountWithEmail}
                 disabled={loading}
-                className="bg-green-500 rounded-xl py-4 items-center justify-center mt-4"
+                style={{
+                  backgroundColor: theme.colors.primary || '#3BB273',
+                  borderRadius: 12,
+                  paddingVertical: 16,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginTop: 8,
+                }}
                 activeOpacity={0.8}
               >
                 {loading ? (
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
-                  <Text className="text-white font-semibold text-lg">Criar Conta</Text>
+                  <Text style={{
+                    color: '#FFFFFF',
+                    fontWeight: '600',
+                    fontSize: 18,
+                  }}>{t('onboarding.createAccount')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1568,13 +2306,12 @@ export function OnboardingScreen({ navigation }: any) {
     <SafeAreaView className="flex-1 bg-white dark:bg-gray-900">
       {renderProgressBar()}
       <ScrollView
-        className="flex-1"
-        contentContainerClassName="flex-grow"
+        style={{ flex: 1 }}
+        contentContainerStyle={{ flexGrow: 1, paddingVertical: 32, paddingHorizontal: 24 }}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={true}
       >
-        <View className="flex-1 justify-between px-6 py-8">
-          {renderStep()}
-        </View>
+        {renderStep()}
       </ScrollView>
 
       {/* Navigation Buttons */}
@@ -1586,23 +2323,23 @@ export function OnboardingScreen({ navigation }: any) {
                 onPress={handleBack}
                 className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-xl py-4 items-center"
               >
-                <Text className="text-gray-900 dark:text-white font-semibold">Back</Text>
+                <Text className="text-gray-900 dark:text-white font-semibold">{t('onboarding.back')}</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
               onPress={handleNext}
-              disabled={!canProceed() || loading}
+              disabled={!canProceed() || loading || calculating}
               className={`flex-1 rounded-xl py-4 items-center ${
-                canProceed() && !loading
+                canProceed() && !loading && !calculating
                   ? 'bg-green-500'
                   : 'bg-gray-300 dark:bg-gray-700'
               }`}
             >
-              {loading ? (
+              {loading || calculating ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <Text className="text-white font-semibold">
-                  {currentStep === 'calorieGoal' ? 'Continue' : 'Continue'}
+                  {t('onboarding.continue')}
                 </Text>
               )}
             </TouchableOpacity>

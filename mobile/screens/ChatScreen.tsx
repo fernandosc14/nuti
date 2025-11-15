@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '../context/UserContext';
+import { useLanguage } from '../context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
 import { sendChatMessage, ChatMessage } from '../services/api';
 import { collection, addDoc, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
@@ -33,6 +34,7 @@ interface Message {
 
 export function ChatScreen({ navigation }: any) {
   const { user, profile } = useUser();
+  const { t } = useLanguage();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -185,38 +187,44 @@ export function ChatScreen({ navigation }: any) {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-gray-900">
-      {/* Header */}
-      <View className="flex-row items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-        <TouchableOpacity onPress={() => navigation.goBack()} className="mr-4">
-          <Ionicons name="arrow-back" size={24} color="#3BB273" />
-        </TouchableOpacity>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      style={{ flex: 1 }}
+    >
+      <View className="flex-1 bg-white dark:bg-gray-900">
+        {/* Header */}
+        <View className="flex-row items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <TouchableOpacity onPress={() => navigation.goBack()} className="mr-4">
+            <Ionicons name="arrow-back" size={24} color="#3BB273" />
+          </TouchableOpacity>
         <View className="flex-1">
           <Text className="text-2xl font-bold text-gray-900 dark:text-white">
-            NutriBot
+            {t('chat.title')}
           </Text>
           <Text className="text-sm text-gray-500 dark:text-gray-400">
-            O teu assistente nutricional
+            {t('chat.subtitle')}
           </Text>
         </View>
-      </View>
+        </View>
 
-      {/* Mensagens */}
-      <ScrollView
-        ref={scrollViewRef}
-        className="flex-1 px-6 py-4"
-        contentContainerStyle={{ paddingBottom: 20 }}
-      >
+        {/* Mensagens */}
+        <ScrollView
+          ref={scrollViewRef}
+          className="flex-1 px-6 py-4"
+          contentContainerStyle={{ paddingBottom: 100 }}
+          keyboardShouldPersistTaps="handled"
+        >
         {messages.length === 0 && (
           <View className="items-center justify-center py-12">
             <View className="w-20 h-20 bg-green-100 dark:bg-green-900 rounded-full items-center justify-center mb-4">
-              <Text className="text-4xl">🤖</Text>
+              <Text className="text-4xl">💬</Text>
             </View>
             <Text className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-              Olá!
+              {t('chat.greeting')}
             </Text>
             <Text className="text-gray-500 dark:text-gray-400 text-center">
-              Sou o NutriBot. Como posso ajudar hoje?
+              {t('chat.greetingMessage')}
             </Text>
           </View>
         )}
@@ -274,22 +282,19 @@ export function ChatScreen({ navigation }: any) {
         )}
       </ScrollView>
 
-      {/* Input */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
-        <View className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+        {/* Input */}
+        <View className="px-6 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900" style={{ paddingTop: 12, paddingBottom: 60 }}>
           <View className="flex-row items-center gap-2">
             <TextInput
               className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-xl px-4 py-3 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700"
-              placeholder="Escreve a tua mensagem..."
+              placeholder={t('chat.placeholder')}
               placeholderTextColor="#9CA3AF"
               value={inputText}
               onChangeText={setInputText}
               multiline
               maxLength={500}
               editable={!loading}
+              style={{ maxHeight: 100 }}
             />
             <TouchableOpacity
               onPress={handleSend}
@@ -308,8 +313,8 @@ export function ChatScreen({ navigation }: any) {
             </TouchableOpacity>
           </View>
         </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
