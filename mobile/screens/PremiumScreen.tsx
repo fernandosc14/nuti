@@ -27,50 +27,50 @@ export function PremiumScreen({ navigation }: any) {
 
       Toast.show({
         type: 'success',
-        text1: 'Bem-vindo ao Premium!',
-        text2: 'Agora tens acesso a todas as funcionalidades',
+        text1: t('premium.welcomeTitle') || 'Welcome to Premium!',
+        text2: t('premium.welcomeMessage') || 'You now have access to all premium features',
       });
 
       navigation.goBack();
     } catch (error: any) {
       Toast.show({
         type: 'error',
-        text1: 'Erro',
-        text2: error.message || 'Erro ao atualizar plano',
+        text1: t('common.error') || 'Error',
+        text2: error.message || t('premium.updateError') || 'Error updating plan',
       });
     }
   };
 
   const features = [
     {
-      icon: '🤖',
-      title: 'Chat IA Ilimitado',
-      description: 'Faz quantas perguntas quiseres à Ajuda Nuti',
+      icon: '💬',
+      title: t('premium.feature1') || 'Unlimited Chat',
+      description: t('premium.feature1Description') || 'Ask as many questions as you want to Nuti Help',
     },
     {
       icon: '📊',
-      title: 'Relatórios Personalizados',
-      description: 'Análise detalhada do teu progresso nutricional',
+      title: t('premium.feature2') || 'Personalized Reports',
+      description: t('premium.feature2Description') || 'Detailed analysis of your nutritional progress',
     },
     {
       icon: '🎯',
-      title: 'Planos de Refeições',
-      description: 'Recebe planos de refeições personalizados',
+      title: t('premium.feature3') || 'Meal Plans',
+      description: t('premium.feature3Description') || 'Receive personalized meal plans',
     },
     {
       icon: '📈',
-      title: 'Estatísticas Avançadas',
-      description: 'Acompanha o teu progresso com gráficos detalhados',
+      title: t('premium.feature4') || 'Advanced Statistics',
+      description: t('premium.feature4Description') || 'Track your progress with detailed charts',
     },
     {
       icon: '🔔',
-      title: 'Lembretes Personalizados',
-      description: 'Recebe notificações para manter o teu hábito',
+      title: t('premium.feature5') || 'Personalized Reminders',
+      description: t('premium.feature5Description') || 'Receive notifications to maintain your habit',
     },
     {
       icon: '⭐',
-      title: 'Badges Exclusivas',
-      description: 'Desbloqueia badges especiais apenas para Premium',
+      title: t('premium.feature6') || 'Exclusive Badges',
+      description: t('premium.feature6Description') || 'Unlock special badges only for Premium',
     },
   ];
 
@@ -82,7 +82,8 @@ export function PremiumScreen({ navigation }: any) {
           flexDirection: 'row',
           alignItems: 'center',
           paddingHorizontal: 20,
-          paddingVertical: 16,
+          paddingTop: 8,
+          paddingBottom: 12,
           borderBottomWidth: 1,
           borderBottomColor: theme.colors.border || '#E5E7EB',
         }}>
@@ -107,7 +108,7 @@ export function PremiumScreen({ navigation }: any) {
             color: theme.colors.text,
             flex: 1,
           }}>
-            Premium
+            {t('premium.title') || 'Premium'}
           </Text>
         </View>
       </SafeAreaView>
@@ -148,14 +149,14 @@ export function PremiumScreen({ navigation }: any) {
               marginBottom: 8,
               textAlign: 'center',
             }}>
-              Desbloqueia o Premium
+              {t('premium.unlockTitle') || 'Unlock Premium'}
             </Text>
             <Text style={{
               fontSize: 16,
               color: theme.colors.textSecondary || '#9CA3AF',
               textAlign: 'center',
             }}>
-              Acesso completo a todas as funcionalidades
+              {t('premium.unlockDescription') || 'Full access to all features'}
             </Text>
           </MotiView>
 
@@ -235,7 +236,7 @@ export function PremiumScreen({ navigation }: any) {
               marginBottom: 8,
               opacity: 0.9,
             }}>
-              Preço Especial
+              {t('premium.specialPrice') || 'Special Price'}
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 8 }}>
               <Text style={{
@@ -252,7 +253,7 @@ export function PremiumScreen({ navigation }: any) {
                 marginLeft: 8,
                 opacity: 0.9,
               }}>
-                /mês
+                {t('premium.perMonth') || '/month'}
               </Text>
             </View>
             <Text style={{
@@ -260,7 +261,7 @@ export function PremiumScreen({ navigation }: any) {
               fontSize: 14,
               opacity: 0.9,
             }}>
-              Cancela quando quiseres
+              {t('premium.cancelAnytime') || 'Cancel anytime'}
             </Text>
           </MotiView>
 
@@ -294,7 +295,7 @@ export function PremiumScreen({ navigation }: any) {
                   fontSize: 18,
                   fontWeight: '700',
                 }}>
-                  Ativar Premium Agora
+                  {t('premium.activateButton') || 'Activate Premium Now'}
                 </Text>
               </TouchableOpacity>
             </MotiView>
@@ -320,7 +321,7 @@ export function PremiumScreen({ navigation }: any) {
                 fontSize: 18,
                 fontWeight: '700',
               }}>
-                Já és Premium! ⭐
+                {t('premium.alreadyPremium') || 'You are already Premium!'} ⭐
               </Text>
             </MotiView>
           )}
@@ -332,8 +333,7 @@ export function PremiumScreen({ navigation }: any) {
             textAlign: 'center',
             lineHeight: 18,
           }}>
-            Ao ativar, aceitas os termos e condições. O pagamento será processado
-            através da tua conta da App Store/Play Store.
+            {t('premium.terms') || 'By activating, you accept the terms and conditions. Payment will be processed through your App Store/Play Store account.'}
           </Text>
         </View>
       </ScrollView>

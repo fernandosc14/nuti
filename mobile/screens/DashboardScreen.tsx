@@ -24,6 +24,7 @@ import { useTheme } from '../context/ThemeContext';
 import { ChartCircle } from '../components/ChartCircle';
 import { MealCard } from '../components/MealCard';
 import { BadgeItem } from '../components/BadgeItem';
+import { PremiumPromoCard } from '../components/PremiumPromoCard';
 import { Ionicons } from '@expo/vector-icons';
 import { collection, query, where, getDocs, Timestamp, doc, deleteDoc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -77,6 +78,7 @@ export function DashboardScreen({ navigation }: any) {
   const [editWaterAmount, setEditWaterAmount] = useState('0');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [currentMacroIndex, setCurrentMacroIndex] = useState(0);
+  const [todayMealCount, setTodayMealCount] = useState(0);
 
   useEffect(() => {
     // Se não houver user, limpar estado e não carregar dados
@@ -226,9 +228,27 @@ export function DashboardScreen({ navigation }: any) {
       const selectedDayNormalized = new Date(selectedDate);
       selectedDayNormalized.setHours(0, 0, 0, 0);
       
-      if (user && user.uid === currentUserId && selectedDayNormalized.getTime() === today.getTime()) {
-        await updateStreak(user.uid);
-        await refreshProfile();
+      if (user && user.uid === currentUserId) {
+        if (selectedDayNormalized.getTime() === today.getTime()) {
+          // Contar refeições de hoje para mostrar no streak
+          const todayMealsRef = collection(db, 'meals');
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const todayMealsQuery = query(
+            todayMealsRef,
+            where('userId', '==', user.uid),
+            where('date', '>=', Timestamp.fromDate(today)),
+            where('date', '<', Timestamp.fromDate(tomorrow))
+          );
+          const todayMealsSnapshot = await getDocs(todayMealsQuery);
+          setTodayMealCount(todayMealsSnapshot.size);
+          
+          await updateStreak(user.uid);
+          await refreshProfile();
+        } else {
+          // Se não for hoje, usar o número de refeições do dia selecionado
+          setTodayMealCount(mealsData.length);
+        }
       }
     } catch (error: any) {
       // Se for erro de permissões e não houver user, ignorar silenciosamente (logout em progresso)
@@ -483,72 +503,65 @@ export function DashboardScreen({ navigation }: any) {
             animate={{ opacity: 1, translateY: 0 }}
             transition={{ type: 'timing', duration: 400 }}
           >
-            <View style={{ marginBottom: 24 }}>
-              <Text style={{
-                fontSize: 32,
-                fontWeight: '800',
-                color: theme.colors.text,
-                marginBottom: 4,
-              }}>
-                {t('dashboard.greeting').replace('{name}', profile?.name || t('common.loading'))} {getGreetingEmoji()}
-              </Text>
-              <Text style={{
-                fontSize: 16,
-                color: theme.colors.textSecondary || '#9CA3AF',
-              }}>
-                {t('dashboard.howIsDay')}
-              </Text>
-            </View>
-          </MotiView>
-
-          {/* Streak */}
-          {profile && profile.streak > 0 && (
-            <MotiView
-              from={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ type: 'timing', duration: 400 }}
-              style={{
-                backgroundColor: theme.mode === 'dark' ? '#7C2D12' : '#FED7AA',
-                borderRadius: 20,
-                padding: 20,
-                marginBottom: 24,
-                flexDirection: 'row',
-                alignItems: 'center',
-                shadowColor: '#F97316',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.2,
-                shadowRadius: 8,
-                elevation: 5,
-              }}
-            >
-              <View style={{
-                width: 56,
-                height: 56,
-                borderRadius: 28,
-                backgroundColor: theme.mode === 'dark' ? '#9A3412' : '#F97316',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-                <Ionicons name="flame" size={32} color="#FFFFFF" />
-              </View>
-              <View style={{ marginLeft: 16, flex: 1 }}>
+            <View style={{ 
+              flexDirection: 'row', 
+              justifyContent: 'space-between', 
+              alignItems: 'flex-start',
+              marginBottom: 24,
+            }}>
+              <View style={{ flex: 1 }}>
                 <Text style={{
-                  fontWeight: '700',
+                  fontSize: 32,
+                  fontWeight: '800',
                   color: theme.colors.text,
-                  fontSize: 20,
                   marginBottom: 4,
                 }}>
-                  {profile.streak} {t('dashboard.streak')}! 🔥
+                  {(() => {
+                    const firstName = profile?.name?.split(' ')[0] || '';
+                    const greeting = t('dashboard.greeting') || 'Hello';
+                    return greeting.replace('{name}', firstName);
+                  })()} {getGreetingEmoji()}
                 </Text>
                 <Text style={{
-                  color: theme.mode === 'dark' ? '#FBBF24' : '#92400E',
-                  fontSize: 14,
+                  fontSize: 16,
+                  color: theme.colors.textSecondary || '#9CA3AF',
                 }}>
-                  {t('common.success')} 🔥
+                  {t('dashboard.howIsDay')}
                 </Text>
               </View>
-            </MotiView>
-          )}
+              
+              {/* Streak Badge - Pequeno no canto */}
+              {profile && (
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: profile.streak > 0
+                    ? (theme.mode === 'dark' ? '#1F2937' : '#374151')
+                    : (theme.colors.card || '#FFFFFF'),
+                  borderRadius: 20,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderWidth: profile.streak > 0 ? 0 : 1,
+                  borderColor: theme.colors.border || '#E5E7EB',
+                  marginLeft: 16,
+                }}>
+                  <Ionicons 
+                    name="flame" 
+                    size={16} 
+                    color={profile.streak > 0 ? "#F97316" : (theme.colors.textSecondary || '#9CA3AF')} 
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={{
+                    fontSize: 14,
+                    fontWeight: '700',
+                    color: profile.streak > 0 ? "#FFFFFF" : (theme.colors.text || '#000000'),
+                  }}>
+                    {profile.streak || 0}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </MotiView>
 
           {/* Badges */}
           {badges.length > 0 && (
@@ -726,6 +739,13 @@ export function DashboardScreen({ navigation }: any) {
               })()}
             </View>
           </MotiView>
+
+          {/* Premium Promo Card */}
+          <PremiumPromoCard
+            variant="compact"
+            fullWidth={true}
+            onPress={() => navigation.navigate('Premium')}
+          />
 
           {/* Gráfico Circular */}
           <MotiView

@@ -27,8 +27,10 @@ import { ChatScreen } from './screens/ChatScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { EditNameScreen } from './screens/EditNameScreen';
 import { EditPersonalDetailsScreen } from './screens/EditPersonalDetailsScreen';
+import { EditGoalAndWeightScreen } from './screens/EditGoalAndWeightScreen';
 import { PremiumScreen } from './screens/PremiumScreen';
 import { ProgressScreen } from './screens/ProgressScreen';
+import { PremiumWelcomeModal } from './components/PremiumWelcomeModal';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import './global.css';
@@ -385,6 +387,7 @@ function AppStack() {
       <Stack.Screen name="AddMeal" component={AddMealScreen} />
       <Stack.Screen name="EditName" component={EditNameScreen} />
       <Stack.Screen name="EditPersonalDetails" component={EditPersonalDetailsScreen} />
+      <Stack.Screen name="EditGoalAndWeight" component={EditGoalAndWeightScreen} />
       <Stack.Screen name="Premium" component={PremiumScreen} />
     </Stack.Navigator>
     </View>
@@ -646,6 +649,7 @@ export default function App() {
               <NavigationErrorBoundary>
                 <RootNavigator />
               </NavigationErrorBoundary>
+              <PremiumWelcomeModal />
               <Toast />
             </UserProvider>
           </ThemeProvider>

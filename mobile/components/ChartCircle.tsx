@@ -47,7 +47,7 @@ export function ChartCircle({ consumed, goal, size = 200, strokeWidth = 20 }: Ch
     if (percentage >= 100) return '#EF4444'; // Vermelho se excedeu
     if (percentage >= 75) return '#3BB273'; // Verde se próximo da meta
     if (percentage >= 50) return '#F59E0B'; // Laranja se médio
-    return '#3B82F6'; // Azul se baixo
+    return '#EF4444'; // Vermelho se baixo
   };
 
   const color = getColor();

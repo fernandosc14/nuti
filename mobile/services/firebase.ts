@@ -45,8 +45,18 @@ export const auth = initializeAuth(app, {
 
 // Exportar outros serviços
 export const db = getFirestore(app);
+
+// Inicializar Storage
+// Usa o bucket do firebaseConfig (que já vem do .env ou fallback)
+// O Firebase SDK automaticamente usa o storageBucket do firebaseConfig
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
+
+// Log para debug
+console.log('=== Firebase Configuration ===');
+console.log('Project ID:', firebaseConfig.projectId);
+console.log('Storage Bucket:', firebaseConfig.storageBucket);
+console.log('============================');
 
 export default app;
 

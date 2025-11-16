@@ -43,6 +43,8 @@ export interface UserProfile {
   onboardingCompleted?: boolean;
   // Auth method
   authMethod?: 'google' | 'email';
+  // Profile image
+  profileImageUrl?: string;
 }
 
 interface UserContextType {
@@ -257,6 +259,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
           onboardingCompleted: onboardingCompleted, // Garantir que é boolean (true ou false)
           // Auth method
           authMethod: data.authMethod,
+          // Profile image
+          profileImageUrl: data.profileImageUrl,
         };
         
         setProfile(loadedProfile);

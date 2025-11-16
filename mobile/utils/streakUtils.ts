@@ -9,7 +9,7 @@ import { collection, query, where, getDocs, Timestamp, doc, getDoc, setDoc } fro
 
 /**
  * Verifica e atualiza o streak do utilizador
- * Streak aumenta se o utilizador registou ≥3 refeições no dia
+ * Streak aumenta se o utilizador registou ≥1 refeição no dia
  */
 export async function updateStreak(userId: string): Promise<number> {
   try {
@@ -30,50 +30,58 @@ export async function updateStreak(userId: string): Promise<number> {
     const snapshot = await getDocs(q);
     const mealCount = snapshot.size;
 
-    // Se tem ≥3 refeições hoje, atualizar streak
-    if (mealCount >= 3) {
-      // Buscar perfil do utilizador
-      const userRef = doc(db, 'users', userId);
-      const userSnap = await getDoc(userRef);
+    // Buscar perfil do utilizador
+    const userRef = doc(db, 'users', userId);
+    const userSnap = await getDoc(userRef);
 
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        const lastStreakDate = userData.lastStreakDate?.toDate();
-        const currentStreak = userData.streak || 0;
+    if (!userSnap.exists()) {
+      return 0;
+    }
 
-        // Verificar se já atualizou hoje
-        const todayStr = today.toDateString();
-        const lastStreakStr = lastStreakDate?.toDateString();
+    const userData = userSnap.data();
+    const lastStreakDate = userData.lastStreakDate?.toDate();
+    const currentStreak = userData.streak || 0;
 
-        if (lastStreakStr !== todayStr) {
-          // Verificar se foi ontem (continua streak) ou outro dia (reset)
-          const yesterday = new Date(today);
-          yesterday.setDate(yesterday.getDate() - 1);
-          const yesterdayStr = yesterday.toDateString();
+    const todayStr = today.toDateString();
+    const lastStreakStr = lastStreakDate?.toDateString();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toDateString();
 
-          let newStreak = 1;
-          if (lastStreakStr === yesterdayStr) {
-            // Continua streak
-            newStreak = currentStreak + 1;
-          }
-
-          await setDoc(userRef, {
-            streak: newStreak,
-            lastStreakDate: Timestamp.fromDate(today),
-          }, { merge: true });
-
-          return newStreak;
+    // Se tem ≥1 refeição hoje, atualizar streak
+    if (mealCount >= 1) {
+      // Verificar se já atualizou hoje
+      if (lastStreakStr !== todayStr) {
+        // Verificar se foi ontem (continua streak) ou outro dia (reset)
+        let newStreak = 1;
+        if (lastStreakStr === yesterdayStr) {
+          // Continua streak
+          newStreak = currentStreak + 1;
         }
 
-        return currentStreak;
+        await setDoc(userRef, {
+          streak: newStreak,
+          lastStreakDate: Timestamp.fromDate(today),
+        }, { merge: true });
+
+        return newStreak;
+      }
+
+      return currentStreak;
+    } else {
+      // Se tem <1 refeição hoje, verificar se perdeu o streak
+      // Se o último streak foi há mais de 1 dia, resetar para 0
+      if (lastStreakStr && lastStreakStr !== todayStr && lastStreakStr !== yesterdayStr) {
+        // Perdeu o streak (último streak foi há 2+ dias)
+        await setDoc(userRef, {
+          streak: 0,
+        }, { merge: true });
+        return 0;
       }
     }
 
-    // Buscar streak atual
-    const userRef = doc(db, 'users', userId);
-    const userSnap = await getDoc(userRef);
-    
-    return userSnap.data()?.streak || 0;
+    // Retornar streak atual
+    return currentStreak;
   } catch (error: any) {
     // Ignorar erros de permissões silenciosamente (pode ser que o utilizador não esteja autenticado)
     if (error?.code === 'permission-denied') {

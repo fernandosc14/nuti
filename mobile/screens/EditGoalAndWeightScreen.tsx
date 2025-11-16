@@ -1,7 +1,7 @@
 /**
- * EditPersonalDetailsScreen
+ * EditGoalAndWeightScreen
  * 
- * Tela para editar os detalhes pessoais (peso, altura, objetivo)
+ * Tela para editar o objetivo (goal) e peso atual (current weight)
  */
 
 import React, { useState, useEffect } from 'react';
@@ -23,32 +23,28 @@ import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import Slider from '@react-native-community/slider';
 
-export function EditPersonalDetailsScreen({ navigation }: any) {
+export function EditGoalAndWeightScreen({ navigation }: any) {
   const { profile, updateProfile } = useUser();
   const { theme } = useTheme();
   const { t } = useLanguage();
   const [weight, setWeight] = useState('');
-  const [height, setHeight] = useState('');
+  const [goal, setGoal] = useState<'lose' | 'maintain' | 'gain'>('maintain');
   const [loading, setLoading] = useState(false);
   const [isImperial, setIsImperial] = useState(false);
   const [weightText, setWeightText] = useState('');
-  const [heightText, setHeightText] = useState('');
   const [weightIsEmpty, setWeightIsEmpty] = useState(false);
-  const [heightIsEmpty, setHeightIsEmpty] = useState(false);
 
   useEffect(() => {
     if (profile) {
       setWeight(profile.weight ? profile.weight.toString() : '');
-      setHeight(profile.height ? profile.height.toString() : '');
+      setGoal(profile.goal || 'maintain');
       setWeightText('');
-      setHeightText('');
       setWeightIsEmpty(false);
-      setHeightIsEmpty(false);
     }
   }, [profile]);
 
   const handleSave = async () => {
-    if (!weight || !height) {
+    if (!weight) {
       Toast.show({
         type: 'error',
         text1: t('common.error') || 'Erro',
@@ -60,7 +56,6 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
     setLoading(true);
     try {
       let finalWeight = weight;
-      let finalHeight = height;
       
       if (weightText !== '') {
         const num = parseFloat(weightText.replace(/[^0-9.]/g, ''));
@@ -77,47 +72,10 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
           }
         }
       }
-      
-      if (heightText !== '') {
-        let newHeight = parseFloat(height) || 175;
-        if (isImperial) {
-          const cleanText = heightText.replace(/[^0-9'"]/g, '');
-          let feet = 0;
-          let inches = 0;
-          const match1 = cleanText.match(/(\d+)'(\d+)/);
-          if (match1) {
-            feet = parseInt(match1[1]) || 0;
-            inches = parseInt(match1[2]) || 0;
-          } else {
-            const num = parseInt(cleanText);
-            if (!isNaN(num)) {
-              if (num >= 40 && num <= 84) {
-                feet = Math.floor(num / 10);
-                inches = num % 10;
-              } else if (num >= 4 && num <= 7) {
-                feet = num;
-                inches = 0;
-              }
-            }
-          }
-          if (feet >= 4 && feet <= 7 && inches >= 0 && inches <= 11) {
-            const totalCm = feet * 30.48 + inches * 2.54;
-            if (totalCm >= 120 && totalCm <= 220) {
-              newHeight = Math.round(totalCm);
-            }
-          }
-        } else {
-          const num = parseInt(heightText.replace(/[^0-9]/g, ''));
-          if (!isNaN(num) && num >= 120 && num <= 220) {
-            newHeight = num;
-          }
-        }
-        finalHeight = newHeight.toString();
-      }
 
       await updateProfile({
         weight: parseFloat(finalWeight),
-        height: parseFloat(finalHeight),
+        goal,
       });
 
       Toast.show({
@@ -173,7 +131,7 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
             textAlign: 'center',
             marginRight: 40,
           }}>
-            {t('profile.personalDetails') || 'Detalhes pessoais'}
+            {t('profile.goalAndWeight') || 'Meta e peso atual'}
           </Text>
         </View>
 
@@ -378,200 +336,55 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
             />
           </View>
 
-          {/* Altura com slider */}
+          {/* Objetivo */}
           <View style={{ marginBottom: 32 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <Text style={{
-                fontSize: 16,
-                fontWeight: '600',
-                color: theme.colors.text,
-              }}>
-                {t('profile.height')}
-              </Text>
-              <View style={{ flexDirection: 'row', backgroundColor: theme.colors.border || '#E5E7EB', borderRadius: 8, padding: 2 }}>
-                <TouchableOpacity
-                  onPress={() => setIsImperial(false)}
-                  activeOpacity={0.7}
-                  style={{
-                    paddingVertical: 6,
-                    paddingHorizontal: 12,
-                    borderRadius: 6,
-                    backgroundColor: !isImperial ? theme.colors.primary || '#3BB273' : 'transparent',
-                  }}
-                >
-                  <Text style={{
-                    fontSize: 12,
-                    fontWeight: '600',
-                    color: !isImperial ? '#FFFFFF' : theme.colors.textSecondary || '#9CA3AF',
-                  }}>
-                    cm
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setIsImperial(true)}
-                  activeOpacity={0.7}
-                  style={{
-                    paddingVertical: 6,
-                    paddingHorizontal: 12,
-                    borderRadius: 6,
-                    backgroundColor: isImperial ? theme.colors.primary || '#3BB273' : 'transparent',
-                  }}
-                >
-                  <Text style={{
-                    fontSize: 12,
-                    fontWeight: '600',
-                    color: isImperial ? '#FFFFFF' : theme.colors.textSecondary || '#9CA3AF',
-                  }}>
-                    ft/in
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-              <TouchableOpacity
-                onPress={() => {
-                  let currentValue = parseFloat(height) || 175;
-                  if (heightText !== '') {
-                    const num = parseInt(heightText.replace(/[^0-9]/g, ''));
-                    if (!isNaN(num) && num >= 120 && num <= 220) {
-                      currentValue = num;
-                      setHeight(currentValue.toString());
-                    }
-                  }
-                  const newValue = Math.max(120, currentValue - 1);
-                  setHeight(newValue.toString());
-                  setHeightText('');
-                }}
-                activeOpacity={0.7}
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  backgroundColor: theme.colors.border || '#E5E7EB',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginRight: 12,
-                }}
-              >
-                <Ionicons name="remove" size={20} color={theme.colors.text} />
-              </TouchableOpacity>
-              
-              <TextInput
-                style={{
-                  fontSize: 32,
-                  fontWeight: '700',
-                  color: theme.colors.primary || '#3BB273',
-                  textAlign: 'center',
-                  minWidth: 120,
-                }}
-                value={heightText !== '' ? heightText : (heightIsEmpty ? '' : (isImperial ? `${Math.floor(parseFloat(height || '175') / 30.48)}'${Math.round((parseFloat(height || '175') % 30.48) / 2.54)}"` : height))}
-                onChangeText={(text) => {
-                  setHeightText(text);
-                  if (text === '') {
-                    setHeightIsEmpty(true);
-                  } else {
-                    setHeightIsEmpty(false);
-                  }
-                }}
-                onBlur={() => {
-                  if (heightText === '') {
-                    setHeightIsEmpty(true);
-                    return;
-                  }
-                  let newHeight = parseFloat(height) || 175;
-                  if (isImperial) {
-                    const cleanText = heightText.replace(/[^0-9'"]/g, '');
-                    let feet = 0;
-                    let inches = 0;
-                    const match1 = cleanText.match(/(\d+)'(\d+)/);
-                    if (match1) {
-                      feet = parseInt(match1[1]) || 0;
-                      inches = parseInt(match1[2]) || 0;
-                    } else {
-                      const num = parseInt(cleanText);
-                      if (!isNaN(num)) {
-                        if (num >= 40 && num <= 84) {
-                          feet = Math.floor(num / 10);
-                          inches = num % 10;
-                        } else if (num >= 4 && num <= 7) {
-                          feet = num;
-                          inches = 0;
-                        }
-                      }
-                    }
-                    if (feet >= 4 && feet <= 7 && inches >= 0 && inches <= 11) {
-                      const totalCm = feet * 30.48 + inches * 2.54;
-                      if (totalCm >= 120 && totalCm <= 220) {
-                        newHeight = Math.round(totalCm);
-                      }
-                    }
-                  } else {
-                    const num = parseInt(heightText.replace(/[^0-9]/g, ''));
-                    if (!isNaN(num) && num >= 120 && num <= 220) {
-                      newHeight = num;
-                    }
-                  }
-                  setHeight(newHeight.toString());
-                  setHeightIsEmpty(false);
-                  setHeightText('');
-                }}
-                keyboardType={isImperial ? "default" : "numeric"}
-                selectTextOnFocus={false}
-              />
-              
-              <TouchableOpacity
-                onPress={() => {
-                  let currentValue = parseFloat(height) || 175;
-                  if (heightText !== '') {
-                    const num = parseInt(heightText.replace(/[^0-9]/g, ''));
-                    if (!isNaN(num) && num >= 120 && num <= 220) {
-                      currentValue = num;
-                      setHeight(currentValue.toString());
-                    }
-                  }
-                  const newValue = Math.min(220, currentValue + 1);
-                  setHeight(newValue.toString());
-                  setHeightText('');
-                }}
-                activeOpacity={0.7}
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  backgroundColor: theme.colors.border || '#E5E7EB',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginLeft: 12,
-                }}
-              >
-                <Ionicons name="add" size={20} color={theme.colors.text} />
-              </TouchableOpacity>
-            </View>
             <Text style={{
-              textAlign: 'center',
-              fontSize: 12,
-              color: theme.colors.textSecondary || '#9CA3AF',
-              marginBottom: 8,
+              fontSize: 16,
+              fontWeight: '600',
+              color: theme.colors.text,
+              marginBottom: 16,
             }}>
-              {isImperial ? "ft'in\"" : 'cm'}
+              {t('profile.goal')}
             </Text>
-            <Slider
-              style={{ width: '100%', height: 40 }}
-              minimumValue={120}
-              maximumValue={220}
-              step={1}
-              value={parseFloat(height) || 175}
-              onValueChange={(value) => {
-                setHeight(Math.round(value).toString());
-                setHeightText('');
-                setHeightIsEmpty(false);
-              }}
-              minimumTrackTintColor={theme.colors.primary || '#3BB273'}
-              maximumTrackTintColor={theme.colors.border || '#E5E7EB'}
-              thumbTintColor={theme.colors.primary || '#3BB273'}
-            />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {(['lose', 'maintain', 'gain'] as const).map((g) => (
+                <TouchableOpacity
+                  key={g}
+                  onPress={() => setGoal(g)}
+                  activeOpacity={0.7}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 16,
+                    paddingHorizontal: 16,
+                    borderRadius: 12,
+                    backgroundColor: goal === g
+                      ? theme.colors.primary || '#3BB273'
+                      : theme.colors.card,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: goal === g
+                      ? theme.colors.primary || '#3BB273'
+                      : theme.colors.border || '#E5E7EB',
+                  }}
+                >
+                  <Text style={{
+                    fontSize: 14,
+                    fontWeight: '600',
+                    color: goal === g
+                      ? '#FFFFFF'
+                      : theme.colors.text,
+                  }}>
+                    {g === 'lose'
+                      ? t('onboarding.goal.lose')
+                      : g === 'gain'
+                      ? t('onboarding.goal.gain')
+                      : t('onboarding.goal.maintain')}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-
         </ScrollView>
 
         {/* Botão Salvar */}
@@ -584,17 +397,17 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
         }}>
           <TouchableOpacity
             onPress={handleSave}
-            disabled={loading || !weight || !height}
+            disabled={loading || !weight}
             activeOpacity={0.7}
             style={{
-              backgroundColor: (loading || !weight || !height)
+              backgroundColor: (loading || !weight)
                 ? theme.colors.border || '#E5E7EB'
                 : theme.colors.primary || '#3BB273',
               borderRadius: 12,
               paddingVertical: 16,
               alignItems: 'center',
               justifyContent: 'center',
-              opacity: (loading || !weight || !height) ? 0.5 : 1,
+              opacity: (loading || !weight) ? 0.5 : 1,
             }}
           >
             {loading ? (
@@ -603,7 +416,7 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
               <Text style={{
                 fontSize: 16,
                 fontWeight: '600',
-                color: (loading || !weight || !height)
+                color: (loading || !weight)
                   ? theme.colors.textSecondary || '#9CA3AF'
                   : '#FFFFFF',
               }}>

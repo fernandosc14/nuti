@@ -16,7 +16,7 @@ export interface FoodNutrition {
 /**
  * Base de dados de alimentos comuns com valores nutricionais reais
  */
-const FOOD_DATABASE: FoodNutrition[] = [
+export const FOOD_DATABASE: FoodNutrition[] = [
   // Grãos e Cereais
   { name: 'arroz', caloriesPer100g: 130, proteinPer100g: 2.7, carbsPer100g: 28, fatPer100g: 0.3 },
   { name: 'arroz branco', caloriesPer100g: 130, proteinPer100g: 2.7, carbsPer100g: 28, fatPer100g: 0.3 },
@@ -58,6 +58,23 @@ const FOOD_DATABASE: FoodNutrition[] = [
   { name: 'maçã', caloriesPer100g: 52, proteinPer100g: 0.3, carbsPer100g: 14, fatPer100g: 0.2 },
   { name: 'banana', caloriesPer100g: 89, proteinPer100g: 1.1, carbsPer100g: 23, fatPer100g: 0.3 },
   { name: 'laranja', caloriesPer100g: 47, proteinPer100g: 0.9, carbsPer100g: 12, fatPer100g: 0.1 },
+  
+  // Laticínios
+  { name: 'leite', caloriesPer100g: 42, proteinPer100g: 3.4, carbsPer100g: 5, fatPer100g: 1 },
+  { name: 'iogurte', caloriesPer100g: 59, proteinPer100g: 10, carbsPer100g: 3.6, fatPer100g: 0.4 },
+  { name: 'queijo', caloriesPer100g: 113, proteinPer100g: 7, carbsPer100g: 1, fatPer100g: 9 },
+  { name: 'queijo fresco', caloriesPer100g: 98, proteinPer100g: 11, carbsPer100g: 2.5, fatPer100g: 4.3 },
+  
+  // Pães e Cereais
+  { name: 'pão', caloriesPer100g: 265, proteinPer100g: 9, carbsPer100g: 49, fatPer100g: 3.2 },
+  { name: 'pão branco', caloriesPer100g: 265, proteinPer100g: 9, carbsPer100g: 49, fatPer100g: 3.2 },
+  { name: 'pão integral', caloriesPer100g: 247, proteinPer100g: 13, carbsPer100g: 41, fatPer100g: 4.2 },
+  { name: 'aveia', caloriesPer100g: 389, proteinPer100g: 17, carbsPer100g: 66, fatPer100g: 7 },
+  
+  // Outros
+  { name: 'azeite', caloriesPer100g: 884, proteinPer100g: 0, carbsPer100g: 0, fatPer100g: 100 },
+  { name: 'manteiga', caloriesPer100g: 717, proteinPer100g: 0.9, carbsPer100g: 0.1, fatPer100g: 81 },
+  { name: 'mel', caloriesPer100g: 304, proteinPer100g: 0.3, carbsPer100g: 82, fatPer100g: 0 },
 ];
 
 /**

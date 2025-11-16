@@ -22,12 +22,15 @@ import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { BadgeItem } from '../components/BadgeItem';
+import { PremiumPromoCard } from '../components/PremiumPromoCard';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
-import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, getDoc, deleteField } from 'firebase/firestore';
 import { db } from '../services/firebase';
+import * as ImagePicker from 'expo-image-picker';
 import * as Clipboard from 'expo-clipboard';
 import Constants from 'expo-constants';
+import { Alert } from 'react-native';
 
 interface Badge {
   id: string;
@@ -38,7 +41,7 @@ interface Badge {
 }
 
 export function ProfileScreen({ navigation }: any) {
-  const { user, profile, signOut, updateProfile } = useUser();
+  const { user, profile, signOut, updateProfile, refreshProfile } = useUser();
   const { theme, toggleTheme } = useTheme();
   const isDark = theme.isDark;
   const { language, setLanguage, t } = useLanguage();
@@ -47,6 +50,8 @@ export function ProfileScreen({ navigation }: any) {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
   const [badges, setBadges] = useState<Badge[]>([]);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [showImagePickerModal, setShowImagePickerModal] = useState(false);
 
   // Função para gerar código de referência único baseado no userId
   const generateReferralCode = (userId: string): string => {
@@ -135,6 +140,210 @@ export function ProfileScreen({ navigation }: any) {
   };
 
   const userAge = calculateAge(profile?.dateOfBirth);
+
+  const handleSelectProfileImage = () => {
+    if (!user) return;
+    setShowImagePickerModal(true);
+  };
+
+  const handleCameraPress = async () => {
+    setShowImagePickerModal(false);
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          t('common.error') || 'Erro',
+          t('profile.cameraPermissionRequired') || 'Permissão de câmera necessária'
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        await uploadProfileImage(result.assets[0].uri);
+      }
+    } catch (error: any) {
+      Toast.show({
+        type: 'error',
+        text1: t('common.error') || 'Erro',
+        text2: error.message || t('profile.imageUploadError') || 'Erro ao selecionar imagem',
+      });
+    }
+  };
+
+  const handleGalleryPress = async () => {
+    setShowImagePickerModal(false);
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          t('common.error') || 'Erro',
+          t('profile.galleryPermissionRequired') || 'Permissão de galeria necessária'
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        await uploadProfileImage(result.assets[0].uri);
+      }
+    } catch (error: any) {
+      Toast.show({
+        type: 'error',
+        text1: t('common.error') || 'Erro',
+        text2: error.message || t('profile.imageUploadError') || 'Erro ao selecionar imagem',
+      });
+    }
+  };
+
+  // Converter imagem para base64 (solução gratuita sem Firebase Storage)
+  // Usa XMLHttpRequest que funciona melhor no React Native
+  const uriToBase64 = async (uri: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      
+      xhr.onload = function () {
+        if (xhr.status === 200 || xhr.status === 0) {
+          try {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const base64String = reader.result as string;
+              if (base64String) {
+                resolve(base64String);
+              } else {
+                reject(new Error('Falha ao converter blob para base64'));
+              }
+            };
+            reader.onerror = () => {
+              reject(new Error('Erro ao ler o blob'));
+            };
+            reader.readAsDataURL(xhr.response);
+          } catch (readError: any) {
+            reject(new Error('Erro ao processar resposta: ' + readError.message));
+          }
+        } else {
+          reject(new Error(`Falha ao carregar imagem: status ${xhr.status}`));
+        }
+      };
+      
+      xhr.onerror = function () {
+        reject(new Error('Erro de rede ao carregar imagem'));
+      };
+      
+      xhr.onabort = function () {
+        reject(new Error('Carregamento da imagem cancelado'));
+      };
+      
+      xhr.responseType = 'blob';
+      xhr.open('GET', uri, true);
+      xhr.send(null);
+    });
+  };
+
+  const uploadProfileImage = async (imageUri: string) => {
+    if (!user) {
+      Toast.show({
+        type: 'error',
+        text1: t('common.error') || 'Erro',
+        text2: 'Usuário não autenticado',
+      });
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      console.log('Starting image upload, URI:', imageUri);
+      console.log('User UID:', user.uid);
+      
+      // Converter imagem para base64
+      const base64Image = await uriToBase64(imageUri);
+      console.log('Base64 image created, length:', base64Image.length);
+      
+      // Verificar tamanho (limite do Firestore é ~1MB, mas vamos limitar a ~500KB para segurança)
+      const sizeInKB = (base64Image.length * 3) / 4 / 1024;
+      if (sizeInKB > 500) {
+        Toast.show({
+          type: 'error',
+          text1: t('common.error') || 'Erro',
+          text2: 'Imagem muito grande. Por favor, escolha uma imagem menor (máximo 500KB).',
+        });
+        return;
+      }
+      
+      console.log('Image size:', sizeInKB.toFixed(2), 'KB');
+
+      // Atualizar perfil com a imagem em base64
+      await updateProfile({ profileImageUrl: base64Image });
+      console.log('Profile updated with base64 image');
+
+      Toast.show({
+        type: 'success',
+        text1: t('profile.updateSuccess') || 'Sucesso',
+        text2: t('profile.imageUpdated') || 'Foto de perfil atualizada com sucesso',
+      });
+    } catch (error: any) {
+      console.error('Error uploading profile image:', error);
+      console.error('Error message:', error.message);
+      
+      let errorMessage = t('profile.imageUploadError') || 'Erro ao fazer upload da imagem';
+      
+      if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      Toast.show({
+        type: 'error',
+        text1: t('common.error') || 'Erro',
+        text2: errorMessage,
+      });
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const removeProfileImage = async () => {
+    if (!user) return;
+
+    setShowImagePickerModal(false);
+    setUploadingImage(true);
+    try {
+      // Remover a foto de perfil usando deleteField do Firestore
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        profileImageUrl: deleteField(),
+      });
+      
+      // Recarregar o perfil para atualizar o estado local
+      await refreshProfile();
+      
+      Toast.show({
+        type: 'success',
+        text1: t('profile.updateSuccess') || 'Sucesso',
+        text2: t('profile.imageRemoved') || 'Foto de perfil removida com sucesso',
+      });
+    } catch (error: any) {
+      console.error('Error removing profile image:', error);
+      Toast.show({
+        type: 'error',
+        text1: t('common.error') || 'Erro',
+        text2: t('profile.imageRemoveError') || 'Erro ao remover foto de perfil',
+      });
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   React.useEffect(() => {
     if (profile) {
@@ -243,51 +452,83 @@ export function ProfileScreen({ navigation }: any) {
           marginBottom: 24,
           backgroundColor: theme.colors.card,
           borderRadius: 16,
-          padding: 20,
+          paddingHorizontal: 20,
+          paddingTop: 20,
+          paddingBottom: 20,
           borderWidth: 1,
           borderColor: theme.colors.border || '#E5E7EB',
         }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             {/* Avatar */}
-            <View style={{
-              width: 64,
-              height: 64,
-              borderRadius: 32,
-              backgroundColor: theme.colors.primary || '#3BB273',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginRight: 16,
-            }}>
-              <Ionicons name="person" size={32} color="#FFFFFF" />
-            </View>
+            <TouchableOpacity
+              onPress={handleSelectProfileImage}
+              activeOpacity={0.7}
+              disabled={uploadingImage}
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 32,
+                backgroundColor: theme.colors.primary || '#3BB273',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: 16,
+                overflow: 'hidden',
+              }}
+            >
+              {profile?.profileImageUrl ? (
+                <Image
+                  source={{ uri: profile.profileImageUrl }}
+                  style={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: 32,
+                  }}
+                />
+              ) : (
+                <Ionicons name="camera" size={28} color="#FFFFFF" />
+              )}
+              {uploadingImage && (
+                <View style={{
+                  position: 'absolute',
+                  width: 64,
+                  height: 64,
+                  borderRadius: 32,
+                  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                </View>
+              )}
+            </TouchableOpacity>
 
             {/* Nome e Idade */}
-            <View style={{ flex: 1 }}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('EditName')}
+              activeOpacity={0.7}
+              style={{ flex: 1 }}
+            >
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Text style={{
                   fontSize: 20,
                   fontWeight: '700',
                   color: theme.colors.text,
                   marginRight: 8,
+                  flex: 1,
                 }}>
                   {profile?.name || t('profile.name') || 'Digite seu nome'}
                 </Text>
-                <TouchableOpacity
-                  onPress={() => navigation.navigate('EditName')}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="pencil-outline" size={18} color={theme.colors.textSecondary || '#9CA3AF'} />
-                </TouchableOpacity>
+                <Ionicons name="pencil-outline" size={18} color={theme.colors.textSecondary || '#9CA3AF'} />
               </View>
               {userAge !== null && (
                 <Text style={{
                   fontSize: 14,
                   color: theme.colors.textSecondary || '#9CA3AF',
                 }}>
-                  {userAge} {t('profile.age') || 'anos'}
+                  {userAge} {t('profile.ageYears') || 'anos'}
                 </Text>
               )}
-            </View>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -354,6 +595,12 @@ export function ProfileScreen({ navigation }: any) {
           </View>
         )}
 
+        {/* Premium Promo Card */}
+        <PremiumPromoCard
+          variant="compact"
+          onPress={() => navigation.navigate('Premium')}
+        />
+
         {/* Lista de Configurações */}
         <View style={{
           marginHorizontal: 24,
@@ -390,13 +637,7 @@ export function ProfileScreen({ navigation }: any) {
 
           {/* Meta e Peso Atual */}
           <TouchableOpacity
-            onPress={() => {
-              Toast.show({
-                type: 'info',
-                text1: t('profile.goalAndWeight') || 'Meta e peso atual',
-                text2: 'Em breve',
-              });
-            }}
+            onPress={() => navigation.navigate('EditGoalAndWeight')}
             activeOpacity={0.7}
             style={{
               flexDirection: 'row',
@@ -1052,6 +1293,189 @@ export function ProfileScreen({ navigation }: any) {
                 </Text>
               </TouchableOpacity>
             </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Modal de Seleção de Foto */}
+      <Modal
+        visible={showImagePickerModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowImagePickerModal(false)}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            justifyContent: 'flex-end',
+          }}
+          onPress={() => setShowImagePickerModal(false)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: theme.colors.card,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              paddingTop: 24,
+              paddingBottom: 60,
+              paddingHorizontal: 24,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: -4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 12,
+              elevation: 8,
+            }}
+          >
+            {/* Handle bar */}
+            <View style={{
+              width: 40,
+              height: 4,
+              backgroundColor: theme.colors.border || '#E5E7EB',
+              borderRadius: 2,
+              alignSelf: 'center',
+              marginBottom: 24,
+            }} />
+
+            <Text style={{
+              fontSize: 20,
+              fontWeight: '700',
+              color: theme.colors.text,
+              textAlign: 'center',
+              marginBottom: 24,
+            }}>
+              {t('profile.selectPhoto') || 'Selecionar foto'}
+            </Text>
+
+            <View style={{
+              flexDirection: 'row',
+              gap: 16,
+              marginBottom: 16,
+            }}>
+              {/* Opção Câmera */}
+              <TouchableOpacity
+                onPress={handleCameraPress}
+                activeOpacity={0.7}
+                style={{
+                  flex: 1,
+                  backgroundColor: theme.colors.background,
+                  borderRadius: 16,
+                  padding: 20,
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: theme.colors.border || '#E5E7EB',
+                }}
+              >
+                <View style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 28,
+                  backgroundColor: theme.colors.primary || '#3BB273',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 12,
+                }}>
+                  <Ionicons name="camera" size={28} color="#FFFFFF" />
+                </View>
+                <Text style={{
+                  fontSize: 14,
+                  fontWeight: '600',
+                  color: theme.colors.text,
+                }}>
+                  {t('profile.camera') || 'Câmera'}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Opção Galeria */}
+              <TouchableOpacity
+                onPress={handleGalleryPress}
+                activeOpacity={0.7}
+                style={{
+                  flex: 1,
+                  backgroundColor: theme.colors.background,
+                  borderRadius: 16,
+                  padding: 20,
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: theme.colors.border || '#E5E7EB',
+                }}
+              >
+                <View style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 28,
+                  backgroundColor: theme.colors.primary || '#3BB273',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 12,
+                }}>
+                  <Ionicons name="images" size={28} color="#FFFFFF" />
+                </View>
+                <Text style={{
+                  fontSize: 14,
+                  fontWeight: '600',
+                  color: theme.colors.text,
+                }}>
+                  {t('profile.gallery') || 'Galeria'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Opção Remover Foto (apenas se já houver foto) */}
+            {profile?.profileImageUrl && (
+              <TouchableOpacity
+                onPress={removeProfileImage}
+                activeOpacity={0.7}
+                disabled={uploadingImage}
+                style={{
+                  paddingVertical: 16,
+                  borderRadius: 12,
+                  backgroundColor: theme.colors.background,
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: '#EF4444',
+                  marginBottom: 12,
+                }}
+              >
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                }}>
+                  <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '600',
+                    color: '#EF4444',
+                  }}>
+                    {t('profile.removePhoto') || 'Remover foto'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {/* Botão Cancelar */}
+            <TouchableOpacity
+              onPress={() => setShowImagePickerModal(false)}
+              activeOpacity={0.7}
+              style={{
+                paddingVertical: 16,
+                borderRadius: 12,
+                backgroundColor: theme.colors.background,
+                alignItems: 'center',
+                borderWidth: 1,
+                borderColor: theme.colors.border || '#E5E7EB',
+              }}
+            >
+              <Text style={{
+                fontSize: 16,
+                fontWeight: '600',
+                color: theme.colors.text,
+              }}>
+                {t('common.cancel') || 'Cancelar'}
+              </Text>
+            </TouchableOpacity>
           </Pressable>
         </Pressable>
       </Modal>

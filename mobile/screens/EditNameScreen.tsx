@@ -4,7 +4,7 @@
  * Tela para editar o nome do utilizador
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '../context/UserContext';
@@ -26,13 +27,51 @@ export function EditNameScreen({ navigation }: any) {
   const { theme } = useTheme();
   const { t } = useLanguage();
   const [name, setName] = useState('');
+  const [age, setAge] = useState('');
   const [loading, setLoading] = useState(false);
+  const initialized = useRef(false);
+  
+  // Validar se a idade está no intervalo correto
+  const isAgeValid = () => {
+    if (!age || age === '') return true; // Idade é opcional
+    const ageNum = parseInt(age);
+    return !isNaN(ageNum) && ageNum >= 18 && ageNum <= 120;
+  };
+  
+  const ageError = () => {
+    if (!age || age === '') return null;
+    const ageNum = parseInt(age);
+    if (isNaN(ageNum)) return null;
+    if (ageNum < 18) return t('profile.ageTooYoung') || 'Idade mínima é 18 anos';
+    if (ageNum > 120) return t('profile.ageTooOld') || 'Idade máxima é 120 anos';
+    return null;
+  };
+
+  // Calcular idade a partir da data de nascimento
+  const calculateAge = (dateOfBirth: Date | undefined): number => {
+    if (!dateOfBirth) return 0;
+    const today = new Date();
+    let age = today.getFullYear() - dateOfBirth.getFullYear();
+    const monthDiff = today.getMonth() - dateOfBirth.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dateOfBirth.getDate())) {
+      age--;
+    }
+    return age;
+  };
 
   useEffect(() => {
-    if (profile?.name) {
-      setName(profile.name);
+    // Só inicializar uma vez quando o profile estiver disponível
+    if (!initialized.current && profile) {
+      if (profile.name) {
+        setName(profile.name);
+      }
+      if (profile.dateOfBirth) {
+        const calculatedAge = calculateAge(profile.dateOfBirth);
+        setAge(calculatedAge > 0 ? calculatedAge.toString() : '');
+      }
+      initialized.current = true;
     }
-  }, [profile?.name]);
+  }, [profile]);
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -44,23 +83,52 @@ export function EditNameScreen({ navigation }: any) {
       return;
     }
 
+    // Validar idade se fornecida
+    if (!isAgeValid()) {
+      Toast.show({
+        type: 'error',
+        text1: t('common.error') || 'Erro',
+        text2: ageError() || t('profile.invalidAge') || 'Por favor, insira uma idade válida (18-120)',
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      await updateProfile({ name: name.trim() });
+      const updates: any = { name: name.trim() };
+      
+      // Se a idade foi fornecida, calcular dateOfBirth
+      if (age && parseInt(age) > 0) {
+        const ageNum = parseInt(age);
+        const today = new Date();
+        const birthYear = today.getFullYear() - ageNum;
+        // Usar 1 de Janeiro como data padrão (aproximação)
+        const dateOfBirth = new Date(birthYear, 0, 1);
+        updates.dateOfBirth = dateOfBirth;
+      }
+      
+      await updateProfile(updates);
+      
+      // Desativar loading antes de navegar
+      setLoading(false);
+      
       Toast.show({
         type: 'success',
         text1: t('profile.updateSuccess') || 'Sucesso',
         text2: t('profile.nameUpdated') || 'Nome atualizado com sucesso',
       });
-      navigation.goBack();
+      
+      // Navegar após um pequeno delay para o Toast aparecer
+      setTimeout(() => {
+        navigation.goBack();
+      }, 500);
     } catch (error: any) {
+      setLoading(false);
       Toast.show({
         type: 'error',
         text1: t('common.error') || 'Erro',
         text2: error.message || t('profile.updateError') || 'Erro ao atualizar nome',
       });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -105,27 +173,88 @@ export function EditNameScreen({ navigation }: any) {
         </View>
 
         {/* Conteúdo */}
-        <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 32 }}>
-          {/* Campo de Texto */}
-          <TextInput
-            style={{
-              backgroundColor: theme.colors.card,
-              borderRadius: 12,
-              paddingVertical: 16,
-              paddingHorizontal: 16,
-              fontSize: 16,
+        <ScrollView 
+          style={{ flex: 1 }} 
+          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 20 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Campo de Nome */}
+          <View style={{ marginBottom: 24 }}>
+            <Text style={{
+              fontSize: 14,
+              fontWeight: '600',
               color: theme.colors.text,
-              borderWidth: 1,
-              borderColor: theme.colors.border || '#E5E7EB',
-            }}
-            value={name}
-            onChangeText={setName}
-            placeholder={t('profile.namePlaceholder') || 'Insira o nome aqui'}
-            placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
-            autoFocus={true}
-            maxLength={50}
-          />
-        </View>
+              marginBottom: 8,
+            }}>
+              {t('profile.name') || 'Nome'}
+            </Text>
+            <TextInput
+              style={{
+                backgroundColor: theme.colors.card,
+                borderRadius: 12,
+                paddingVertical: 16,
+                paddingHorizontal: 16,
+                fontSize: 16,
+                color: theme.colors.text,
+                borderWidth: 1,
+                borderColor: theme.colors.border || '#E5E7EB',
+              }}
+              value={name}
+              onChangeText={setName}
+              placeholder={t('profile.namePlaceholder') || 'Insira o nome aqui'}
+              placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
+              autoFocus={true}
+              maxLength={50}
+            />
+          </View>
+
+          {/* Campo de Idade */}
+          <View style={{ marginBottom: 24 }}>
+            <Text style={{
+              fontSize: 14,
+              fontWeight: '600',
+              color: theme.colors.text,
+              marginBottom: 8,
+            }}>
+              {t('profile.age') || 'Idade'}
+            </Text>
+            <TextInput
+              style={{
+                backgroundColor: theme.colors.card,
+                borderRadius: 12,
+                paddingVertical: 16,
+                paddingHorizontal: 16,
+                fontSize: 16,
+                color: theme.colors.text,
+                borderWidth: 1,
+                borderColor: theme.colors.border || '#E5E7EB',
+              }}
+              value={age}
+              onChangeText={(text) => {
+                // Permitir apenas números
+                const numericValue = text.replace(/[^0-9]/g, '');
+                // Permitir qualquer número, mas validar depois
+                if (numericValue === '' || parseInt(numericValue) <= 120) {
+                  setAge(numericValue);
+                }
+              }}
+              placeholder={t('profile.agePlaceholder') || 'Insira a idade'}
+              placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
+              keyboardType="numeric"
+              maxLength={3}
+            />
+            {ageError() && (
+              <Text style={{
+                fontSize: 12,
+                color: '#EF4444',
+                marginTop: 4,
+                marginLeft: 4,
+              }}>
+                {ageError()}
+              </Text>
+            )}
+          </View>
+        </ScrollView>
 
         {/* Botão Pronto */}
         <View style={{
@@ -135,26 +264,30 @@ export function EditNameScreen({ navigation }: any) {
         }}>
           <TouchableOpacity
             onPress={handleSave}
-            disabled={loading || !name.trim()}
+            disabled={loading || !name.trim() || !isAgeValid()}
             activeOpacity={0.7}
             style={{
-              backgroundColor: theme.colors.card,
+              backgroundColor: (loading || !name.trim() || !isAgeValid())
+                ? theme.colors.border || '#E5E7EB'
+                : theme.colors.primary || '#3BB273',
               borderRadius: 12,
               paddingVertical: 16,
               alignItems: 'center',
               justifyContent: 'center',
-              opacity: (loading || !name.trim()) ? 0.5 : 1,
+              opacity: (loading || !name.trim() || !isAgeValid()) ? 0.5 : 1,
             }}
           >
             {loading ? (
-              <ActivityIndicator color={theme.colors.text} />
+              <ActivityIndicator color="#FFFFFF" />
             ) : (
               <Text style={{
                 fontSize: 16,
                 fontWeight: '600',
-                color: theme.colors.text,
+                color: (loading || !name.trim() || !isAgeValid())
+                  ? theme.colors.textSecondary || '#9CA3AF'
+                  : '#FFFFFF',
               }}>
-                {t('profile.done') || 'Pronto'}
+                {t('profile.save') || 'Salvar'}
               </Text>
             )}
           </TouchableOpacity>
