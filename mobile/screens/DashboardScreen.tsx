@@ -4,7 +4,7 @@
  * Tela principal com gráfico circular, streak, badges e lista de refeições
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '../context/UserContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import { useSelectedDate } from '../context/SelectedDateContext';
 import { ChartCircle } from '../components/ChartCircle';
 import { MealCard } from '../components/MealCard';
 import { BadgeItem } from '../components/BadgeItem';
@@ -29,9 +30,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { collection, query, where, getDocs, Timestamp, doc, deleteDoc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { updateStreak } from '../utils/streakUtils';
+import { calculateCalorieGoalFromProfile } from '../utils/nutritionUtils';
 import Toast from 'react-native-toast-message';
 import { MotiView } from 'moti';
 import { Image, Dimensions } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Text as SvgText } from 'react-native-svg';
 
 const { width: screenWidth } = Dimensions.get('window');
 const WATER_SLIDE_PADDING = 24; // Padding direito do slide da água
@@ -43,6 +47,7 @@ interface Meal {
   mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
   image?: string;
   date: Date;
+  addedAt?: Date | null; // Data de quando foi realmente adicionada
   protein?: number;
   carbs?: number;
   fat?: number;
@@ -60,6 +65,7 @@ export function DashboardScreen({ navigation }: any) {
   const { user, profile, refreshProfile } = useUser();
   const { t, language } = useLanguage();
   const { theme } = useTheme();
+  const { setSelectedDate: setContextSelectedDate } = useSelectedDate();
   const [consumed, setConsumed] = useState(0);
   const [goal, setGoal] = useState(2000);
   const [meals, setMeals] = useState<Meal[]>([]);
@@ -79,6 +85,8 @@ export function DashboardScreen({ navigation }: any) {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [currentMacroIndex, setCurrentMacroIndex] = useState(0);
   const [todayMealCount, setTodayMealCount] = useState(0);
+  const [steps, setSteps] = useState(0);
+  const macroScrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     // Se não houver user, limpar estado e não carregar dados
@@ -95,6 +103,22 @@ export function DashboardScreen({ navigation }: any) {
       loadDashboardData();
     }
   }, [user, profile, selectedDate]);
+
+  // Atualizar contexto quando a data selecionada mudar
+  useEffect(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selectedDateNormalized = new Date(selectedDate);
+    selectedDateNormalized.setHours(0, 0, 0, 0);
+    
+    // Se a data selecionada for hoje, limpar o contexto (usar data atual)
+    // Se for um dia anterior, atualizar o contexto
+    if (selectedDateNormalized.getTime() === today.getTime()) {
+      setContextSelectedDate(null);
+    } else {
+      setContextSelectedDate(selectedDate);
+    }
+  }, [selectedDate, setContextSelectedDate]);
 
 
   const loadDashboardData = async () => {
@@ -114,12 +138,10 @@ export function DashboardScreen({ navigation }: any) {
         return;
       }
 
-      // Calcular meta de calorias baseada no perfil
-      if (profile?.weight && profile?.height) {
-        const bmr = 10 * profile.weight + 6.25 * profile.height - 5 * 30 + 5;
-        const goalMultiplier =
-          profile.goal === 'lose' ? 0.8 : profile.goal === 'gain' ? 1.2 : 1;
-        setGoal(Math.round(bmr * 1.5 * goalMultiplier));
+      // Calcular meta de calorias baseada no perfil com fórmula precisa
+      const caloriePlan = calculateCalorieGoalFromProfile(profile);
+      if (caloriePlan?.calories) {
+        setGoal(caloriePlan.calories);
       }
 
       // Verificar novamente antes de query
@@ -156,13 +178,18 @@ export function DashboardScreen({ navigation }: any) {
 
       snapshot.forEach((doc) => {
         const data = doc.data();
+        // Garantir que a data seja convertida corretamente do Timestamp
+        const mealDate = data.date?.toDate ? data.date.toDate() : (data.date instanceof Date ? data.date : new Date(data.date));
+        // Converter addedAt de Timestamp para Date se existir
+        const addedAt = data.addedAt?.toDate ? data.addedAt.toDate() : (data.addedAt instanceof Date ? data.addedAt : (data.addedAt ? new Date(data.addedAt) : null));
         mealsData.push({
           id: doc.id,
           name: data.name,
           calories: data.calories,
           mealType: data.mealType || 'snack',
           image: data.image,
-          date: data.date?.toDate() || new Date(),
+          date: mealDate,
+          addedAt: addedAt,
           protein: data.protein,
           carbs: data.carbs,
           fat: data.fat,
@@ -214,12 +241,13 @@ export function DashboardScreen({ navigation }: any) {
         // Verificar antes de setState
         if (user && user.uid === currentUserId) {
         setBadges(badgesData);
-        }
+      }
       }
 
       // Carregar água do dia selecionado (só se ainda houver user)
       if (user && user.uid === currentUserId) {
         await loadWaterIntake(selectedDay);
+        await loadSteps(selectedDay);
       }
 
       // Verificar antes de atualizar streak (só se for o dia atual)
@@ -243,8 +271,8 @@ export function DashboardScreen({ navigation }: any) {
           const todayMealsSnapshot = await getDocs(todayMealsQuery);
           setTodayMealCount(todayMealsSnapshot.size);
           
-          await updateStreak(user.uid);
-          await refreshProfile();
+      await updateStreak(user.uid);
+      await refreshProfile();
         } else {
           // Se não for hoje, usar o número de refeições do dia selecionado
           setTodayMealCount(mealsData.length);
@@ -274,6 +302,52 @@ export function DashboardScreen({ navigation }: any) {
   const handleDeleteMeal = (mealId: string) => {
     setMealToDelete(mealId);
     setShowDeleteModal(true);
+  };
+
+  const loadSteps = async (date: Date = selectedDate) => {
+    // Verificar user antes de qualquer operação
+    if (!user) {
+      setSteps(0);
+      return;
+    }
+
+    // Guardar uid para verificar depois
+    const currentUserId = user.uid;
+
+    try {
+      // Verificar novamente antes de aceder ao Firestore
+      if (!user || user.uid !== currentUserId) {
+        setSteps(0);
+        return;
+      }
+
+      const targetDate = new Date(date);
+      targetDate.setHours(0, 0, 0, 0);
+      const dateStr = targetDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      const stepsDocRef = doc(db, 'steps', `${user.uid}_${dateStr}`);
+      const stepsDoc = await getDoc(stepsDocRef);
+
+      // Verificar novamente após query
+      if (!user || user.uid !== currentUserId) {
+        setSteps(0);
+        return;
+      }
+
+      if (stepsDoc.exists()) {
+        const data = stepsDoc.data();
+        setSteps(data.count || 0);
+      } else {
+        setSteps(0);
+      }
+    } catch (error: any) {
+      // Se for erro de permissões ou não houver user, ignorar silenciosamente (logout em progresso)
+      if (!user || error?.code === 'permission-denied') {
+        setSteps(0);
+        return;
+      }
+      console.error('Error loading steps:', error);
+      setSteps(0);
+    }
   };
 
   const loadWaterIntake = async (date: Date = selectedDate) => {
@@ -482,8 +556,20 @@ export function DashboardScreen({ navigation }: any) {
     return '🌙';
   };
 
+  const backgroundStyle = !theme?.isDark 
+    ? { flex: 1 } 
+    : { flex: 1, backgroundColor: theme?.colors?.background || '#FFFFFF' };
+
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+    <View style={backgroundStyle}>
+      {!theme?.isDark && (
+        <LinearGradient
+          colors={['#FFFFFF', '#F0FDF4']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+      )}
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 100 }}
@@ -503,63 +589,156 @@ export function DashboardScreen({ navigation }: any) {
             animate={{ opacity: 1, translateY: 0 }}
             transition={{ type: 'timing', duration: 400 }}
           >
-            <View style={{ 
+            <View style={{
               flexDirection: 'row', 
               justifyContent: 'space-between', 
               alignItems: 'flex-start',
               marginBottom: 24,
             }}>
               <View style={{ flex: 1 }}>
-                <Text style={{
-                  fontSize: 32,
-                  fontWeight: '800',
-                  color: theme.colors.text,
-                  marginBottom: 4,
-                }}>
-                  {(() => {
-                    const firstName = profile?.name?.split(' ')[0] || '';
-                    const greeting = t('dashboard.greeting') || 'Hello';
-                    return greeting.replace('{name}', firstName);
-                  })()} {getGreetingEmoji()}
-                </Text>
-                <Text style={{
-                  fontSize: 16,
-                  color: theme.colors.textSecondary || '#9CA3AF',
-                }}>
-                  {t('dashboard.howIsDay')}
-                </Text>
-              </View>
+                {/* Logo "N" - usando imagem */}
+                <View style={{ height: 40, justifyContent: 'center', width: 40 }}>
+                  <Image
+                    source={require('../assets/logo-n.png')}
+                    style={{
+                      width: 40,
+                      height: 40,
+                      resizeMode: 'contain',
+                    }}
+                  />
+                </View>
+            </View>
               
-              {/* Streak Badge - Pequeno no canto */}
-              {profile && (
+              {/* Badges: Streak e Steps */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 16 }}>
+                {/* Streak Badge */}
+                {profile && (
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: profile.streak > 0
+                      ? (theme.isDark ? '#1F2937' : '#FEF3C7')
+                      : (theme.colors.card || '#FFFFFF'),
+                    borderRadius: 20,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderWidth: profile.streak > 0 ? 0 : 1,
+                    borderColor: theme.colors.border || '#E5E7EB',
+                    shadowColor: profile.streak > 0 ? '#F97316' : 'transparent',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: profile.streak > 0 ? (theme.isDark ? 0.2 : 0.1) : 0,
+                    shadowRadius: 4,
+                    elevation: profile.streak > 0 ? 2 : 0,
+                  }}>
+                    <Ionicons 
+                      name="flame" 
+                      size={16} 
+                      color={profile.streak > 0 ? "#F97316" : (theme.colors.textSecondary || '#9CA3AF')} 
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={{
+                      fontSize: 14,
+                      fontWeight: '700',
+                      color: profile.streak > 0 
+                        ? (theme.isDark ? "#FFFFFF" : "#92400E") 
+                        : (theme.colors.text || '#000000'),
+                    }}>
+                      {profile.streak || 0}
+                    </Text>
+                  </View>
+                )}
+                
+                {/* Water Badge */}
                 <View style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  backgroundColor: profile.streak > 0
-                    ? (theme.mode === 'dark' ? '#1F2937' : '#374151')
+                  backgroundColor: waterIntake > 0
+                    ? (theme.isDark ? '#1F2937' : '#DBEAFE')
                     : (theme.colors.card || '#FFFFFF'),
                   borderRadius: 20,
                   paddingHorizontal: 12,
                   paddingVertical: 8,
-                  borderWidth: profile.streak > 0 ? 0 : 1,
+                  borderWidth: waterIntake > 0 ? 0 : 1,
                   borderColor: theme.colors.border || '#E5E7EB',
-                  marginLeft: 16,
+                  shadowColor: waterIntake > 0 ? '#3B82F6' : 'transparent',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: waterIntake > 0 ? (theme.isDark ? 0.2 : 0.1) : 0,
+                  shadowRadius: 4,
+                  elevation: waterIntake > 0 ? 2 : 0,
                 }}>
                   <Ionicons 
-                    name="flame" 
+                    name="water" 
                     size={16} 
-                    color={profile.streak > 0 ? "#F97316" : (theme.colors.textSecondary || '#9CA3AF')} 
+                    color={waterIntake > 0 ? "#3B82F6" : (theme.colors.textSecondary || '#9CA3AF')} 
                     style={{ marginRight: 6 }}
                   />
                   <Text style={{
                     fontSize: 14,
                     fontWeight: '700',
-                    color: profile.streak > 0 ? "#FFFFFF" : (theme.colors.text || '#000000'),
+                    color: waterIntake > 0 
+                      ? (theme.isDark ? "#FFFFFF" : "#1E40AF") 
+                      : (theme.colors.text || '#000000'),
                   }}>
-                    {profile.streak || 0}
+                    {waterIntake > 0 ? `${Math.round(waterIntake / 1000)}L` : '0L'}
                   </Text>
                 </View>
-              )}
+                
+                {/* Steps Badge */}
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: steps > 0
+                    ? (theme.isDark ? '#1F2937' : '#374151')
+                    : (theme.colors.card || '#FFFFFF'),
+                  borderRadius: 20,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderWidth: steps > 0 ? 0 : 1,
+                  borderColor: theme.colors.border || '#E5E7EB',
+                }}>
+                  <Ionicons 
+                    name="walk" 
+                    size={16} 
+                    color={steps > 0 ? "#3BB273" : (theme.colors.textSecondary || '#9CA3AF')} 
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={{
+                    fontSize: 14,
+                    fontWeight: '700',
+                    color: steps > 0 ? "#FFFFFF" : (theme.colors.text || '#000000'),
+                  }}>
+                    {steps > 0 ? steps.toLocaleString() : '0'}
+                  </Text>
+                </View>
+                
+                {/* Badges/Conquistas Badge */}
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: badges.length > 0
+                    ? (theme.isDark ? '#1F2937' : '#374151')
+                    : (theme.colors.card || '#FFFFFF'),
+                  borderRadius: 20,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderWidth: badges.length > 0 ? 0 : 1,
+                  borderColor: theme.colors.border || '#E5E7EB',
+                }}>
+                  <Ionicons 
+                    name="trophy" 
+                    size={16} 
+                    color={badges.length > 0 ? "#F59E0B" : (theme.colors.textSecondary || '#9CA3AF')} 
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={{
+                    fontSize: 14,
+                    fontWeight: '700',
+                    color: badges.length > 0 ? "#FFFFFF" : (theme.colors.text || '#000000'),
+                  }}>
+                    {badges.length}
+                  </Text>
+                </View>
+              </View>
             </View>
           </MotiView>
 
@@ -659,7 +838,7 @@ export function DashboardScreen({ navigation }: any) {
                   const dayNumber = date.getDate();
                   
                   days.push(
-                    <TouchableOpacity
+            <TouchableOpacity
                       key={date.toISOString()}
                       onPress={() => setSelectedDate(date)}
                       activeOpacity={0.7}
@@ -731,13 +910,13 @@ export function DashboardScreen({ navigation }: any) {
                           {dayNumber}
                         </Text>
                       </View>
-                    </TouchableOpacity>
+            </TouchableOpacity>
                   );
                 }
                 
                 return days;
               })()}
-            </View>
+          </View>
           </MotiView>
 
           {/* Premium Promo Card */}
@@ -748,9 +927,9 @@ export function DashboardScreen({ navigation }: any) {
           />
 
           {/* Gráfico Circular */}
-          <MotiView
-            from={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
+            <MotiView
+              from={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
             transition={{ type: 'timing', duration: 500, delay: 200 }}
             style={{ marginBottom: 24 }}
           >
@@ -765,18 +944,53 @@ export function DashboardScreen({ navigation }: any) {
             style={{ marginBottom: 24 }}
           >
             <ScrollView
+              ref={macroScrollViewRef}
               horizontal
               pagingEnabled
               showsHorizontalScrollIndicator={false}
               onMomentumScrollEnd={(event) => {
                 const cardWidth = screenWidth;
-                const index = Math.round(event.nativeEvent.contentOffset.x / cardWidth);
+                const offset = event.nativeEvent.contentOffset.x;
+                const maxOffset = screenWidth; // Máximo: apenas 2 slides (0 e 1)
+                
+                // Se passou do limite, corrigir suavemente após um pequeno delay
+                if (offset > maxOffset + 1) {
+                  // Usar setTimeout para dar tempo ao momentum natural terminar
+                  setTimeout(() => {
+                    macroScrollViewRef.current?.scrollTo({ 
+                      x: maxOffset, 
+                      animated: true 
+                    });
+                  }, 50);
+                  setCurrentMacroIndex(1);
+                  return;
+                }
+                
+                const clampedOffset = Math.min(maxOffset, Math.max(0, offset));
+                const index = Math.round(clampedOffset / cardWidth);
                 setCurrentMacroIndex(Math.min(1, Math.max(0, index)));
               }}
-              contentContainerStyle={{ width: screenWidth * 2 }}
-              decelerationRate="fast"
+              onScrollEndDrag={(event) => {
+                const offset = event.nativeEvent.contentOffset.x;
+                const maxOffset = screenWidth;
+                
+                // Se está tentando arrastar além do limite, aplicar correção suave
+                if (offset > maxOffset) {
+                  setTimeout(() => {
+                    macroScrollViewRef.current?.scrollTo({ 
+                      x: maxOffset, 
+                      animated: true 
+                    });
+                  }, 100);
+                }
+              }}
+              contentContainerStyle={{ width: screenWidth * 2, flexDirection: 'row', paddingBottom: 8 }}
+              decelerationRate={0.9}
               snapToInterval={screenWidth}
               snapToAlignment="start"
+              bounces={false}
+              scrollEnabled={true}
+              overScrollMode="never"
             >
               {/* Slide 1: Proteína, Carboidratos, Gordura */}
               <View style={{
@@ -784,6 +998,8 @@ export function DashboardScreen({ navigation }: any) {
                 flexDirection: 'row',
                 paddingLeft: 0,
                 paddingRight: 24,
+                paddingBottom: 4,
+                alignItems: 'flex-start',
               }}>
                   {/* Proteína */}
                   <View style={{
@@ -794,9 +1010,10 @@ export function DashboardScreen({ navigation }: any) {
                     alignItems: 'center',
                     shadowColor: '#000',
                     shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 8,
-                    elevation: 3,
+                    shadowOpacity: theme.isDark ? 0.1 : 0.05,
+                    shadowRadius: 4,
+                    elevation: theme.isDark ? 2 : 1,
+                    overflow: 'visible',
                   }}>
                   <View style={{
                     width: 48,
@@ -816,15 +1033,15 @@ export function DashboardScreen({ navigation }: any) {
                     marginBottom: 4,
                   }}>
                     {macros.protein}g
-                  </Text>
+                </Text>
                   <Text style={{
                     fontSize: 12,
                     color: theme.colors.textSecondary || '#9CA3AF',
                     fontWeight: '600',
                   }}>
                     {t('dashboard.protein')}
-                  </Text>
-                  </View>
+                </Text>
+              </View>
 
                   {/* Carboidratos */}
                   <View style={{
@@ -836,9 +1053,10 @@ export function DashboardScreen({ navigation }: any) {
                     alignItems: 'center',
                     shadowColor: '#000',
                     shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 8,
-                    elevation: 3,
+                    shadowOpacity: theme.isDark ? 0.1 : 0.05,
+                    shadowRadius: 4,
+                    elevation: theme.isDark ? 2 : 1,
+                    overflow: 'visible',
                   }}>
                   <View style={{
                     width: 48,
@@ -865,8 +1083,8 @@ export function DashboardScreen({ navigation }: any) {
                     fontWeight: '600',
                   }}>
                     {t('dashboard.carbs')}
-                  </Text>
-                  </View>
+                </Text>
+              </View>
 
                   {/* Gordura */}
                   <View style={{
@@ -878,9 +1096,10 @@ export function DashboardScreen({ navigation }: any) {
                     alignItems: 'center',
                     shadowColor: '#000',
                     shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 8,
-                    elevation: 3,
+                    shadowOpacity: theme.isDark ? 0.1 : 0.05,
+                    shadowRadius: 4,
+                    elevation: theme.isDark ? 2 : 1,
+                    overflow: 'visible',
                   }}>
                   <View style={{
                     width: 48,
@@ -892,7 +1111,7 @@ export function DashboardScreen({ navigation }: any) {
                     marginBottom: 8,
                   }}>
                     <Ionicons name="flame" size={24} color="#EAB308" />
-                  </View>
+            </View>
                   <Text style={{
                     fontSize: 24,
                     fontWeight: '800',
@@ -916,6 +1135,8 @@ export function DashboardScreen({ navigation }: any) {
                 width: screenWidth,
                 paddingLeft: 0,
                 paddingRight: 24,
+                overflow: 'hidden',
+                backgroundColor: 'transparent',
               }}>
                 <View style={{ 
                   flexDirection: 'row', 
@@ -923,6 +1144,7 @@ export function DashboardScreen({ navigation }: any) {
                   justifyContent: 'space-between',
                   marginBottom: 16,
                   width: Math.floor(screenWidth - WATER_SLIDE_PADDING - WATER_SLIDE_PADDING),
+                  backgroundColor: 'transparent',
                 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <View style={{
@@ -935,7 +1157,7 @@ export function DashboardScreen({ navigation }: any) {
                       marginRight: 12,
                     }}>
                       <Ionicons name="water" size={22} color="#3B82F6" />
-                    </View>
+          </View>
                     <Text style={{
                       fontSize: 20,
                       fontWeight: '700',
@@ -976,9 +1198,7 @@ export function DashboardScreen({ navigation }: any) {
                   onPress={() => setShowWaterModal(true)}
                   activeOpacity={0.7}
                   style={{
-                    backgroundColor: theme.mode === 'dark' 
-                      ? 'rgba(59, 130, 246, 0.3)' 
-                      : 'rgba(59, 130, 246, 0.9)',
+                    backgroundColor: '#3B82F6',
                     borderRadius: 16,
                     padding: 16,
                     flexDirection: 'row',
@@ -989,10 +1209,6 @@ export function DashboardScreen({ navigation }: any) {
                     shadowOpacity: 0.3,
                     shadowRadius: 8,
                     elevation: 5,
-                    borderWidth: 1,
-                    borderColor: theme.mode === 'dark' 
-                      ? 'rgba(59, 130, 246, 0.4)' 
-                      : 'rgba(59, 130, 246, 1)',
                     width: Math.floor(screenWidth - WATER_SLIDE_PADDING - WATER_SLIDE_PADDING),
                     maxWidth: Math.floor(screenWidth - 24 - 24),
                   }}
@@ -1056,7 +1272,7 @@ export function DashboardScreen({ navigation }: any) {
                 justifyContent: 'center',
                 marginRight: 12,
               }}>
-                <Ionicons name="restaurant" size={22} color={theme.colors.primary || '#3BB273'} />
+                <Ionicons name="fast-food-outline" size={22} color={theme.colors.primary || '#3BB273'} />
               </View>
               <Text style={{
                 fontSize: 20,
@@ -1076,7 +1292,21 @@ export function DashboardScreen({ navigation }: any) {
                 borderColor: theme.colors.border || '#E5E7EB',
                 borderStyle: 'dashed',
               }}>
-                <Text style={{ fontSize: 48, marginBottom: 12 }}>🍽️</Text>
+                <View style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 32,
+                  backgroundColor: theme.colors.primary + '15',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 16,
+                }}>
+                  <Ionicons 
+                    name="restaurant-outline" 
+                    size={32} 
+                    color={theme.colors.primary || '#3BB273'} 
+                  />
+                </View>
                 <Text style={{
                   color: theme.colors.textSecondary || '#9CA3AF',
                   fontSize: 16,
@@ -1111,22 +1341,61 @@ export function DashboardScreen({ navigation }: any) {
                         calories={meal.calories || 0}
                         mealType={meal.mealType || 'snack'}
                         image={meal.image}
-                        time={meal.date?.toLocaleTimeString('pt-PT', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                        }) || ''}
+                        time={(() => {
+                          // Sempre usar a data real da refeição armazenada
+                          if (!meal.date) return '';
+                          
+                          // Garantir que meal.date é um objeto Date válido
+                          let mealDate: Date;
+                          if (meal.date instanceof Date) {
+                            mealDate = meal.date;
+                          } else if (typeof meal.date === 'string' || typeof meal.date === 'number') {
+                            mealDate = new Date(meal.date);
+                          } else {
+                            return '';
+                          }
+                          
+                          // Verificar se a data é válida
+                          if (isNaN(mealDate.getTime())) {
+                            return '';
+                          }
+                          
+                          // Sempre mostrar a data de quando foi realmente adicionada (addedAt) + hora da refeição
+                          // Isso mostra quando a refeição foi realmente adicionada, não para que dia foi adicionada
+                          const locale = language === 'pt' ? 'pt-PT' : 
+                                        language === 'es' ? 'es-ES' : 
+                                        language === 'fr' ? 'fr-FR' : 
+                                        language === 'de' ? 'de-DE' : 
+                                        language === 'it' ? 'it-IT' : 'en-US';
+                          
+                          // Usar addedAt se disponível (quando foi realmente adicionada)
+                          // Se não existir addedAt, usar date (para refeições antigas)
+                          const dateToShow = meal.addedAt || mealDate;
+                          
+                          const dateStr = dateToShow.toLocaleDateString(locale, {
+                            day: '2-digit',
+                            month: '2-digit',
+                          });
+                          
+                          const timeStr = mealDate.toLocaleTimeString(locale, {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          });
+                          
+                          return `${dateStr} ${timeStr}`;
+                        })()}
                         onPress={() => {
                           setSelectedMeal(meal);
                           setShowMealModal(true);
                         }}
                         onDelete={() => handleDeleteMeal(meal.id)}
-                      />
+                />
                     </MotiView>
                   ))}
           </View>
             )}
           </MotiView>
-        </View>
+          </View>
       </ScrollView>
 
       {/* Modal de Detalhes da Refeição */}
@@ -1179,7 +1448,7 @@ export function DashboardScreen({ navigation }: any) {
                   }} numberOfLines={2}>
                     {selectedMeal.name}
                   </Text>
-      <TouchableOpacity
+            <TouchableOpacity
                     onPress={() => setShowMealModal(false)}
                     style={{
                       padding: 8,
@@ -1220,7 +1489,7 @@ export function DashboardScreen({ navigation }: any) {
                         fontWeight: '600',
                       }}>
                         {t('dashboard.mealType')}
-                      </Text>
+                  </Text>
                       <Text style={{
                         fontSize: 16,
                         color: theme.colors.text,
@@ -1230,8 +1499,8 @@ export function DashboardScreen({ navigation }: any) {
                          selectedMeal.mealType === 'lunch' ? '🍽️ ' + t('addMeal.lunch') :
                          selectedMeal.mealType === 'dinner' ? '🌙 ' + t('addMeal.dinner') :
                          '🍎 ' + t('addMeal.snack')}
-                      </Text>
-                    </View>
+                  </Text>
+                </View>
 
                     {/* Data e Hora */}
                     <View>
@@ -1257,7 +1526,7 @@ export function DashboardScreen({ navigation }: any) {
                           minute: '2-digit',
                         })}
                       </Text>
-                    </View>
+              </View>
 
                     {/* Calorias */}
                     <View style={{
@@ -1265,14 +1534,6 @@ export function DashboardScreen({ navigation }: any) {
                       borderRadius: 14,
                       padding: 12,
                     }}>
-                      <Text style={{
-                        fontSize: 13,
-                        color: theme.colors.textSecondary || '#9CA3AF',
-                        marginBottom: 6,
-                        fontWeight: '600',
-                      }}>
-                        {t('dashboard.calories')}
-                      </Text>
                       <Text style={{
                         fontSize: 28,
                         color: theme.colors.primary || '#3BB273',
@@ -1412,7 +1673,7 @@ export function DashboardScreen({ navigation }: any) {
                       }}>
                         {t('dashboard.delete')}
                       </Text>
-                    </TouchableOpacity>
+            </TouchableOpacity>
                   </View>
                 </View>
               </>
@@ -1470,7 +1731,7 @@ export function DashboardScreen({ navigation }: any) {
               marginBottom: 20,
             }}>
               <Ionicons name="trash" size={32} color="#EF4444" />
-            </View>
+        </View>
 
             {/* Título */}
             <Text style={{
@@ -1500,7 +1761,7 @@ export function DashboardScreen({ navigation }: any) {
               gap: 12,
             }}>
               {/* Botão Cancelar */}
-              <TouchableOpacity
+      <TouchableOpacity
                 onPress={() => {
                   setShowDeleteModal(false);
                   setMealToDelete(null);
@@ -1522,7 +1783,7 @@ export function DashboardScreen({ navigation }: any) {
                 }}>
                   {t('common.cancel')}
                 </Text>
-              </TouchableOpacity>
+      </TouchableOpacity>
 
               {/* Botão Eliminar */}
               <TouchableOpacity

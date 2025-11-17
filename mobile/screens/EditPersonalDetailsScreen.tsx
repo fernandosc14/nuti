@@ -4,7 +4,7 @@
  * Tela para editar os detalhes pessoais (peso, altura, objetivo)
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useUnits } from '../context/UnitsContext';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import Slider from '@react-native-community/slider';
@@ -27,25 +28,64 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
   const { profile, updateProfile } = useUser();
   const { theme } = useTheme();
   const { t } = useLanguage();
+  const { units, convertWeight, convertHeight, formatHeight, parseHeight } = useUnits();
   const [weight, setWeight] = useState('');
   const [height, setHeight] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isImperial, setIsImperial] = useState(false);
   const [weightText, setWeightText] = useState('');
   const [heightText, setHeightText] = useState('');
   const [weightIsEmpty, setWeightIsEmpty] = useState(false);
   const [heightIsEmpty, setHeightIsEmpty] = useState(false);
+  const initialized = useRef(false);
+
+  // Função para formatar peso com 1 casa decimal (arredondar corretamente)
+  const formatWeight = (value: number): string => {
+    // Arredondar para 1 casa decimal
+    const rounded = Math.round(value * 10) / 10;
+    return rounded.toFixed(1);
+  };
+
+  // Valores mínimos e máximos
+  const MIN_WEIGHT_KG = 30;
+  const MAX_WEIGHT_KG = 200;
+  const MIN_WEIGHT_LB = Math.round(convertWeight(MIN_WEIGHT_KG, 'kg', 'lb'));
+  const MAX_WEIGHT_LB = Math.round(convertWeight(MAX_WEIGHT_KG, 'kg', 'lb'));
+  
+  // Valores mínimos e máximos de altura
+  const MIN_HEIGHT_CM = 120;
+  const MAX_HEIGHT_CM = 220;
+  const MIN_HEIGHT_IN = Math.round(convertHeight(MIN_HEIGHT_CM, 'cm', 'in'));
+  const MAX_HEIGHT_IN = Math.round(convertHeight(MAX_HEIGHT_CM, 'cm', 'in'));
 
   useEffect(() => {
-    if (profile) {
-      setWeight(profile.weight ? profile.weight.toString() : '');
-      setHeight(profile.height ? profile.height.toString() : '');
+    if (profile && !initialized.current) {
+      // Converter peso de kg (Firestore) para a unidade selecionada
+      const weightInKg = profile.weight || 0;
+      const displayWeight = units.weight === 'lb' 
+        ? convertWeight(weightInKg, 'kg', 'lb')
+        : weightInKg;
+      
+      setWeight(displayWeight > 0 ? formatWeight(displayWeight) : '');
+      
+      // Converter altura de cm (Firestore) para a unidade selecionada
+      const heightInCm = profile.height || 175;
+      if (units.height === 'in') {
+        // Converter para ft'in" formato
+        const inches = convertHeight(heightInCm, 'cm', 'in');
+        const feet = Math.floor(inches / 12);
+        const remainingInches = Math.round(inches % 12);
+        setHeight(`${feet}'${remainingInches}"`);
+      } else {
+        setHeight(Math.round(heightInCm).toString());
+      }
+      
       setWeightText('');
       setHeightText('');
       setWeightIsEmpty(false);
       setHeightIsEmpty(false);
+      initialized.current = true;
     }
-  }, [profile]);
+  }, [profile, units.weight, units.height, convertWeight, convertHeight]);
 
   const handleSave = async () => {
     if (!weight || !height) {
@@ -65,54 +105,52 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
       if (weightText !== '') {
         const num = parseFloat(weightText.replace(/[^0-9.]/g, ''));
         if (!isNaN(num)) {
-          if (isImperial) {
-            const kg = num / 2.20462;
-            if (kg >= 30 && kg <= 200) {
-              finalWeight = (Math.round(kg * 2) / 2).toString();
+          if (units.weight === 'lb') {
+            // Converter de lb para kg antes de guardar (guardar valor exato, sem arredondar)
+            const kg = convertWeight(num, 'lb', 'kg');
+            if (kg >= MIN_WEIGHT_KG && kg <= MAX_WEIGHT_KG) {
+              finalWeight = kg.toString(); // Guardar valor exato
             }
           } else {
-            if (num >= 30 && num <= 200) {
-              finalWeight = (Math.round(num * 2) / 2).toString();
+            // Já está em kg (guardar valor exato)
+            if (num >= MIN_WEIGHT_KG && num <= MAX_WEIGHT_KG) {
+              finalWeight = num.toString();
             }
+          }
+        }
+      } else if (weight) {
+        // Se não há weightText mas há weight, converter se necessário
+        const weightNum = parseFloat(weight);
+        if (!isNaN(weightNum)) {
+          if (units.weight === 'lb') {
+            // Converter de lb para kg antes de guardar (guardar valor exato)
+            const kg = convertWeight(weightNum, 'lb', 'kg');
+            finalWeight = kg.toString(); // Guardar valor exato
+          } else {
+            finalWeight = weightNum.toString(); // Guardar valor exato
           }
         }
       }
       
       if (heightText !== '') {
-        let newHeight = parseFloat(height) || 175;
-        if (isImperial) {
-          const cleanText = heightText.replace(/[^0-9'"]/g, '');
-          let feet = 0;
-          let inches = 0;
-          const match1 = cleanText.match(/(\d+)'(\d+)/);
-          if (match1) {
-            feet = parseInt(match1[1]) || 0;
-            inches = parseInt(match1[2]) || 0;
-          } else {
-            const num = parseInt(cleanText);
-            if (!isNaN(num)) {
-              if (num >= 40 && num <= 84) {
-                feet = Math.floor(num / 10);
-                inches = num % 10;
-              } else if (num >= 4 && num <= 7) {
-                feet = num;
-                inches = 0;
-              }
-            }
-          }
-          if (feet >= 4 && feet <= 7 && inches >= 0 && inches <= 11) {
-            const totalCm = feet * 30.48 + inches * 2.54;
-            if (totalCm >= 120 && totalCm <= 220) {
-              newHeight = Math.round(totalCm);
-            }
-          }
+        // Converter altura da unidade selecionada para cm
+        const heightInCm = parseHeight(heightText, units.height);
+        if (heightInCm >= 120 && heightInCm <= 220) {
+          finalHeight = heightInCm.toString();
+        }
+      } else if (height) {
+        // Se não há heightText mas há height, converter se necessário
+        if (units.height === 'in') {
+          // Converter de ft'in" para cm
+          const heightInCm = parseHeight(height, 'in');
+          finalHeight = heightInCm.toString();
         } else {
-          const num = parseInt(heightText.replace(/[^0-9]/g, ''));
-          if (!isNaN(num) && num >= 120 && num <= 220) {
-            newHeight = num;
+          // Já está em cm
+          const heightNum = parseFloat(height);
+          if (!isNaN(heightNum) && heightNum >= 120 && heightNum <= 220) {
+            finalHeight = heightNum.toString();
           }
         }
-        finalHeight = newHeight.toString();
       }
 
       await updateProfile({
@@ -120,20 +158,23 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
         height: parseFloat(finalHeight),
       });
 
+      setLoading(false);
       Toast.show({
         type: 'success',
         text1: t('profile.updateSuccess') || 'Sucesso',
         text2: t('profile.detailsUpdated') || 'Detalhes atualizados com sucesso',
       });
-      navigation.goBack();
+      // Pequeno delay para garantir que o Toast seja visível
+      setTimeout(() => {
+        navigation.goBack();
+      }, 500);
     } catch (error: any) {
+      setLoading(false);
       Toast.show({
         type: 'error',
         text1: t('common.error') || 'Erro',
         text2: error.message || t('profile.updateError') || 'Erro ao atualizar detalhes',
       });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -193,68 +234,42 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
               }}>
                 {t('profile.weight')}
               </Text>
-              <View style={{ flexDirection: 'row', backgroundColor: theme.colors.border || '#E5E7EB', borderRadius: 8, padding: 2 }}>
-                <TouchableOpacity
-                  onPress={() => setIsImperial(false)}
-                  activeOpacity={0.7}
-                  style={{
-                    paddingVertical: 6,
-                    paddingHorizontal: 12,
-                    borderRadius: 6,
-                    backgroundColor: !isImperial ? theme.colors.primary || '#3BB273' : 'transparent',
-                  }}
-                >
-                  <Text style={{
-                    fontSize: 12,
-                    fontWeight: '600',
-                    color: !isImperial ? '#FFFFFF' : theme.colors.textSecondary || '#9CA3AF',
-                  }}>
-                    kg
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setIsImperial(true)}
-                  activeOpacity={0.7}
-                  style={{
-                    paddingVertical: 6,
-                    paddingHorizontal: 12,
-                    borderRadius: 6,
-                    backgroundColor: isImperial ? theme.colors.primary || '#3BB273' : 'transparent',
-                  }}
-                >
-                  <Text style={{
-                    fontSize: 12,
-                    fontWeight: '600',
-                    color: isImperial ? '#FFFFFF' : theme.colors.textSecondary || '#9CA3AF',
-                  }}>
-                    lbs
-                  </Text>
-                </TouchableOpacity>
-              </View>
+              <Text style={{
+                fontSize: 14,
+                fontWeight: '600',
+                color: theme.colors.primary || '#3BB273',
+              }}>
+                {units.weight}
+              </Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
               <TouchableOpacity
                 onPress={() => {
-                  let currentValue = parseFloat(weight) || 70;
+                  let currentValue = parseFloat(weight) || (units.weight === 'lb' ? MIN_WEIGHT_LB + (MAX_WEIGHT_LB - MIN_WEIGHT_LB) / 2 : 70);
                   if (weightText !== '') {
                     const num = parseFloat(weightText.replace(/[^0-9.]/g, ''));
                     if (!isNaN(num)) {
-                      if (isImperial) {
-                        const kg = num / 2.20462;
-                        if (kg >= 30 && kg <= 200) {
-                          currentValue = Math.round(kg * 2) / 2;
-                          setWeight(currentValue.toString());
+                      if (units.weight === 'lb') {
+                        const kg = convertWeight(num, 'lb', 'kg');
+                        if (kg >= MIN_WEIGHT_KG && kg <= MAX_WEIGHT_KG) {
+                          const displayKg = convertWeight(kg, 'kg', units.weight);
+                          currentValue = parseFloat(displayKg.toFixed(1));
+                          setWeight(formatWeight(currentValue));
                         }
                       } else {
-                        if (num >= 30 && num <= 200) {
-                          currentValue = Math.round(num * 2) / 2;
-                          setWeight(currentValue.toString());
+                        if (num >= MIN_WEIGHT_KG && num <= MAX_WEIGHT_KG) {
+                          currentValue = parseFloat(num.toFixed(1));
+                          setWeight(formatWeight(currentValue));
                         }
                       }
                     }
                   }
-                  const newValue = Math.max(30, currentValue - 0.5);
-                  setWeight(newValue.toString());
+                  // Converter limites para a unidade atual
+                  const minValue = units.weight === 'lb' ? MIN_WEIGHT_LB : MIN_WEIGHT_KG;
+                  const maxValue = units.weight === 'lb' ? MAX_WEIGHT_LB : MAX_WEIGHT_KG;
+                  const step = units.weight === 'lb' ? 1 : 0.5;
+                  const newValue = Math.max(minValue, parseFloat((currentValue - step).toFixed(1)));
+                  setWeight(formatWeight(newValue));
                   setWeightText('');
                 }}
                 activeOpacity={0.7}
@@ -279,7 +294,7 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
                   textAlign: 'center',
                   minWidth: 120,
                 }}
-                value={weightText !== '' ? weightText : (weightIsEmpty ? '' : (isImperial ? `${Math.round(parseFloat(weight || '70') * 2.20462)}` : weight))}
+                value={weightText !== '' ? weightText : (weightIsEmpty ? '' : weight)}
                 onChangeText={(text) => {
                   setWeightText(text);
                   if (text === '') {
@@ -295,16 +310,17 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
                   }
                   const num = parseFloat(weightText.replace(/[^0-9.]/g, ''));
                   if (!isNaN(num)) {
-                    if (isImperial) {
-                      const kg = num / 2.20462;
-                      if (kg >= 30 && kg <= 200) {
-                        setWeight((Math.round(kg * 2) / 2).toString());
+                    if (units.weight === 'lb') {
+                      const kg = convertWeight(num, 'lb', 'kg');
+                      if (kg >= MIN_WEIGHT_KG && kg <= MAX_WEIGHT_KG) {
+                        const displayKg = convertWeight(kg, 'kg', units.weight);
+                        setWeight(formatWeight(displayKg));
                         setWeightIsEmpty(false);
                         setWeightText('');
                       }
                     } else {
-                      if (num >= 30 && num <= 200) {
-                        setWeight((Math.round(num * 2) / 2).toString());
+                      if (num >= MIN_WEIGHT_KG && num <= MAX_WEIGHT_KG) {
+                        setWeight(formatWeight(num));
                         setWeightIsEmpty(false);
                         setWeightText('');
                       }
@@ -317,26 +333,31 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
               
               <TouchableOpacity
                 onPress={() => {
-                  let currentValue = parseFloat(weight) || 70;
+                  let currentValue = parseFloat(weight) || (units.weight === 'lb' ? MIN_WEIGHT_LB + (MAX_WEIGHT_LB - MIN_WEIGHT_LB) / 2 : 70);
                   if (weightText !== '') {
                     const num = parseFloat(weightText.replace(/[^0-9.]/g, ''));
                     if (!isNaN(num)) {
-                      if (isImperial) {
-                        const kg = num / 2.20462;
-                        if (kg >= 30 && kg <= 200) {
-                          currentValue = Math.round(kg * 2) / 2;
-                          setWeight(currentValue.toString());
+                      if (units.weight === 'lb') {
+                        const kg = convertWeight(num, 'lb', 'kg');
+                        if (kg >= MIN_WEIGHT_KG && kg <= MAX_WEIGHT_KG) {
+                          const displayKg = convertWeight(kg, 'kg', units.weight);
+                          currentValue = parseFloat(displayKg.toFixed(1));
+                          setWeight(formatWeight(currentValue));
                         }
                       } else {
-                        if (num >= 30 && num <= 200) {
-                          currentValue = Math.round(num * 2) / 2;
-                          setWeight(currentValue.toString());
+                        if (num >= MIN_WEIGHT_KG && num <= MAX_WEIGHT_KG) {
+                          currentValue = parseFloat(num.toFixed(1));
+                          setWeight(formatWeight(currentValue));
                         }
                       }
                     }
                   }
-                  const newValue = Math.min(200, currentValue + 0.5);
-                  setWeight(newValue.toString());
+                  // Converter limites para a unidade atual
+                  const minValue = units.weight === 'lb' ? MIN_WEIGHT_LB : MIN_WEIGHT_KG;
+                  const maxValue = units.weight === 'lb' ? MAX_WEIGHT_LB : MAX_WEIGHT_KG;
+                  const step = units.weight === 'lb' ? 1 : 0.5;
+                  const newValue = Math.min(maxValue, parseFloat((currentValue + step).toFixed(1)));
+                  setWeight(formatWeight(newValue));
                   setWeightText('');
                 }}
                 activeOpacity={0.7}
@@ -359,16 +380,16 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
               color: theme.colors.textSecondary || '#9CA3AF',
               marginBottom: 8,
             }}>
-              {isImperial ? 'lbs' : 'kg'}
+              {units.weight}
             </Text>
             <Slider
               style={{ width: '100%', height: 40 }}
-              minimumValue={30}
-              maximumValue={200}
-              step={0.5}
-              value={parseFloat(weight) || 70}
+              minimumValue={units.weight === 'lb' ? MIN_WEIGHT_LB : MIN_WEIGHT_KG}
+              maximumValue={units.weight === 'lb' ? MAX_WEIGHT_LB : MAX_WEIGHT_KG}
+              step={units.weight === 'lb' ? 1 : 0.5}
+              value={parseFloat(weight) || (units.weight === 'lb' ? MIN_WEIGHT_LB + (MAX_WEIGHT_LB - MIN_WEIGHT_LB) / 2 : 70)}
               onValueChange={(value) => {
-                setWeight((Math.round(value * 2) / 2).toString());
+                setWeight(formatWeight(value));
                 setWeightText('');
                 setWeightIsEmpty(false);
               }}
@@ -388,58 +409,40 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
               }}>
                 {t('profile.height')}
               </Text>
-              <View style={{ flexDirection: 'row', backgroundColor: theme.colors.border || '#E5E7EB', borderRadius: 8, padding: 2 }}>
-                <TouchableOpacity
-                  onPress={() => setIsImperial(false)}
-                  activeOpacity={0.7}
-                  style={{
-                    paddingVertical: 6,
-                    paddingHorizontal: 12,
-                    borderRadius: 6,
-                    backgroundColor: !isImperial ? theme.colors.primary || '#3BB273' : 'transparent',
-                  }}
-                >
-                  <Text style={{
-                    fontSize: 12,
-                    fontWeight: '600',
-                    color: !isImperial ? '#FFFFFF' : theme.colors.textSecondary || '#9CA3AF',
-                  }}>
-                    cm
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setIsImperial(true)}
-                  activeOpacity={0.7}
-                  style={{
-                    paddingVertical: 6,
-                    paddingHorizontal: 12,
-                    borderRadius: 6,
-                    backgroundColor: isImperial ? theme.colors.primary || '#3BB273' : 'transparent',
-                  }}
-                >
-                  <Text style={{
-                    fontSize: 12,
-                    fontWeight: '600',
-                    color: isImperial ? '#FFFFFF' : theme.colors.textSecondary || '#9CA3AF',
-                  }}>
-                    ft/in
-                  </Text>
-                </TouchableOpacity>
-              </View>
+              <Text style={{
+                fontSize: 14,
+                fontWeight: '600',
+                color: theme.colors.primary || '#3BB273',
+              }}>
+                {units.height === 'cm' ? 'cm' : "ft'in"}
+              </Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
               <TouchableOpacity
                 onPress={() => {
-                  let currentValue = parseFloat(height) || 175;
+                  let currentValueCm = 175;
                   if (heightText !== '') {
-                    const num = parseInt(heightText.replace(/[^0-9]/g, ''));
-                    if (!isNaN(num) && num >= 120 && num <= 220) {
-                      currentValue = num;
-                      setHeight(currentValue.toString());
+                    currentValueCm = parseHeight(heightText, units.height);
+                  } else if (height) {
+                    if (units.height === 'in') {
+                      currentValueCm = parseHeight(height, 'in');
+                    } else {
+                      currentValueCm = parseFloat(height) || 175;
                     }
                   }
-                  const newValue = Math.max(120, currentValue - 1);
-                  setHeight(newValue.toString());
+                  
+                  // Decrementar (em cm)
+                  const newValueCm = Math.max(MIN_HEIGHT_CM, currentValueCm - 1);
+                  
+                  // Converter de volta para a unidade selecionada
+                  if (units.height === 'in') {
+                    const inches = convertHeight(newValueCm, 'cm', 'in');
+                    const feet = Math.floor(inches / 12);
+                    const remainingInches = Math.round(inches % 12);
+                    setHeight(`${feet}'${remainingInches}"`);
+                  } else {
+                    setHeight(Math.round(newValueCm).toString());
+                  }
                   setHeightText('');
                 }}
                 activeOpacity={0.7}
@@ -458,13 +461,13 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
               
               <TextInput
                 style={{
-                  fontSize: 32,
+                  fontSize: units.height === 'in' ? 24 : 32,
                   fontWeight: '700',
                   color: theme.colors.primary || '#3BB273',
                   textAlign: 'center',
-                  minWidth: 120,
+                  minWidth: units.height === 'in' ? 140 : 120,
                 }}
-                value={heightText !== '' ? heightText : (heightIsEmpty ? '' : (isImperial ? `${Math.floor(parseFloat(height || '175') / 30.48)}'${Math.round((parseFloat(height || '175') % 30.48) / 2.54)}"` : height))}
+                value={heightText !== '' ? heightText : (heightIsEmpty ? '' : height)}
                 onChangeText={(text) => {
                   setHeightText(text);
                   if (text === '') {
@@ -478,59 +481,55 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
                     setHeightIsEmpty(true);
                     return;
                   }
-                  let newHeight = parseFloat(height) || 175;
-                  if (isImperial) {
-                    const cleanText = heightText.replace(/[^0-9'"]/g, '');
-                    let feet = 0;
-                    let inches = 0;
-                    const match1 = cleanText.match(/(\d+)'(\d+)/);
-                    if (match1) {
-                      feet = parseInt(match1[1]) || 0;
-                      inches = parseInt(match1[2]) || 0;
+                  
+                  // Converter altura da unidade selecionada para cm
+                  const heightInCm = parseHeight(heightText, units.height);
+                  
+                  // Validar
+                  if (heightInCm >= MIN_HEIGHT_CM && heightInCm <= MAX_HEIGHT_CM) {
+                    // Converter de volta para a unidade selecionada
+                    if (units.height === 'in') {
+                      const inches = convertHeight(heightInCm, 'cm', 'in');
+                      const feet = Math.floor(inches / 12);
+                      const remainingInches = Math.round(inches % 12);
+                      setHeight(`${feet}'${remainingInches}"`);
                     } else {
-                      const num = parseInt(cleanText);
-                      if (!isNaN(num)) {
-                        if (num >= 40 && num <= 84) {
-                          feet = Math.floor(num / 10);
-                          inches = num % 10;
-                        } else if (num >= 4 && num <= 7) {
-                          feet = num;
-                          inches = 0;
-                        }
-                      }
-                    }
-                    if (feet >= 4 && feet <= 7 && inches >= 0 && inches <= 11) {
-                      const totalCm = feet * 30.48 + inches * 2.54;
-                      if (totalCm >= 120 && totalCm <= 220) {
-                        newHeight = Math.round(totalCm);
-                      }
-                    }
-                  } else {
-                    const num = parseInt(heightText.replace(/[^0-9]/g, ''));
-                    if (!isNaN(num) && num >= 120 && num <= 220) {
-                      newHeight = num;
+                      setHeight(Math.round(heightInCm).toString());
                     }
                   }
-                  setHeight(newHeight.toString());
                   setHeightIsEmpty(false);
                   setHeightText('');
                 }}
-                keyboardType={isImperial ? "default" : "numeric"}
+                keyboardType="numeric"
                 selectTextOnFocus={false}
+                placeholder={units.height === 'in' ? "5'10\"" : '175'}
               />
               
               <TouchableOpacity
                 onPress={() => {
-                  let currentValue = parseFloat(height) || 175;
+                  let currentValueCm = 175;
                   if (heightText !== '') {
-                    const num = parseInt(heightText.replace(/[^0-9]/g, ''));
-                    if (!isNaN(num) && num >= 120 && num <= 220) {
-                      currentValue = num;
-                      setHeight(currentValue.toString());
+                    currentValueCm = parseHeight(heightText, units.height);
+                  } else if (height) {
+                    if (units.height === 'in') {
+                      currentValueCm = parseHeight(height, 'in');
+                    } else {
+                      currentValueCm = parseFloat(height) || 175;
                     }
                   }
-                  const newValue = Math.min(220, currentValue + 1);
-                  setHeight(newValue.toString());
+                  
+                  // Incrementar (em cm)
+                  const newValueCm = Math.min(MAX_HEIGHT_CM, currentValueCm + 1);
+                  
+                  // Converter de volta para a unidade selecionada
+                  if (units.height === 'in') {
+                    const inches = convertHeight(newValueCm, 'cm', 'in');
+                    const feet = Math.floor(inches / 12);
+                    const remainingInches = Math.round(inches % 12);
+                    setHeight(`${feet}'${remainingInches}"`);
+                  } else {
+                    setHeight(Math.round(newValueCm).toString());
+                  }
                   setHeightText('');
                 }}
                 activeOpacity={0.7}
@@ -553,16 +552,36 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
               color: theme.colors.textSecondary || '#9CA3AF',
               marginBottom: 8,
             }}>
-              {isImperial ? "ft'in\"" : 'cm'}
+              {units.height === 'cm' ? 'cm' : "ft'in"}
             </Text>
             <Slider
               style={{ width: '100%', height: 40 }}
-              minimumValue={120}
-              maximumValue={220}
+              minimumValue={MIN_HEIGHT_CM}
+              maximumValue={MAX_HEIGHT_CM}
               step={1}
-              value={parseFloat(height) || 175}
+              value={(() => {
+                // Converter altura atual para cm para o slider
+                if (heightText !== '') {
+                  return parseHeight(heightText, units.height);
+                } else if (height) {
+                  if (units.height === 'in') {
+                    return parseHeight(height, 'in');
+                  } else {
+                    return parseFloat(height) || 175;
+                  }
+                }
+                return 175;
+              })()}
               onValueChange={(value) => {
-                setHeight(Math.round(value).toString());
+                // Converter valor do slider para a unidade selecionada
+                if (units.height === 'in') {
+                  const inches = convertHeight(value, 'cm', 'in');
+                  const feet = Math.floor(inches / 12);
+                  const remainingInches = Math.round(inches % 12);
+                  setHeight(`${feet}'${remainingInches}"`);
+                } else {
+                  setHeight(Math.round(value).toString());
+                }
                 setHeightText('');
                 setHeightIsEmpty(false);
               }}

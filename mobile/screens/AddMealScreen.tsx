@@ -20,9 +20,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '../context/UserContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import { useUnits } from '../context/UnitsContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera } from 'expo-camera';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { searchFood, getFoodByBarcode, analyzeFoodImage, analyzeFoodDescription, FoodItem } from '../services/api';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -36,10 +37,14 @@ export function AddMealScreen({ navigation, route }: any) {
   const { user, refreshProfile } = useUser();
   const { t, language } = useLanguage();
   const { theme } = useTheme();
+  const { units } = useUnits();
   const mode = route?.params?.mode || 'search';
+  const selectedDateParam = route?.params?.selectedDate;
   const [searchQuery, setSearchQuery] = useState('');
+  const [barcodeInput, setBarcodeInput] = useState('');
   const [foodResults, setFoodResults] = useState<FoodItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState<
     'breakfast' | 'lunch' | 'dinner' | 'snack'
   >('breakfast');
@@ -63,6 +68,8 @@ export function AddMealScreen({ navigation, route }: any) {
     setSelectedMealType(defaultMealType);
   }, []);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+  const [scanned, setScanned] = useState(false);
   const [analyzedFood, setAnalyzedFood] = useState<FoodItem | null>(null);
   const [editingFood, setEditingFood] = useState<FoodItem | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -76,6 +83,7 @@ export function AddMealScreen({ navigation, route }: any) {
   }>>([]);
   const [foodDescription, setFoodDescription] = useState('');
   const [analyzingDescription, setAnalyzingDescription] = useState(false);
+  const [addingMeal, setAddingMeal] = useState(false);
   const [selectedFoods, setSelectedFoods] = useState<Array<{
     id: string;
     name: string;
@@ -87,56 +95,61 @@ export function AddMealScreen({ navigation, route }: any) {
   }>>([]);
 
   const mealTypes = [
-    { value: 'breakfast', label: 'Pequeno-almoço', icon: '☕' },
-    { value: 'lunch', label: 'Almoço', icon: '🍽️' },
-    { value: 'dinner', label: 'Jantar', icon: '🌙' },
-    { value: 'snack', label: 'Lanche', icon: '🍎' },
+    { value: 'breakfast', label: t('addMeal.breakfast'), icon: '☕' },
+    { value: 'lunch', label: t('addMeal.lunch'), icon: '🍽️' },
+    { value: 'dinner', label: t('addMeal.dinner'), icon: '🌙' },
+    { value: 'snack', label: t('addMeal.snack'), icon: '🍎' },
   ] as const;
 
   // Solicitar permissões
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  
   React.useEffect(() => {
-    (async () => {
-      const { status: cameraStatus } = await Camera.requestCameraPermissionsAsync();
-      setHasPermission(cameraStatus === 'granted');
-    })();
-  }, []);
+    if (cameraPermission) {
+      setHasPermission(cameraPermission.granted);
+    }
+  }, [cameraPermission]);
 
   // Se o modo for 'camera', abrir câmera automaticamente
   React.useEffect(() => {
     if (mode === 'camera') {
       handleTakePhoto();
     } else if (mode === 'barcode') {
-      // TODO: Implementar scanner de código de barras
-      Toast.show({
-        type: 'info',
-        text1: 'Funcionalidade em desenvolvimento',
-        text2: 'Scanner de código de barras em breve!',
-      });
+      // Modo código de barras - abrir scanner de câmera
+      if (cameraPermission?.granted) {
+        setShowBarcodeScanner(true);
+        setScanned(false);
+      } else if (cameraPermission && !cameraPermission.granted) {
+        // Solicitar permissão automaticamente
+        requestCameraPermission();
+      }
     }
-  }, [mode]);
+  }, [mode, cameraPermission]);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
 
     setLoading(true);
+    setIsSearching(true);
     try {
       const results = await searchFood(searchQuery);
       setFoodResults(results);
       if (results.length === 0) {
         Toast.show({
           type: 'info',
-          text1: 'Nenhum resultado',
-          text2: 'Tenta pesquisar com outros termos',
+          text1: t('addMeal.noResults') || 'No results',
+          text2: t('addMeal.tryOtherTerms') || 'Try searching with other terms',
         });
       }
     } catch (error) {
       Toast.show({
         type: 'error',
-        text1: 'Erro',
-        text2: 'Erro ao pesquisar alimentos',
+        text1: t('addMeal.error') || 'Error',
+        text2: t('addMeal.searchError') || 'Error searching food',
       });
     } finally {
       setLoading(false);
+      setIsSearching(false);
     }
   };
 
@@ -159,6 +172,7 @@ export function AddMealScreen({ navigation, route }: any) {
         const imageUri = result.assets[0].uri;
         setCapturedImage(imageUri);
         setLoading(true);
+        setIsSearching(false); // Não é pesquisa, é análise de imagem
 
         try {
           // Analisar imagem com IA
@@ -278,20 +292,98 @@ export function AddMealScreen({ navigation, route }: any) {
       
       Toast.show({
         type: 'error',
-        text1: 'Erro',
-        text2: error.message || 'Erro ao tirar foto. Tente novamente.',
+        text1: t('addMeal.error') || 'Error',
+        text2: error.message || t('addMeal.cameraError') || 'Error taking photo. Please try again.',
       });
       setLoading(false);
     }
   };
 
-  // Barcode scanning temporarily disabled to avoid native build issues.
-  const handleBarcodeScan = async (_data: string) => {
-    Toast.show({
-      type: 'info',
-      text1: 'Funcionalidade temporariamente desativada',
-      text2: 'Ler código de barras foi desativado para esta versão.',
-    });
+  // Processar código de barras escaneado ou inserido manualmente
+  const processBarcode = async (barcode: string) => {
+    if (!barcode.trim()) {
+      return;
+    }
+
+    const cleanBarcode = barcode.trim();
+    console.log('[AddMeal] Processando código de barras:', cleanBarcode);
+
+    setLoading(true);
+    setIsSearching(false); // Não é pesquisa, é código de barras
+    setScanned(true);
+    setShowBarcodeScanner(false);
+    
+    try {
+      const food = await getFoodByBarcode(cleanBarcode);
+      
+      if (!food) {
+        console.log('[AddMeal] Produto não encontrado para código:', cleanBarcode);
+        Toast.show({
+          type: 'error',
+          text1: t('common.error') || 'Erro',
+          text2: t('addMeal.barcodeNotFound') || `Produto não encontrado na base de dados.\nCódigo: ${cleanBarcode}\nTente pesquisar pelo nome do produto.`,
+          visibilityTime: 5000,
+        });
+        setLoading(false);
+        // Permitir escanear novamente
+        setScanned(false);
+        return;
+      }
+
+      console.log('[AddMeal] Produto encontrado:', food.name);
+
+      // Adicionar o alimento encontrado à lista de alimentos selecionados
+      const foodToAdd = {
+        id: food.id,
+        name: food.name,
+        caloriesPer100g: food.calories || 0,
+        proteinPer100g: food.protein || 0,
+        carbsPer100g: food.carbs || 0,
+        fatPer100g: food.fat || 0,
+        weight: 100, // Peso padrão: 100g
+      };
+
+      setSelectedFoods([...selectedFoods, foodToAdd]);
+      setBarcodeInput(''); // Limpar input após adicionar
+      
+      Toast.show({
+        type: 'success',
+        text1: t('addMeal.productFound') || 'Produto encontrado',
+        text2: `${food.name} ${t('addMeal.addedToList') || 'adicionado à lista'}`,
+      });
+    } catch (error: any) {
+      console.error('Error searching barcode:', error);
+      Toast.show({
+        type: 'error',
+        text1: t('common.error') || 'Erro',
+        text2: error.message || t('addMeal.barcodeError') || 'Erro ao buscar produto',
+      });
+      // Permitir escanear novamente
+      setScanned(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Buscar alimento por código de barras usando Open Food Facts (input manual)
+  const handleBarcodeSearch = async () => {
+    if (!barcodeInput.trim()) {
+      Toast.show({
+        type: 'error',
+        text1: t('common.error') || 'Erro',
+        text2: t('addMeal.barcodeEmpty') || 'Por favor, insira um código de barras',
+      });
+      return;
+    }
+
+    await processBarcode(barcodeInput.trim());
+  };
+
+  // Handler para quando o código de barras é escaneado pela câmera
+  const handleBarCodeScanned = ({ data }: { data: string; type: string }) => {
+    if (!scanned && data) {
+      processBarcode(data);
+    }
   };
 
   // Converter imagem para base64 (solução gratuita sem Firebase Storage)
@@ -369,8 +461,8 @@ export function AddMealScreen({ navigation, route }: any) {
     if (exists) {
       Toast.show({
         type: 'info',
-        text1: 'Alimento já adicionado',
-        text2: 'Este alimento já está na lista',
+        text1: t('addMeal.alreadyAdded') || 'Food already added',
+        text2: t('addMeal.alreadyInList') || 'This food is already in the list',
       });
       return;
     }
@@ -383,13 +475,17 @@ export function AddMealScreen({ navigation, route }: any) {
       proteinPer100g: food.protein,
       carbsPer100g: food.carbs,
       fatPer100g: food.fat,
-      weight: 100,
+      weight: 100, // Peso padrão: 100g
     }]);
+
+    // Limpar resultados da pesquisa e campo de pesquisa
+    setFoodResults([]);
+    setSearchQuery('');
 
     Toast.show({
       type: 'success',
-      text1: 'Adicionado',
-      text2: `${food.name} adicionado à lista`,
+      text1: t('addMeal.added') || 'Added',
+      text2: t('addMeal.foodAddedToList', { food: food.name }) || `${food.name} added to list`,
     });
   };
 
@@ -398,11 +494,43 @@ export function AddMealScreen({ navigation, route }: any) {
     setSelectedFoods(selectedFoods.filter(f => f.id !== id));
   };
 
+  // Converter gramas para onças (para exibição)
+  const gramsToOunces = (grams: number): number => {
+    return grams / 28.3495;
+  };
+
+  // Converter onças para gramas (para armazenamento)
+  const ouncesToGrams = (ounces: number): number => {
+    return ounces * 28.3495;
+  };
+
+  // Obter unidade apropriada para o alimento (sempre g ou oz, nunca ml)
+  const getFoodUnit = (foodName: string): string => {
+    return units.weight === 'lb' ? 'oz' : 'g';
+  };
+
+  // Formatar peso para exibição (g ou oz)
+  const formatFoodWeight = (weightInGrams: number, foodName?: string): string => {
+    if (units.weight === 'lb') {
+      // Se unidade é libras, mostrar em onças
+      const ounces = gramsToOunces(weightInGrams);
+      return Math.round(ounces * 10) / 10; // Arredondar para 1 casa decimal
+    } else {
+      // Se unidade é kg, mostrar em gramas
+      return Math.round(weightInGrams).toString();
+    }
+  };
+
   // Atualizar peso de um alimento
   const updateFoodWeight = (id: string, weight: number) => {
-    setSelectedFoods(selectedFoods.map(f => 
-      f.id === id ? { ...f, weight: Math.max(0, weight) } : f
-    ));
+    setSelectedFoods(selectedFoods.map(f => {
+      if (f.id === id) {
+        // Converter conforme unidade (sempre em gramas ou onças)
+        const weightInGrams = units.weight === 'lb' ? ouncesToGrams(weight) : weight;
+        return { ...f, weight: Math.max(0, weightInGrams) };
+      }
+      return f;
+    }));
   };
 
   // Calcular totais da lista
@@ -420,14 +548,37 @@ export function AddMealScreen({ navigation, route }: any) {
 
   // Adicionar todos os alimentos como uma refeição
   const addMealFromList = async () => {
-    if (!user || selectedFoods.length === 0) return;
+    if (!user || selectedFoods.length === 0 || addingMeal) return; // Prevenir múltiplos cliques
 
+    setAddingMeal(true);
     try {
       const totals = calculateTotals();
       const mealName = selectedFoods.length === 1 
         ? selectedFoods[0].name 
         : selectedFoods.map(f => f.name).join(', ');
 
+      // Usar data selecionada se disponível, senão usar data atual
+      // Se houver data selecionada, usar essa data mas manter a hora atual
+      let mealDate: Date;
+      if (selectedDateParam) {
+        const selectedDate = new Date(selectedDateParam);
+        const now = new Date();
+        // Usar a data selecionada mas com a hora atual
+        mealDate = new Date(
+          selectedDate.getFullYear(),
+          selectedDate.getMonth(),
+          selectedDate.getDate(),
+          now.getHours(),
+          now.getMinutes(),
+          now.getSeconds()
+        );
+      } else {
+        mealDate = new Date();
+      }
+
+      // Sempre salvar também a data de quando foi adicionada (hoje)
+      const addedAt = new Date();
+      
       await addDoc(collection(db, 'meals'), {
         userId: user.uid,
         name: mealName,
@@ -437,7 +588,8 @@ export function AddMealScreen({ navigation, route }: any) {
         fat: totals.fat,
         image: null,
         mealType: selectedMealType,
-        date: Timestamp.now(),
+        date: Timestamp.fromDate(mealDate), // Data para qual a refeição foi adicionada (dia selecionado)
+        addedAt: Timestamp.fromDate(addedAt), // Data de quando foi realmente adicionada (hoje)
       });
 
       // Atualizar streak
@@ -446,8 +598,8 @@ export function AddMealScreen({ navigation, route }: any) {
 
       Toast.show({
         type: 'success',
-        text1: 'Refeição adicionada!',
-        text2: `${selectedFoods.length} alimento(s) adicionado(s) ao teu diário`,
+        text1: t('addMeal.mealAdded') || 'Meal added!',
+        text2: t('addMeal.foodsAddedToDiary', { count: selectedFoods.length }) || `${selectedFoods.length} food(s) added to your diary`,
       });
 
       // Limpar lista e voltar
@@ -457,16 +609,18 @@ export function AddMealScreen({ navigation, route }: any) {
       console.error('Error adding meal:', error);
       Toast.show({
         type: 'error',
-        text1: 'Erro',
-        text2: error.message || 'Erro ao adicionar refeição',
+        text1: t('addMeal.error') || 'Error',
+        text2: error.message || t('addMeal.mealAddError') || 'Error adding meal',
       });
+      setAddingMeal(false); // Permitir tentar novamente em caso de erro
     }
   };
 
   // Função antiga mantida para compatibilidade (usada apenas na edição de comida analisada)
   const addMeal = async (food: FoodItem) => {
-    if (!user) return;
+    if (!user || addingMeal) return; // Prevenir múltiplos cliques
 
+    setAddingMeal(true);
     try {
       // Converter imagem para base64 se existir
       let imageUrl = food.image || null;
@@ -477,6 +631,28 @@ export function AddMealScreen({ navigation, route }: any) {
         }
       }
 
+      // Usar data selecionada se disponível, senão usar data atual
+      // Se houver data selecionada, usar essa data mas manter a hora atual
+      let mealDate: Date;
+      if (selectedDateParam) {
+        const selectedDate = new Date(selectedDateParam);
+        const now = new Date();
+        // Usar a data selecionada mas com a hora atual
+        mealDate = new Date(
+          selectedDate.getFullYear(),
+          selectedDate.getMonth(),
+          selectedDate.getDate(),
+          now.getHours(),
+          now.getMinutes(),
+          now.getSeconds()
+        );
+      } else {
+        mealDate = new Date();
+      }
+
+      // Sempre salvar também a data de quando foi adicionada (hoje)
+      const addedAt = new Date();
+      
       await addDoc(collection(db, 'meals'), {
         userId: user.uid,
         name: food.name,
@@ -486,7 +662,8 @@ export function AddMealScreen({ navigation, route }: any) {
         fat: food.fat,
         image: imageUrl,
         mealType: selectedMealType,
-        date: Timestamp.now(),
+        date: Timestamp.fromDate(mealDate), // Data para qual a refeição foi adicionada (dia selecionado)
+        addedAt: Timestamp.fromDate(addedAt), // Data de quando foi realmente adicionada (hoje)
       });
 
       // Atualizar streak
@@ -495,8 +672,8 @@ export function AddMealScreen({ navigation, route }: any) {
 
       Toast.show({
         type: 'success',
-        text1: 'Refeição adicionada!',
-        text2: `${food.name} foi adicionado ao teu diário`,
+        text1: t('addMeal.mealAdded') || 'Meal added!',
+        text2: t('addMeal.foodAddedToDiary', { food: food.name }) || `${food.name} was added to your diary`,
       });
 
       navigation.goBack();
@@ -504,14 +681,15 @@ export function AddMealScreen({ navigation, route }: any) {
       console.error('Error adding meal:', error);
       Toast.show({
         type: 'error',
-        text1: 'Erro',
-        text2: error.message || 'Não foi possível adicionar a refeição',
+        text1: t('addMeal.error') || 'Error',
+        text2: error.message || t('addMeal.couldNotAddMeal') || 'Could not add meal',
       });
+      setAddingMeal(false); // Permitir tentar novamente em caso de erro
     }
   };
 
   const handleSaveEditedFood = () => {
-    if (!editingFood) return;
+    if (!editingFood || addingMeal) return; // Prevenir múltiplos cliques
     addMeal(editingFood);
   };
 
@@ -540,7 +718,8 @@ export function AddMealScreen({ navigation, route }: any) {
           flexDirection: 'row',
           alignItems: 'center',
           paddingHorizontal: 24,
-          paddingVertical: 16,
+          paddingTop: 8,
+          paddingBottom: 12,
           borderBottomWidth: 1,
           borderBottomColor: theme.colors.border || '#E5E7EB',
         }}>
@@ -798,14 +977,16 @@ export function AddMealScreen({ navigation, route }: any) {
                         color: theme.colors.textSecondary || '#9CA3AF',
                         flex: 1,
                       }}>
-                        {t('addMeal.weight')} (g):
+                        {t('addMeal.weight')} ({getFoodUnit(food.name)}):
                       </Text>
                       <TextInput
-                        value={food.weight.toString()}
+                        value={formatFoodWeight(food.weight, food.name).toString()}
                         onChangeText={(text) => {
-                          const weight = parseFloat(text) || 0;
+                          const num = parseFloat(text) || 0;
+                          // Converter conforme unidade
+                          const weightInGrams = units.weight === 'lb' ? ouncesToGrams(num) : num;
                           const updatedFoods = [...plateFoods];
-                          updatedFoods[index] = { ...food, weight };
+                          updatedFoods[index] = { ...food, weight: weightInGrams };
                           setPlateFoods(updatedFoods);
                           
                           // Recalcular totais
@@ -839,7 +1020,7 @@ export function AddMealScreen({ navigation, route }: any) {
                           width: 100,
                           textAlign: 'right',
                         }}
-                        placeholder="100"
+                        placeholder={units.weight === 'lb' ? "3.5" : "100"}
                         placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
                       />
                     </View>
@@ -1066,20 +1247,30 @@ export function AddMealScreen({ navigation, route }: any) {
             {/* Botão Salvar */}
             <TouchableOpacity
               onPress={handleSaveEditedFood}
+              disabled={addingMeal}
+              activeOpacity={addingMeal ? 1 : 0.7}
               style={{
-                backgroundColor: theme.colors.primary || '#3BB273',
+                backgroundColor: addingMeal 
+                  ? (theme.colors.primary || '#3BB273') + '80' 
+                  : theme.colors.primary || '#3BB273',
                 borderRadius: 16,
                 paddingVertical: 16,
                 alignItems: 'center',
+                justifyContent: 'center',
                 marginTop: 8,
+                flexDirection: 'row',
+                gap: 8,
               }}
             >
+              {addingMeal && (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              )}
               <Text style={{
                 color: '#FFFFFF',
                 fontSize: 16,
                 fontWeight: '700',
               }}>
-                {t('addMeal.saveMeal')}
+                {addingMeal ? t('addMeal.adding') : t('addMeal.saveMeal')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1094,7 +1285,8 @@ export function AddMealScreen({ navigation, route }: any) {
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 24,
-        paddingVertical: 16,
+        paddingTop: 8,
+        paddingBottom: 12,
         borderBottomWidth: 1,
         borderBottomColor: theme.colors.border || '#E5E7EB',
       }}>
@@ -1132,7 +1324,7 @@ export function AddMealScreen({ navigation, route }: any) {
             color: theme.colors.textSecondary || '#9CA3AF',
             fontSize: 16,
           }}>
-            {t('addMeal.analyzing')}
+            {isSearching ? (t('addMeal.searching') || 'Searching...') : (t('addMeal.analyzing') || 'Analyzing image...')}
           </Text>
         </View>
       ) : (
@@ -1263,42 +1455,212 @@ export function AddMealScreen({ navigation, route }: any) {
           </Modal>
         </View>
 
-        {/* Pesquisa */}
-        <View className="mb-6">
-          <View className="flex-row gap-2">
-            <View className="flex-1 relative">
-              <Ionicons
-                name="search"
-                size={20}
-                color="#9CA3AF"
-                style={{ position: 'absolute', left: 12, top: 14, zIndex: 1 }}
-              />
-              <TextInput
-                className="bg-gray-100 dark:bg-gray-800 rounded-xl px-12 py-4 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700"
-                placeholder="Pesquisar alimento..."
-                placeholderTextColor="#9CA3AF"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                onSubmitEditing={handleSearch}
-                returnKeyType="search"
-              />
+        {/* Pesquisa ou Código de Barras */}
+        {mode === 'search' ? (
+          <View className="mb-6">
+            <View className="flex-row gap-2">
+              <View className="flex-1 relative">
+                <Ionicons
+                  name="search"
+                  size={20}
+                  color="#9CA3AF"
+                  style={{ position: 'absolute', left: 12, top: 14, zIndex: 1 }}
+                />
+                <TextInput
+                  className="bg-gray-100 dark:bg-gray-800 rounded-xl px-12 py-4 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700"
+                  placeholder="Pesquisar alimento..."
+                  placeholderTextColor="#9CA3AF"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  onSubmitEditing={handleSearch}
+                  returnKeyType="search"
+                />
+              </View>
+              <TouchableOpacity
+                onPress={handleSearch}
+                disabled={loading}
+                className="bg-green-500 rounded-xl px-6 py-4 items-center justify-center"
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Ionicons name="search" size={20} color="#FFFFFF" />
+                )}
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              onPress={handleSearch}
-              disabled={loading}
-              className="bg-green-500 rounded-xl px-6 py-4 items-center justify-center"
-            >
-              {loading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Ionicons name="search" size={20} color="#FFFFFF" />
-              )}
-            </TouchableOpacity>
           </View>
-        </View>
+        ) : mode === 'barcode' ? (
+          <View style={{ marginBottom: 24 }}>
+            {/* Scanner de Código de Barras */}
+            {showBarcodeScanner && cameraPermission?.granted ? (
+              <View style={{ 
+                height: 400,
+                borderRadius: 16,
+                overflow: 'hidden',
+                borderWidth: 2,
+                borderColor: theme.colors.primary || '#3BB273',
+                marginBottom: 16,
+                position: 'relative',
+              }}>
+                <CameraView
+                  style={{ flex: 1 }}
+                  facing="back"
+                  barcodeScannerSettings={{
+                    barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
+                  }}
+                  onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+                />
+                {/* Overlay com posicionamento absoluto */}
+                <View style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  justifyContent: 'flex-end',
+                  alignItems: 'center',
+                  paddingBottom: 20,
+                }}>
+                  <View style={{
+                    width: '80%',
+                    height: 200,
+                    borderWidth: 2,
+                    borderColor: '#FFFFFF',
+                    borderRadius: 12,
+                    backgroundColor: 'transparent',
+                  }} />
+                  <Text style={{
+                    color: '#FFFFFF',
+                    fontSize: 16,
+                    fontWeight: '600',
+                    marginTop: 16,
+                    textAlign: 'center',
+                    backgroundColor: 'rgba(0,0,0,0.5)',
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                  }}>
+                    {t('addMeal.scanBarcode') || 'Aponte a câmera para o código de barras'}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShowBarcodeScanner(false);
+                      setScanned(false);
+                    }}
+                    style={{
+                      marginTop: 16,
+                      backgroundColor: 'rgba(255,255,255,0.2)',
+                      paddingHorizontal: 24,
+                      paddingVertical: 12,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <Text style={{
+                      color: '#FFFFFF',
+                      fontSize: 16,
+                      fontWeight: '600',
+                    }}>
+                      {t('common.cancel') || 'Cancelar'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity
+                onPress={async () => {
+                  if (!cameraPermission?.granted) {
+                    const result = await requestCameraPermission();
+                    if (!result.granted) {
+                      Toast.show({
+                        type: 'error',
+                        text1: t('common.error') || 'Erro',
+                        text2: t('profile.cameraPermissionRequired') || 'Permissão de câmera necessária',
+                      });
+                      return;
+                    }
+                  }
+                  setShowBarcodeScanner(true);
+                  setScanned(false);
+                }}
+                style={{
+                  backgroundColor: theme.colors.card,
+                  borderRadius: 12,
+                  paddingVertical: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: theme.colors.border || '#E5E7EB',
+                  marginBottom: 12,
+                }}
+              >
+                <Ionicons name="barcode" size={20} color={theme.colors.primary || '#3BB273'} />
+                <Text style={{
+                  color: theme.colors.text,
+                  fontWeight: '600',
+                  marginLeft: 8,
+                  fontSize: 16,
+                }}>
+                  📷 {t('addMeal.scanBarcode') || 'Escanear Código de Barras'}
+                </Text>
+              </TouchableOpacity>
+            )}
+            
+            {/* Input Manual de Código de Barras */}
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <View style={{ flex: 1, position: 'relative' }}>
+                <Ionicons
+                  name="barcode-outline"
+                  size={20}
+                  color={theme.colors.textSecondary || '#9CA3AF'}
+                  style={{ position: 'absolute', left: 12, top: 14, zIndex: 1 }}
+                />
+                <TextInput
+                  style={{
+                    backgroundColor: theme.colors.card || '#F3F4F6',
+                    borderRadius: 12,
+                    paddingLeft: 44,
+                    paddingRight: 12,
+                    paddingVertical: 14,
+                    color: theme.colors.text,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border || '#E5E7EB',
+                    fontSize: 16,
+                  }}
+                  placeholder={t('addMeal.barcodePlaceholder') || 'Ou digite o código de barras...'}
+                  placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
+                  value={barcodeInput}
+                  onChangeText={setBarcodeInput}
+                  onSubmitEditing={handleBarcodeSearch}
+                  returnKeyType="search"
+                  keyboardType="numeric"
+                />
+              </View>
+              <TouchableOpacity
+                onPress={handleBarcodeSearch}
+                disabled={loading}
+                style={{
+                  backgroundColor: theme.colors.primary || '#3BB273',
+                  borderRadius: 12,
+                  paddingHorizontal: 24,
+                  paddingVertical: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: loading ? 0.6 : 1,
+                }}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Ionicons name="search" size={20} color="#FFFFFF" />
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
 
-        {/* Botões de Ação - apenas se não for modo pesquisa */}
-        {mode !== 'search' && (
+        {/* Botão de Câmera - apenas se for modo camera */}
+        {mode === 'camera' && (
           <View style={{ marginBottom: 24 }}>
             <TouchableOpacity
               onPress={handleTakePhoto}
@@ -1311,7 +1673,6 @@ export function AddMealScreen({ navigation, route }: any) {
                 justifyContent: 'center',
                 borderWidth: 1,
                 borderColor: theme.colors.border || '#E5E7EB',
-                marginBottom: 12,
               }}
             >
               <Ionicons name="camera" size={20} color={theme.colors.primary || '#3BB273'} />
@@ -1321,37 +1682,7 @@ export function AddMealScreen({ navigation, route }: any) {
                 marginLeft: 8,
                 fontSize: 16,
               }}>
-                📸 Tirar Foto
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => {
-                Toast.show({
-                  type: 'info',
-                  text1: 'Funcionalidade temporariamente desativada',
-                  text2: 'Ler código de barras foi desativado para esta versão.',
-                });
-              }}
-              style={{
-                backgroundColor: theme.colors.card,
-                borderRadius: 12,
-                paddingVertical: 16,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderWidth: 1,
-                borderColor: theme.colors.border || '#E5E7EB',
-              }}
-            >
-              <Ionicons name="barcode" size={20} color={theme.colors.primary || '#3BB273'} />
-              <Text style={{
-                color: theme.colors.text,
-                fontWeight: '600',
-                marginLeft: 8,
-                fontSize: 16,
-              }}>
-                📷 Ler Código de Barras
+                📸 {t('addMeal.camera') || 'Tirar Foto'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1398,7 +1729,7 @@ export function AddMealScreen({ navigation, route }: any) {
                       </Text>
                       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                         <Text style={{ fontSize: 12, color: theme.colors.textSecondary || '#9CA3AF' }}>
-                          {food.calories} kcal/100g
+                          {food.calories} kcal/{units.weight === 'lb' ? '3.5oz' : '100g'}
                         </Text>
                         <Text style={{ fontSize: 12, color: theme.colors.textSecondary || '#9CA3AF' }}>
                           P: {food.protein}g
@@ -1412,6 +1743,10 @@ export function AddMealScreen({ navigation, route }: any) {
                       </View>
                     </View>
                     <TouchableOpacity
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        addFoodToList(food);
+                      }}
                       style={{
                         backgroundColor: theme.colors.primary || '#3BB273',
                         borderRadius: 8,
@@ -1506,10 +1841,10 @@ export function AddMealScreen({ navigation, route }: any) {
                       color: theme.colors.textSecondary || '#9CA3AF',
                       flex: 1,
                     }}>
-                      {t('addMeal.weight')} (g):
+                      {t('addMeal.weight')} ({getFoodUnit(food.name)}):
                     </Text>
                     <TextInput
-                      value={food.weight.toString()}
+                      value={formatFoodWeight(food.weight, food.name).toString()}
                       onChangeText={(text) => {
                         const weight = parseFloat(text) || 0;
                         updateFoodWeight(food.id, weight);
@@ -1526,7 +1861,7 @@ export function AddMealScreen({ navigation, route }: any) {
                         width: 100,
                         textAlign: 'right',
                       }}
-                      placeholder="100"
+                      placeholder={units.weight === 'lb' ? "3.5" : "100"}
                       placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
                     />
                   </View>
@@ -1629,19 +1964,29 @@ export function AddMealScreen({ navigation, route }: any) {
             {/* Botão Adicionar Refeição */}
             <TouchableOpacity
               onPress={addMealFromList}
+              disabled={addingMeal || selectedFoods.length === 0}
+              activeOpacity={addingMeal ? 1 : 0.7}
               style={{
-                backgroundColor: theme.colors.primary || '#3BB273',
+                backgroundColor: (addingMeal || selectedFoods.length === 0)
+                  ? (theme.colors.primary || '#3BB273') + '80'
+                  : theme.colors.primary || '#3BB273',
                 borderRadius: 16,
                 paddingVertical: 16,
                 alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 8,
               }}
             >
+              {addingMeal && (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              )}
               <Text style={{
                 color: '#FFFFFF',
                 fontSize: 16,
                 fontWeight: '700',
               }}>
-                {t('addMeal.addMeal') || 'Adicionar Refeição'}
+                {addingMeal ? t('addMeal.adding') : t('addMeal.addMeal')}
               </Text>
             </TouchableOpacity>
           </View>

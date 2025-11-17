@@ -44,86 +44,238 @@ export interface PlateAnalysis {
 }
 
 /**
- * Pesquisa alimentos - primeiro na base local (genéricos), depois Open Food Facts
+ * Pesquisa alimentos através do Open Food Facts API
  */
 export async function searchFood(query: string): Promise<FoodItem[]> {
   try {
-    // Importar base de dados local
-    const { FOOD_DATABASE } = await import('./foodDatabase');
-    
     const queryLower = query.toLowerCase().trim();
     
-    // 1. Buscar primeiro na base de dados local (alimentos genéricos)
-    const localResults: FoodItem[] = FOOD_DATABASE
-      .filter(food => {
-        const foodNameLower = food.name.toLowerCase();
-        // Busca parcial - se o nome do alimento contém a query ou vice-versa
-        return foodNameLower.includes(queryLower) || queryLower.includes(foodNameLower);
-      })
-      .slice(0, 10) // Limitar a 10 resultados
-      .map((food, index) => ({
-        id: `local_${food.name}_${index}`,
-        name: food.name.charAt(0).toUpperCase() + food.name.slice(1), // Capitalizar primeira letra
-        calories: food.caloriesPer100g,
-        protein: food.proteinPer100g,
-        carbs: food.carbsPer100g,
-        fat: food.fatPer100g,
-        image: undefined, // Alimentos genéricos não têm imagem
-      }));
-    
-    // Se encontrou resultados na base local, retornar apenas esses (mais genéricos)
-    if (localResults.length > 0) {
-      return localResults;
+    if (!queryLower || queryLower.length < 2) {
+      return [];
     }
     
-    // 2. Se não encontrou na base local, buscar no Open Food Facts
-    // Mas agrupar produtos similares para mostrar apenas tipos gerais
+    // Buscar diretamente no Open Food Facts
     const response = await fetch(
-      `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=20`
+      `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=50&fields=code,product_name,nutriments,image_url,image_small_url`
     );
     
     if (!response.ok) {
-      throw new Error('Failed to fetch food data');
+      throw new Error('Failed to fetch food data from Open Food Facts');
     }
 
     const data = await response.json();
     
     if (!data.products || data.products.length === 0) {
-      return [];
+      // Se não encontrou no Open Food Facts, usar base local como fallback
+      const { FOOD_DATABASE } = await import('./foodDatabase');
+      
+      // Função para calcular similaridade (mesma lógica)
+      const calculateSimilarity = (query: string, foodName: string): number => {
+        const queryLower = query.toLowerCase().trim();
+        const nameLower = foodName.toLowerCase().trim();
+        
+        if (nameLower === queryLower) return 1000;
+        if (nameLower.startsWith(queryLower)) return 800;
+        if (nameLower.includes(queryLower)) return 600;
+        
+        const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
+        const nameWords = nameLower.split(/\s+/).filter(w => w.length > 2);
+        const commonWords = queryWords.filter(qw => nameWords.some(nw => nw.includes(qw) || qw.includes(nw)));
+        const wordScore = commonWords.length * 100;
+        
+        let charMatches = 0;
+        let queryIndex = 0;
+        for (let i = 0; i < nameLower.length && queryIndex < queryLower.length; i++) {
+          if (nameLower[i] === queryLower[queryIndex]) {
+            charMatches++;
+            queryIndex++;
+          }
+        }
+        const charScore = (charMatches / queryLower.length) * 50;
+        
+        return wordScore + charScore;
+      };
+      
+      const localResults: FoodItem[] = FOOD_DATABASE
+        .filter(food => {
+          const foodNameLower = food.name.toLowerCase();
+          return foodNameLower.includes(queryLower) || queryLower.includes(foodNameLower);
+        })
+        .map((food, index) => ({
+          id: `local_${food.name}_${index}`,
+          name: food.name.charAt(0).toUpperCase() + food.name.slice(1),
+          calories: food.caloriesPer100g,
+          protein: food.proteinPer100g,
+          carbs: food.carbsPer100g,
+          fat: food.fatPer100g,
+          image: undefined,
+        }))
+        .sort((a, b) => {
+          const aSimilarity = calculateSimilarity(queryLower, a.name);
+          const bSimilarity = calculateSimilarity(queryLower, b.name);
+          return bSimilarity - aSimilarity;
+        })
+        .slice(0, 10);
+      
+      return localResults;
     }
     
-    // Agrupar produtos similares por tipo geral
-    const groupedProducts = new Map<string, FoodItem>();
+    // Processar produtos do Open Food Facts
+    const results: FoodItem[] = [];
+    const seenNames = new Set<string>();
     
     data.products.forEach((product: any) => {
-      const productName = product.product_name || '';
-      const calories = Math.round(product.nutriments?.['energy-kcal_100g'] || 0);
+      const productName = product.product_name || product.product_name_en || '';
+      if (!productName || productName.trim().length === 0) return;
       
-      // Filtrar produtos sem nome ou sem calorias
-      if (!productName || calories === 0) return;
+      // Extrair valores nutricionais
+      const nutriments = product.nutriments || {};
+      const calories = Math.round(nutriments['energy-kcal_100g'] || nutriments['energy-kcal'] || 0);
+      const protein = parseFloat((nutriments.proteins_100g || nutriments.proteins || 0).toFixed(1));
+      const carbs = parseFloat((nutriments.carbohydrates_100g || nutriments.carbohydrates || 0).toFixed(1));
+      const fat = parseFloat((nutriments.fat_100g || nutriments.fat || 0).toFixed(1));
       
-      // Normalizar nome para agrupar produtos similares
+      // Filtrar produtos sem informações nutricionais básicas
+      if (calories === 0 && protein === 0 && carbs === 0 && fat === 0) return;
+      
+      // Normalizar nome para evitar duplicados
       const normalizedName = normalizeFoodName(productName);
+      const nameKey = normalizedName.toLowerCase();
       
-      // Se já existe um produto deste tipo, manter o primeiro (ou o com melhor informação nutricional)
-      if (!groupedProducts.has(normalizedName)) {
-        groupedProducts.set(normalizedName, {
-          id: product.code || product.id || Math.random().toString(),
-          name: normalizedName,
-          calories: calories,
-          protein: parseFloat((product.nutriments?.proteins_100g || 0).toFixed(1)),
-          carbs: parseFloat((product.nutriments?.carbohydrates_100g || 0).toFixed(1)),
-          fat: parseFloat((product.nutriments?.fat_100g || 0).toFixed(1)),
-          image: product.image_url,
-        });
-      }
+      // Evitar duplicados exatos
+      if (seenNames.has(nameKey)) return;
+      seenNames.add(nameKey);
+      
+      results.push({
+        id: product.code || `off_${Math.random().toString(36).substr(2, 9)}`,
+        name: normalizedName,
+        calories: calories || 0,
+        protein: protein || 0,
+        carbs: carbs || 0,
+        fat: fat || 0,
+        image: product.image_url || product.image_small_url || undefined,
+      });
     });
     
-    // Converter Map para Array e limitar a 10 resultados
-    return Array.from(groupedProducts.values()).slice(0, 10);
+    // Função para calcular similaridade entre query e nome do alimento
+    const calculateSimilarity = (query: string, foodName: string): number => {
+      const queryLower = query.toLowerCase().trim();
+      const nameLower = foodName.toLowerCase().trim();
+      
+      // Match exato
+      if (nameLower === queryLower) {
+        return 1000;
+      }
+      
+      // Começa com a query
+      if (nameLower.startsWith(queryLower)) {
+        return 800;
+      }
+      
+      // Contém a query completa
+      if (nameLower.includes(queryLower)) {
+        return 600;
+      }
+      
+      // Conta palavras em comum
+      const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
+      const nameWords = nameLower.split(/\s+/).filter(w => w.length > 2);
+      const commonWords = queryWords.filter(qw => nameWords.some(nw => nw.includes(qw) || qw.includes(nw)));
+      const wordScore = commonWords.length * 100;
+      
+      // Similaridade de caracteres (Levenshtein simplificado)
+      let charMatches = 0;
+      let queryIndex = 0;
+      for (let i = 0; i < nameLower.length && queryIndex < queryLower.length; i++) {
+        if (nameLower[i] === queryLower[queryIndex]) {
+          charMatches++;
+          queryIndex++;
+        }
+      }
+      const charScore = (charMatches / queryLower.length) * 50;
+      
+      return wordScore + charScore;
+    };
+    
+    // Ordenar por similaridade do nome primeiro, depois por informações nutricionais
+    results.sort((a, b) => {
+      const aSimilarity = calculateSimilarity(queryLower, a.name);
+      const bSimilarity = calculateSimilarity(queryLower, b.name);
+      
+      // Se a similaridade for muito diferente, ordenar por similaridade
+      if (Math.abs(aSimilarity - bSimilarity) > 50) {
+        return bSimilarity - aSimilarity;
+      }
+      
+      // Se similaridade for parecida, ordenar por informações nutricionais
+      const aNutritionScore = (a.calories > 0 ? 1 : 0) + (a.protein > 0 ? 1 : 0) + (a.carbs > 0 ? 1 : 0) + (a.fat > 0 ? 1 : 0);
+      const bNutritionScore = (b.calories > 0 ? 1 : 0) + (b.protein > 0 ? 1 : 0) + (b.carbs > 0 ? 1 : 0) + (b.fat > 0 ? 1 : 0);
+      return bNutritionScore - aNutritionScore;
+    });
+    
+    // Limitar a 15 resultados
+    return results.slice(0, 15);
   } catch (error) {
     console.error('Error searching food:', error);
-    return [];
+    
+    // Em caso de erro, tentar base local como fallback
+    try {
+      const { FOOD_DATABASE } = await import('./foodDatabase');
+      const queryLower = query.toLowerCase().trim();
+      
+      // Função para calcular similaridade (mesma lógica)
+      const calculateSimilarity = (q: string, foodName: string): number => {
+        const qLower = q.toLowerCase().trim();
+        const nameLower = foodName.toLowerCase().trim();
+        
+        if (nameLower === qLower) return 1000;
+        if (nameLower.startsWith(qLower)) return 800;
+        if (nameLower.includes(qLower)) return 600;
+        
+        const queryWords = qLower.split(/\s+/).filter(w => w.length > 2);
+        const nameWords = nameLower.split(/\s+/).filter(w => w.length > 2);
+        const commonWords = queryWords.filter(qw => nameWords.some(nw => nw.includes(qw) || qw.includes(nw)));
+        const wordScore = commonWords.length * 100;
+        
+        let charMatches = 0;
+        let queryIndex = 0;
+        for (let i = 0; i < nameLower.length && queryIndex < qLower.length; i++) {
+          if (nameLower[i] === qLower[queryIndex]) {
+            charMatches++;
+            queryIndex++;
+          }
+        }
+        const charScore = (charMatches / qLower.length) * 50;
+        
+        return wordScore + charScore;
+      };
+      
+      const localResults: FoodItem[] = FOOD_DATABASE
+        .filter(food => {
+          const foodNameLower = food.name.toLowerCase();
+          return foodNameLower.includes(queryLower) || queryLower.includes(foodNameLower);
+        })
+        .map((food, index) => ({
+          id: `local_${food.name}_${index}`,
+          name: food.name.charAt(0).toUpperCase() + food.name.slice(1),
+          calories: food.caloriesPer100g,
+          protein: food.proteinPer100g,
+          carbs: food.carbsPer100g,
+          fat: food.fatPer100g,
+          image: undefined,
+        }))
+        .sort((a, b) => {
+          const aSimilarity = calculateSimilarity(queryLower, a.name);
+          const bSimilarity = calculateSimilarity(queryLower, b.name);
+          return bSimilarity - aSimilarity;
+        })
+        .slice(0, 10);
+      
+      return localResults;
+    } catch (fallbackError) {
+      console.error('Error in fallback search:', fallbackError);
+      return [];
+    }
   }
 }
 
@@ -132,20 +284,38 @@ export async function searchFood(query: string): Promise<FoodItem[]> {
  * Remove marcas, tamanhos específicos, etc.
  */
 function normalizeFoodName(productName: string): string {
-  let normalized = productName.toLowerCase();
+  if (!productName || productName.trim().length === 0) {
+    return productName;
+  }
+  
+  let normalized = productName.trim();
+  
+  // Remover informações entre parênteses (geralmente marcas ou informações extras)
+  normalized = normalized.replace(/\([^)]*\)/g, ' ');
+  
+  // Remover informações após vírgulas que parecem ser marcas ou descrições extras
+  const commaIndex = normalized.indexOf(',');
+  if (commaIndex > 0 && commaIndex < normalized.length * 0.6) {
+    // Se a vírgula está na primeira metade, pode ser marca
+    normalized = normalized.substring(0, commaIndex);
+  }
+  
+  normalized = normalized.toLowerCase();
   
   // Remover marcas comuns e palavras de embalagem
   const removePatterns = [
-    // Marcas conhecidas
-    /\b(nestlé|nestle|danone|activia|danio|yoplait|mimosa|aguas|continente|pingo doce|el corte inglés|mercadona|carrefour|eurospin|aldi|lidl|tesco|sainsbury|asda|waitrose|coop|migros|rewe|edeka|kaufland|penny|netto|real|globus|interspar|billa|spar|hofer|dm|rossmann|müller|marca|brand)\b/gi,
+    // Marcas conhecidas (expandida)
+    /\b(nestlé|nestle|danone|activia|danio|yoplait|mimosa|aguas|continente|pingo doce|el corte inglés|mercadona|carrefour|eurospin|aldi|lidl|tesco|sainsbury|asda|waitrose|coop|migros|rewe|edeka|kaufland|penny|netto|real|globus|interspar|billa|spar|hofer|dm|rossmann|müller|marca|brand|coca.?cola|pepsi|fanta|sprite|heinz|kellogg|unilever|pesi|mondelez|mars|ferrero|nutella|milka|toblerone|kit.?kat|snickers|twix|m&m|mms)\b/gi,
     // Tamanhos e quantidades
-    /\b\d+\s*(g|kg|ml|l|un|unid|unidade|unidades|pack|pct|pcs|gr|gramas|litros?|mls?)\b/gi,
+    /\b\d+\s*(g|kg|ml|l|un|unid|unidade|unidades|pack|pct|pcs|gr|gramas|litros?|mls?|oz|fl.?oz)\b/gi,
     // Palavras de embalagem
-    /\b(pack|packaging|embalagem|caixa|lata|garrafa|frasco|saqueta|pacote|unidade|unidades|unid|pcs|pct|frasco|garrafa|garrafão|garrafinha)\b/gi,
+    /\b(pack|packaging|embalagem|caixa|lata|garrafa|frasco|saqueta|pacote|unidade|unidades|unid|pcs|pct|frasco|garrafa|garrafão|garrafinha|bottle|can|box|package)\b/gi,
     // Palavras genéricas de produto
-    /\b(produto|product|alimento|food|comida|bebida|drink)\b/gi,
-    // Caracteres especiais e números soltos
-    /[^\w\s]/g,
+    /\b(produto|product|alimento|food|comida|bebida|drink|item)\b/gi,
+    // Informações de qualidade/orgânico/etc
+    /\b(organic|bio|biologique|orgânico|natural|natur|fresh|fresco|premium|extra|light|diet|zero|sem|without|sem açúcar|sem açucar|sem acucar)\b/gi,
+    // Caracteres especiais e números soltos (mas manter espaços)
+    /[^\w\s\u00C0-\u017F]/g, // Manter acentos
     /\b\d+\b/g,
   ];
   
@@ -158,14 +328,16 @@ function normalizeFoodName(productName: string): string {
   
   // Se ficou muito curto ou vazio, tentar extrair palavra principal
   if (normalized.length < 3) {
-    // Tentar pegar a primeira palavra significativa do nome original
+    // Tentar pegar as primeiras palavras significativas do nome original
     const words = productName.toLowerCase().split(/\s+/);
+    const stopWords = ['de', 'da', 'do', 'das', 'dos', 'em', 'no', 'na', 'com', 'sem', 'e', 'ou', 'the', 'of', 'a', 'an'];
     const significantWords = words.filter(w => 
-      w.length > 3 && 
-      !['de', 'da', 'do', 'das', 'dos', 'em', 'no', 'na', 'com', 'sem'].includes(w)
+      w.length > 2 && !stopWords.includes(w.toLowerCase())
     );
     if (significantWords.length > 0) {
-      normalized = significantWords[0];
+      normalized = significantWords.slice(0, 3).join(' '); // Pegar até 3 palavras significativas
+    } else {
+      normalized = productName; // Se não conseguiu normalizar, retornar original
     }
   }
   
@@ -173,45 +345,435 @@ function normalizeFoodName(productName: string): string {
   normalized = normalized
     .split(' ')
     .filter(w => w.length > 0)
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .map(word => {
+      // Manter acentos e caracteres especiais
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
     .join(' ');
   
   return normalized || productName; // Se ficou vazio, retornar original
 }
 
 /**
- * Obtém alimento por código de barras usando Open Food Facts API
+ * Verifica se um produto é realmente um alimento/bebida
  */
-export async function getFoodByBarcode(barcode: string): Promise<FoodItem | null> {
-  try {
-    const response = await fetch(
-      `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`
-    );
+function isFoodProduct(productName: string, category?: string): boolean {
+  const nameLower = productName.toLowerCase();
+  const categoryLower = category?.toLowerCase() || '';
+  
+  // Palavras-chave que indicam que NÃO é alimento
+  const nonFoodKeywords = [
+    // Roupas e acessórios
+    'camiseta', 't-shirt', 'tshirt', 'shirt', 'camisa', 'blusa', 'vestido', 'dress',
+    'calça', 'pants', 'jeans', 'shorts', 'bermuda', 'sapato', 'shoe', 'sapatos',
+    'tênis', 'sneakers', 'chinelo', 'sandal', 'bolsa', 'bag', 'mochila', 'backpack',
+    'relógio', 'watch', 'óculos', 'glasses', 'oculos', 'cinto', 'belt', 'chapéu', 'hat',
+    'casaco', 'jacket', 'casaco', 'coat', 'jaqueta', 'roupa', 'clothing', 'clothes',
+    'moda', 'fashion', 'têxtil', 'textile',
     
+    // Eletrônicos
+    'smartphone', 'phone', 'telefone', 'tablet', 'laptop', 'notebook', 'computador',
+    'computer', 'tv', 'televisão', 'televisao', 'monitor', 'mouse', 'teclado', 'keyboard',
+    'fone', 'headphone', 'headphones', 'carregador', 'charger', 'cabo', 'cable',
+    'bateria', 'battery', 'pilha', 'pilhas', 'eletrônico', 'eletronico', 'electronic',
+    
+    // Casa e decoração
+    'sofá', 'sofa', 'cadeira', 'chair', 'mesa', 'table', 'cama', 'bed', 'travesseiro',
+    'pillow', 'cortina', 'curtain', 'tapete', 'rug', 'carpet', 'lâmpada', 'lamp',
+    'lampada', 'quadro', 'picture', 'frame', 'vaso', 'vase', 'decoração', 'decoration',
+    
+    // Livros e papelaria
+    'livro', 'book', 'caderno', 'notebook', 'caneta', 'pen', 'lápis', 'pencil',
+    'papel', 'paper', 'revista', 'magazine',
+    
+    // Brinquedos
+    'brinquedo', 'toy', 'boneca', 'doll', 'carrinho', 'car', 'jogo', 'game',
+    
+    // Cosméticos e higiene (não alimentos)
+    'shampoo', 'condicionador', 'conditioner', 'sabonete', 'soap', 'desodorante',
+    'deodorant', 'perfume', 'perfume', 'creme', 'cream', 'loção', 'lotion',
+    'maquiagem', 'makeup', 'batom', 'lipstick', 'esmalte', 'nail polish',
+    
+    // Limpeza
+    'detergente', 'detergent', 'sabão', 'soap', 'limpeza', 'cleaning', 'desinfetante',
+    'disinfectant', 'água sanitária', 'bleach',
+    
+    // Ferramentas
+    'ferramenta', 'tool', 'chave', 'key', 'parafuso', 'screw', 'prego', 'nail',
+    
+    // Outros
+    'medicamento', 'medicine', 'remédio', 'remedio', 'vitamina', 'vitamin', 'suplemento',
+    'supplement', 'pet', 'animal', 'ração', 'pet food',
+  ];
+  
+  // Se contém palavras que indicam que NÃO é alimento, retornar false
+  if (nonFoodKeywords.some(keyword => nameLower.includes(keyword) || categoryLower.includes(keyword))) {
+    console.log('[Barcode] Produto identificado como não-alimento:', productName);
+    return false;
+  }
+  
+  // Palavras-chave que indicam que É alimento (opcional, para reforçar)
+  const foodKeywords = [
+    'alimento', 'food', 'comida', 'bebida', 'drink', 'beverage',
+    'nutrição', 'nutrition', 'caloria', 'calorie', 'kcal',
+    'proteína', 'protein', 'carboidrato', 'carbohydrate', 'gordura', 'fat',
+  ];
+  
+  // Se contém palavras que indicam alimento, retornar true
+  if (foodKeywords.some(keyword => nameLower.includes(keyword))) {
+    return true;
+  }
+  
+  // Se não tem indicadores claros de não-alimento, assumir que pode ser alimento
+  // (melhor aceitar do que rejeitar incorretamente)
+  return true;
+}
+
+/**
+ * Busca produto no UPCitemdb (API gratuita alternativa)
+ */
+async function getFoodFromUPCitemdb(barcode: string): Promise<FoodItem | null> {
+  try {
+    const cleanBarcode = barcode.trim().replace(/\D/g, '');
+    if (!cleanBarcode || cleanBarcode.length < 8) {
+      return null;
+    }
+
+    console.log('[Barcode] Tentando UPCitemdb para código:', cleanBarcode);
+    const response = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${cleanBarcode}`, {
+      headers: {
+        'User-Agent': 'Nuti/1.0',
+      },
+    });
+
     if (!response.ok) {
       return null;
     }
 
     const data = await response.json();
     
+    if (data.code !== 'OK' || !data.items || data.items.length === 0) {
+      return null;
+    }
+
+    const item = data.items[0];
+    const productName = item.title || item.description || '';
+    
+    if (!productName || productName.trim().length === 0) {
+      return null;
+    }
+
+    // Verificar se é realmente um alimento
+    if (!isFoodProduct(productName, item.category)) {
+      console.log('[Barcode] Produto não é alimento (UPCitemdb):', productName);
+      return null;
+    }
+
+    console.log('[Barcode] Produto encontrado no UPCitemdb:', productName);
+
+    // UPCitemdb não fornece valores nutricionais diretamente
+    // Vamos normalizar o nome e retornar (valores nutricionais serão 0)
+    const normalizedName = normalizeFoodName(productName);
+    
+    return {
+      id: cleanBarcode,
+      name: normalizedName,
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+      image: item.images?.[0] || undefined,
+    };
+  } catch (error) {
+    console.log('[Barcode] Erro ao buscar no UPCitemdb:', error);
+    return null;
+  }
+}
+
+/**
+ * Busca produto usando API alternativa (tentativa genérica)
+ * Nota: Algumas APIs podem ter limites ou exigir chaves
+ */
+async function getFoodFromAlternativeAPI(barcode: string): Promise<FoodItem | null> {
+  try {
+    const cleanBarcode = barcode.trim().replace(/\D/g, '');
+    if (!cleanBarcode || cleanBarcode.length < 8) {
+      return null;
+    }
+
+    // Tentar buscar em uma API alternativa simples
+    // Nota: Esta é uma tentativa genérica, pode não funcionar para todos os códigos
+    console.log('[Barcode] Tentando API alternativa para código:', cleanBarcode);
+    
+    // Por enquanto, retornamos null - pode ser expandido no futuro
+    // com outras APIs que não exigem chave ou com chaves configuráveis
+    return null;
+  } catch (error) {
+    console.log('[Barcode] Erro ao buscar em API alternativa:', error);
+    return null;
+  }
+}
+
+/**
+ * Obtém alimento por código de barras usando Open Food Facts API
+ */
+async function getFoodFromOpenFoodFacts(barcode: string): Promise<FoodItem | null> {
+  try {
+    const cleanBarcode = barcode.trim().replace(/\D/g, ''); // Remove caracteres não numéricos
+    
+    if (!cleanBarcode || cleanBarcode.length < 8) {
+      console.log('[Barcode] Código de barras inválido:', barcode, '->', cleanBarcode);
+      return null;
+    }
+
+    console.log('[Barcode] Buscando produto com código:', cleanBarcode);
+    const url = `https://world.openfoodfacts.org/api/v0/product/${cleanBarcode}.json`;
+    console.log('[Barcode] URL:', url);
+
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Nuti/1.0 (Android)',
+      },
+    });
+    
+    if (!response.ok) {
+      console.log('[Barcode] Erro na resposta HTTP:', response.status, response.statusText);
+      return null;
+    }
+
+    const data = await response.json();
+    console.log('[Barcode] Status da API:', data.status);
+    
     if (data.status !== 1 || !data.product) {
+      console.log('[Barcode] Produto não encontrado na base de dados do Open Food Facts');
       return null;
     }
 
     const product = data.product;
-    return {
-      id: product.code || barcode,
-      name: product.product_name || 'Nome desconhecido',
-      calories: Math.round(product.nutriments?.['energy-kcal_100g'] || 0),
-      protein: parseFloat((product.nutriments?.proteins_100g || 0).toFixed(1)),
-      carbs: parseFloat((product.nutriments?.carbohydrates_100g || 0).toFixed(1)),
-      fat: parseFloat((product.nutriments?.fat_100g || 0).toFixed(1)),
-      image: product.image_url,
+    console.log('[Barcode] Produto encontrado:', product.product_name || 'Sem nome');
+    
+    // Tentar obter nome em várias línguas
+    const productName = product.product_name || 
+                       product.product_name_en || 
+                       product.product_name_pt || 
+                       product.product_name_es || 
+                       product.product_name_fr || 
+                       product.product_name_de || 
+                       product.product_name_it ||
+                       product.generic_name ||
+                       product.abbreviated_product_name ||
+                       '';
+    
+    if (!productName || productName.trim().length === 0) {
+      console.log('[Barcode] Produto sem nome');
+      return null;
+    }
+
+    // Verificar se é realmente um alimento (Open Food Facts já filtra, mas vamos garantir)
+    const categories = product.categories || product.categories_tags || [];
+    const categoryString = Array.isArray(categories) ? categories.join(' ') : String(categories);
+    
+    if (!isFoodProduct(productName, categoryString)) {
+      console.log('[Barcode] Produto não é alimento (Open Food Facts):', productName);
+      return null;
+    }
+
+    // Extrair valores nutricionais (tentar várias fontes)
+    const nutriments = product.nutriments || {};
+    
+    // Calorias - tentar várias fontes
+    const calories = Math.round(
+      nutriments['energy-kcal_100g'] || 
+      nutriments['energy-kcal'] || 
+      (nutriments['energy_100g'] ? nutriments['energy_100g'] / 4.184 : 0) || // Converter kJ para kcal
+      (nutriments['energy'] ? nutriments['energy'] / 4.184 : 0) ||
+      0
+    );
+    
+    // Proteína
+    const protein = parseFloat((nutriments.proteins_100g || nutriments.proteins || nutriments['proteins_100g'] || 0).toFixed(1));
+    
+    // Carboidratos
+    const carbs = parseFloat((nutriments.carbohydrates_100g || nutriments.carbohydrates || nutriments['carbohydrates_100g'] || 0).toFixed(1));
+    
+    // Gordura
+    const fat = parseFloat((nutriments.fat_100g || nutriments.fat || nutriments['fat_100g'] || 0).toFixed(1));
+    
+    console.log('[Barcode] Valores nutricionais:', { calories, protein, carbs, fat });
+    
+    // Se não tiver valores nutricionais, tentar buscar na base local pelo nome
+    if (calories === 0 && protein === 0 && carbs === 0 && fat === 0) {
+      console.log('[Barcode] Produto sem valores nutricionais, tentando base local...');
+      const { FOOD_DATABASE } = await import('./foodDatabase');
+      
+      const normalizedName = normalizeFoodName(productName);
+      const nameLower = normalizedName.toLowerCase();
+      
+      // Buscar na base local
+      const localMatch = FOOD_DATABASE.find(food => {
+        const foodNameLower = food.name.toLowerCase();
+        return nameLower.includes(foodNameLower) || foodNameLower.includes(nameLower);
+      });
+      
+      if (localMatch) {
+        console.log('[Barcode] Encontrado na base local:', localMatch.name);
+        return {
+          id: product.code || cleanBarcode,
+          name: normalizedName,
+          calories: localMatch.caloriesPer100g,
+          protein: localMatch.proteinPer100g,
+          carbs: localMatch.carbsPer100g,
+          fat: localMatch.fatPer100g,
+          image: product.image_url || product.image_small_url || undefined,
+        };
+      }
+      
+      // Se não encontrou na base local, retornar o produto mesmo sem valores nutricionais
+      // O usuário pode editar depois
+      console.log('[Barcode] Produto sem valores nutricionais, retornando mesmo assim');
+    }
+    
+    // Normalizar nome do produto
+    const normalizedName = normalizeFoodName(productName);
+    
+    // Verificar se é líquido usando o nome original (antes da normalização)
+    // para garantir que marcas como "Monster" sejam detectadas
+    const isLiquidCheck = (name: string): boolean => {
+      const nameLower = name.toLowerCase();
+      const liquidKeywords = [
+        'água', 'water', 'agua',
+        'sumo', 'suco', 'juice',
+        'bebida', 'drink', 'beverage',
+        'refrigerante', 'soda', 'cola',
+        'cerveja', 'beer', 'cerveza', 'bière',
+        'vinho', 'wine', 'vino', 'vin',
+        'leite', 'milk', 'lait', 'latte',
+        'café', 'coffee', 'cafè', 'café',
+        'chá', 'tea', 'tè', 'thé',
+        'limonada', 'lemonade', 'limonade',
+        'água com gás', 'sparkling water',
+        'energético', 'energy drink', 'energetico',
+        'isotónico', 'sports drink', 'isotonico',
+        'iogurte líquido', 'liquid yogurt',
+        'smoothie', 'batido',
+        'monster', 'red bull', 'redbull', 'rockstar', 'burn', 'powerade', 'gatorade',
+        'coca-cola', 'coca cola', 'pepsi', 'fanta', 'sprite', '7up',
+        'ml', 'litro', 'litros', 'l', 'cl', 'dl',
+      ];
+      return liquidKeywords.some(keyword => nameLower.includes(keyword));
     };
-  } catch (error) {
-    console.error('Error fetching food by barcode:', error);
+    
+    // Usar nome normalizado (sem adicionar indicadores de líquido, pois tudo é em gramas agora)
+    const finalName = normalizedName;
+    
+    return {
+      id: product.code || cleanBarcode,
+      name: finalName,
+      calories: calories || 0,
+      protein: protein || 0,
+      carbs: carbs || 0,
+      fat: fat || 0,
+      image: product.image_url || product.image_small_url || undefined,
+    };
+  } catch (error: any) {
+    console.error('[Barcode] Erro ao buscar produto:', error);
+    console.error('[Barcode] Stack:', error.stack);
     return null;
   }
+}
+
+/**
+ * Obtém alimento por código de barras usando múltiplas APIs (fallback)
+ * Tenta Open Food Facts primeiro, depois UPCitemdb, depois Barcode Lookup
+ */
+export async function getFoodByBarcode(barcode: string): Promise<FoodItem | null> {
+  const cleanBarcode = barcode.trim().replace(/\D/g, '');
+  
+  if (!cleanBarcode || cleanBarcode.length < 8) {
+    console.log('[Barcode] Código de barras inválido:', barcode, '->', cleanBarcode);
+    return null;
+  }
+
+  console.log('[Barcode] Iniciando busca com múltiplas APIs para código:', cleanBarcode);
+
+  // 1. Tentar Open Food Facts primeiro (melhor para valores nutricionais)
+  console.log('[Barcode] Tentando Open Food Facts...');
+  let result = await getFoodFromOpenFoodFacts(cleanBarcode);
+  if (result) {
+    // Validação adicional de segurança (mesmo que a API já tenha validado)
+    if (!isFoodProduct(result.name)) {
+      console.log('[Barcode] Produto rejeitado após validação final:', result.name);
+      result = null;
+    } else {
+      console.log('[Barcode] Produto encontrado no Open Food Facts');
+      return result;
+    }
+  }
+
+  // 2. Tentar UPCitemdb (gratuito, sem API key)
+  console.log('[Barcode] Open Food Facts não encontrou, tentando UPCitemdb...');
+  result = await getFoodFromUPCitemdb(cleanBarcode);
+  if (result) {
+    // Validação adicional de segurança
+    if (!isFoodProduct(result.name)) {
+      console.log('[Barcode] Produto rejeitado após validação final:', result.name);
+      result = null;
+    } else {
+      console.log('[Barcode] Produto encontrado no UPCitemdb');
+      // Tentar buscar valores nutricionais na base local pelo nome
+      if (result.calories === 0 && result.protein === 0 && result.carbs === 0 && result.fat === 0) {
+        const { FOOD_DATABASE } = await import('./foodDatabase');
+        const nameLower = result.name.toLowerCase();
+        const localMatch = FOOD_DATABASE.find(food => {
+          const foodNameLower = food.name.toLowerCase();
+          return nameLower.includes(foodNameLower) || foodNameLower.includes(nameLower);
+        });
+        
+        if (localMatch) {
+          console.log('[Barcode] Valores nutricionais encontrados na base local');
+          result.calories = localMatch.caloriesPer100g;
+          result.protein = localMatch.proteinPer100g;
+          result.carbs = localMatch.carbsPer100g;
+          result.fat = localMatch.fatPer100g;
+        }
+      }
+      return result;
+    }
+  }
+
+  // 3. Tentar API alternativa (pode ser expandida no futuro)
+  console.log('[Barcode] UPCitemdb não encontrou, tentando API alternativa...');
+  result = await getFoodFromAlternativeAPI(cleanBarcode);
+  if (result) {
+    // Validação adicional de segurança
+    if (!isFoodProduct(result.name)) {
+      console.log('[Barcode] Produto rejeitado após validação final:', result.name);
+      result = null;
+    } else {
+      console.log('[Barcode] Produto encontrado na API alternativa');
+      // Tentar buscar valores nutricionais na base local pelo nome
+      if (result.calories === 0 && result.protein === 0 && result.carbs === 0 && result.fat === 0) {
+        const { FOOD_DATABASE } = await import('./foodDatabase');
+        const nameLower = result.name.toLowerCase();
+        const localMatch = FOOD_DATABASE.find(food => {
+          const foodNameLower = food.name.toLowerCase();
+          return nameLower.includes(foodNameLower) || foodNameLower.includes(nameLower);
+        });
+        
+        if (localMatch) {
+          console.log('[Barcode] Valores nutricionais encontrados na base local');
+          result.calories = localMatch.caloriesPer100g;
+          result.protein = localMatch.proteinPer100g;
+          result.carbs = localMatch.carbsPer100g;
+          result.fat = localMatch.fatPer100g;
+        }
+      }
+      return result;
+    }
+  }
+
+  console.log('[Barcode] Produto não encontrado em nenhuma API');
+  return null;
 }
 
 /**

@@ -6,7 +6,6 @@
 
 import React from 'react';
 import { View, Text, Image, TouchableOpacity } from 'react-native';
-import { Coffee, Utensils, Moon, Apple } from '@expo/vector-icons';
 import { Ionicons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { useTheme } from '../context/ThemeContext';
@@ -22,11 +21,20 @@ interface MealCardProps {
   onDelete?: () => void;
 }
 
-const mealIcons = {
-  breakfast: Coffee,
-  lunch: Utensils,
-  dinner: Moon,
-  snack: Apple,
+// Ícones para cada tipo de refeição usando Ionicons
+const getMealIcon = (mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack') => {
+  switch (mealType) {
+    case 'breakfast':
+      return 'cafe-outline';
+    case 'lunch':
+      return 'restaurant-outline';
+    case 'dinner':
+      return 'moon-outline';
+    case 'snack':
+      return 'nutrition-outline';
+    default:
+      return 'restaurant-outline';
+  }
 };
 
 export function MealCard({ name, calories, mealType, image, time, onPress, onDelete }: MealCardProps) {
@@ -50,8 +58,39 @@ export function MealCard({ name, calories, mealType, image, time, onPress, onDel
     } else {
       theme = themeContext.theme;
     }
-    
-    Icon = mealIcons[mealType] || Apple;
+
+    // Cores diferentes apenas para ícones e calorias
+    const getMealStyle = () => {
+      switch (mealType) {
+        case 'breakfast':
+          return {
+            iconBg: '#FEF3C7',
+            iconColor: '#F59E0B',
+            accentColor: '#F59E0B',
+          };
+        case 'lunch':
+        case 'dinner':
+          return {
+            iconBg: '#D1FAE5',
+            iconColor: '#3BB273',
+            accentColor: '#3BB273',
+          };
+        case 'snack':
+          return {
+            iconBg: '#E9D5FF',
+            iconColor: '#A855F7',
+            accentColor: '#A855F7',
+          };
+        default:
+          return {
+            iconBg: (theme?.colors?.primary || '#3BB273') + '15',
+            iconColor: theme?.colors?.primary || '#3BB273',
+            accentColor: theme?.colors?.primary || '#3BB273',
+          };
+      }
+    };
+
+    const mealStyle = getMealStyle();
 
     return (
     <MotiView
@@ -92,7 +131,7 @@ export function MealCard({ name, calories, mealType, image, time, onPress, onDel
           />
         ) : (
           <View style={{
-            backgroundColor: (theme?.colors?.primary || '#3BB273') + '15',
+            backgroundColor: mealStyle.iconBg,
             borderRadius: 12,
             padding: 10,
             marginRight: 12,
@@ -101,11 +140,11 @@ export function MealCard({ name, calories, mealType, image, time, onPress, onDel
             width: 56,
             height: 56,
           }}>
-            {Icon && typeof Icon === 'function' ? (
-              <Icon name="coffee" size={22} color={theme?.colors?.primary || '#3BB273'} />
-            ) : (
-              <Text style={{ fontSize: 22 }}>🍽️</Text>
-            )}
+            <Ionicons 
+              name={getMealIcon(mealType) as any} 
+              size={22} 
+              color={mealStyle.iconColor} 
+            />
           </View>
         )}
 
@@ -132,7 +171,7 @@ export function MealCard({ name, calories, mealType, image, time, onPress, onDel
 
         <View style={{ alignItems: 'flex-end', marginRight: onDelete ? 8 : 0 }}>
           <Text style={{
-            color: theme?.colors?.primary || '#3BB273',
+            color: mealStyle.accentColor,
             fontWeight: '600',
             fontSize: 15,
           }}>

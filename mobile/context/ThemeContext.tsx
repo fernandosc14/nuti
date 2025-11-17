@@ -48,7 +48,8 @@ const darkColors: ThemeColors = {
 
 interface ThemeContextType {
   theme: Theme;
-  setThemeMode: (mode: ThemeMode) => void;
+  themeMode: ThemeMode;
+  setThemeMode: (mode: ThemeMode) => Promise<void>;
   toggleTheme: () => void;
 }
 
@@ -57,30 +58,75 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemColorScheme = useColorScheme();
   const [isDark, setIsDark] = useState(systemColorScheme === 'dark');
+  const [themeMode, setThemeModeState] = useState<ThemeMode>('system');
 
+  // Carregar preferência salva
   useEffect(() => {
-    // Sempre seguir o tema do sistema
-    setIsDark(systemColorScheme === 'dark');
-  }, [systemColorScheme]);
+    const loadThemePreference = async () => {
+      try {
+        const savedMode = await AsyncStorage.getItem('theme_mode');
+        if (savedMode && (savedMode === 'light' || savedMode === 'dark' || savedMode === 'system')) {
+          setThemeModeState(savedMode as ThemeMode);
+          if (savedMode === 'light') {
+            setIsDark(false);
+          } else if (savedMode === 'dark') {
+            setIsDark(true);
+          } else {
+            // Se for 'system', seguir o sistema
+            setIsDark(systemColorScheme === 'dark');
+          }
+        } else {
+          // Se não tem preferência salva, seguir o sistema
+          setThemeModeState('system');
+          setIsDark(systemColorScheme === 'dark');
+        }
+      } catch (error) {
+        console.error('Error loading theme preference:', error);
+        setThemeModeState('system');
+        setIsDark(systemColorScheme === 'dark');
+      }
+    };
+    loadThemePreference();
+  }, []);
+
+  // Se o modo for 'system', seguir o sistema
+  useEffect(() => {
+    if (themeMode === 'system') {
+      setIsDark(systemColorScheme === 'dark');
+    }
+  }, [systemColorScheme, themeMode]);
 
   const setThemeMode = async (mode: ThemeMode) => {
-    // Não fazer nada - sempre automático
+    try {
+      setThemeModeState(mode);
+      if (mode === 'light') {
+        setIsDark(false);
+      } else if (mode === 'dark') {
+        setIsDark(true);
+      } else {
+        setIsDark(systemColorScheme === 'dark');
+      }
+      await AsyncStorage.setItem('theme_mode', mode);
+    } catch (error) {
+      console.error('Error saving theme preference:', error);
+    }
   };
 
-  const toggleTheme = () => {
-    // Não fazer nada - sempre automático
+  const toggleTheme = async () => {
+    const newMode = isDark ? 'light' : 'dark';
+    await setThemeMode(newMode);
   };
 
   const colors = isDark ? darkColors : lightColors;
 
   const theme: Theme = {
-    mode: 'system',
+    mode: themeMode,
     colors,
     isDark,
   };
 
   return (
-    <ThemeContext.Provider value={{ theme, setThemeMode, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, themeMode, setThemeMode, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );

@@ -11,6 +11,7 @@ import Animated, { useSharedValue, useAnimatedProps, withTiming } from 'react-na
 import { calculatePercentage, calculateRemaining } from '../utils/formatters';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -21,7 +22,7 @@ interface ChartCircleProps {
   strokeWidth?: number;
 }
 
-export function ChartCircle({ consumed, goal, size = 200, strokeWidth = 20 }: ChartCircleProps) {
+export function ChartCircle({ consumed, goal, size = 170, strokeWidth = 18 }: ChartCircleProps) {
   const { t } = useLanguage();
   const { theme } = useTheme();
   const percentage = calculatePercentage(consumed, goal);
@@ -45,126 +46,155 @@ export function ChartCircle({ consumed, goal, size = 200, strokeWidth = 20 }: Ch
   // Cores baseadas no progresso
   const getColor = () => {
     if (percentage >= 100) return '#EF4444'; // Vermelho se excedeu
-    if (percentage >= 75) return '#3BB273'; // Verde se próximo da meta
-    if (percentage >= 50) return '#F59E0B'; // Laranja se médio
-    return '#EF4444'; // Vermelho se baixo
+    return '#3BB273'; // Verde se dentro do limite
   };
 
   const color = getColor();
 
   return (
-    <View style={[styles.container, {
-      backgroundColor: theme.colors.card,
-      borderRadius: 24,
-      padding: 24,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.15,
-      shadowRadius: 12,
-      elevation: 5,
-    }]}>
-      {/* Título */}
-      <View style={styles.header}>
-        <View style={[styles.iconContainer, { backgroundColor: color + '20' }]}>
-          <Text style={{ fontSize: 24 }}>🔥</Text>
-        </View>
+    <View style={styles.wrapper}>
+      {/* Header - Fora do card */}
+      {/* <View style={styles.header}>
+        <Text style={{ fontSize: 24, marginRight: 8 }}>🔥</Text>
         <Text style={[styles.title, { color: theme.colors.text }]}>
           {t('dashboard.calories')}
         </Text>
-      </View>
+      </View> */}
 
-      {/* Círculo */}
-      <View style={{ width: size, height: size, position: 'relative', alignItems: 'center', justifyContent: 'center', marginVertical: 20 }}>
-        <Svg width={size} height={size}>
-          {/* Círculo de fundo */}
-          <Circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            stroke={theme.mode === 'dark' ? '#374151' : '#F3F4F6'}
-            strokeWidth={strokeWidth}
-            fill="transparent"
-          />
-          {/* Círculo de progresso */}
-          <AnimatedCircle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            stroke={color}
-            strokeWidth={strokeWidth}
-            fill="transparent"
-            strokeDasharray={circumference}
-            strokeLinecap="round"
-            transform={`rotate(-90 ${size / 2} ${size / 2})`}
-            animatedProps={animatedProps}
-          />
-        </Svg>
+      {/* Card */}
+      <View style={[styles.container, {
+        backgroundColor: theme.colors.card,
+        borderRadius: 20,
+        padding: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        elevation: 5,
+      }]}>
+        {/* Content Row: Círculo + Info */}
+      <View style={styles.contentRow}>
+        {/* Círculo */}
+        <View style={styles.circleWrapper}>
+          <Svg width={size} height={size}>
+            {/* Círculo de fundo */}
+            <Circle
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              stroke={theme.mode === 'dark' ? '#374151' : '#F3F4F6'}
+              strokeWidth={strokeWidth}
+              fill="transparent"
+            />
+            {/* Círculo de progresso */}
+            <AnimatedCircle
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              stroke={color}
+              strokeWidth={strokeWidth}
+              fill="transparent"
+              strokeDasharray={circumference}
+              strokeLinecap="round"
+              transform={`rotate(-90 ${size / 2} ${size / 2})`}
+              animatedProps={animatedProps}
+            />
+          </Svg>
 
-        {/* Texto central */}
-        <View style={styles.textContainer}>
-          <Text style={[styles.consumedText, { color: color }]}>{consumed}</Text>
-          <Text style={[styles.kcalLabel, { color: theme.colors.textSecondary || '#6B7280' }]}>
-            kcal
-          </Text>
-          <View style={styles.progressIndicator}>
-            <View style={[styles.progressDot, { backgroundColor: color }]} />
-            <Text style={[styles.percentageText, { color: theme.colors.textSecondary || '#6B7280' }]}>
-              {Math.round(percentage)}%
+          {/* Texto central */}
+          <View style={styles.textContainer}>
+            <Text style={[styles.consumedText, { color: color }]}>{consumed}</Text>
+            <Text style={[styles.kcalLabel, { color: theme.colors.textSecondary || '#6B7280' }]}>
+              kcal
             </Text>
+            <View style={styles.progressIndicator}>
+              <View style={[styles.progressDot, { backgroundColor: color }]} />
+              <Text style={[styles.percentageText, { color: theme.colors.textSecondary || '#6B7280' }]}>
+                {Math.round(percentage)}%
+              </Text>
+            </View>
           </View>
         </View>
-      </View>
 
-      {/* Informações */}
-      <View style={styles.infoContainer}>
-        <View style={styles.infoRow}>
+        {/* Informações ao lado */}
+        <View style={styles.infoContainer}>
           <View style={styles.infoItem}>
-            <Text style={[styles.infoLabel, { color: theme.colors.textSecondary || '#6B7280' }]}>
-              {t('dashboard.caloriesGoal')}
-            </Text>
-            <Text style={[styles.infoValue, { color: theme.colors.text }]}>
-              {goal} kcal
-            </Text>
+            <View style={styles.infoHeader}>
+              <Ionicons name="flag-outline" size={14} color={theme.colors.textSecondary || '#6B7280'} />
+              <Text style={[styles.infoLabel, { color: theme.colors.textSecondary || '#6B7280' }]}>
+                {t('dashboard.caloriesGoal')}
+              </Text>
+            </View>
+            <View style={styles.infoValueContainer}>
+              <Text style={[styles.infoValue, { color: theme.colors.text }]}>
+                {goal}
+              </Text>
+              <Text style={[styles.infoUnit, { color: theme.colors.textSecondary || '#6B7280' }]}>
+                kcal
+              </Text>
+            </View>
           </View>
+          
           <View style={[styles.divider, { backgroundColor: theme.colors.border || '#E5E7EB' }]} />
+          
           <View style={styles.infoItem}>
-            <Text style={[styles.infoLabel, { color: theme.colors.textSecondary || '#6B7280' }]}>
-              {t('dashboard.caloriesRemaining')}
-            </Text>
-            <Text style={[styles.infoValue, { color: remaining > 0 ? '#3BB273' : '#EF4444' }]}>
-              {remaining} kcal
-            </Text>
+            <View style={styles.infoHeader}>
+              <Ionicons 
+                name={remaining > 0 ? "checkmark-circle-outline" : "warning-outline"} 
+                size={14} 
+                color={remaining > 0 ? '#3BB273' : '#EF4444'} 
+              />
+              <Text style={[styles.infoLabel, { color: theme.colors.textSecondary || '#6B7280' }]}>
+                {t('dashboard.caloriesRemaining')}
+              </Text>
+            </View>
+            <View style={styles.infoValueContainer}>
+              <Text style={[styles.infoValue, { color: remaining > 0 ? '#3BB273' : '#EF4444' }]}>
+                {remaining}
+              </Text>
+              <Text style={[styles.infoUnit, { color: theme.colors.textSecondary || '#6B7280' }]}>
+                kcal
+              </Text>
+            </View>
           </View>
         </View>
+      </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  wrapper: {
     width: '100%',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 16,
     alignSelf: 'flex-start',
-    width: '100%',
+    paddingHorizontal: 4,
   },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
+  container: {
+    width: '100%',
   },
   title: {
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  contentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: 24,
+  },
+  circleWrapper: {
+    width: 170,
+    height: 170,
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   textContainer: {
     position: 'absolute',
@@ -172,58 +202,73 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   consumedText: {
-    fontSize: 48,
+    fontSize: 38,
     fontWeight: '900',
-    lineHeight: 56,
+    lineHeight: 44,
   },
   kcalLabel: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '600',
-    marginTop: 4,
+    marginTop: 2,
   },
   progressIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 4,
     gap: 6,
   },
   progressDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   percentageText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
   },
   infoContainer: {
-    width: '100%',
-    marginTop: 8,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingTop: 16,
-    borderTopWidth: 1,
+    flex: 1,
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    paddingLeft: 8,
   },
   infoItem: {
-    flex: 1,
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    width: '100%',
   },
   divider: {
-    width: 1,
-    height: 40,
-    marginHorizontal: 16,
+    width: '90%',
+    height: 1,
+    marginVertical: 10,
+    alignSelf: 'flex-start',
+  },
+  infoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
   },
   infoLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  infoValueContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
   },
   infoValue: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
+    lineHeight: 26,
+  },
+  infoUnit: {
+    fontSize: 13,
+    fontWeight: '500',
   },
 });
 

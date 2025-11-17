@@ -25,6 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 // import * as Clipboard from 'expo-clipboard';
 import { Timestamp, doc, getDoc, setDoc } from 'firebase/firestore';
+import { calculateCaloriePlan } from '../utils/nutritionUtils';
 import { db } from '../services/firebase';
 
 type OnboardingStep = 
@@ -114,49 +115,35 @@ export function OnboardingScreen({ navigation: _navigation }: any) {
       return null;
     }
 
-    // Valores já estão em números (sliders) - sempre em métricas
-    const weight = weightKg; // kg
-    const height = heightCm; // cm
-
-    // Obter idade
     const ageNum = parseInt(age) || 25;
+    const desiredWeightKgValue = (() => {
+      if (goal === 'maintain') {
+        return weightKg;
+      }
+      if (!desiredWeight) {
+        return weightKg;
+      }
+      const parsed = parseFloat(desiredWeight);
+      if (isNaN(parsed)) {
+        return weightKg;
+      }
+      return isImperial ? parsed * 0.453592 : parsed;
+    })();
 
-    // Fórmula de Mifflin-St Jeor para BMR
-    let bmr: number;
-    if (gender === 'male') {
-      bmr = 10 * weight + 6.25 * height - 5 * ageNum + 5;
-    } else {
-      // female
-      bmr = 10 * weight + 6.25 * height - 5 * ageNum - 161;
-    }
+    const plan = calculateCaloriePlan({
+      weightKg,
+      heightCm,
+      age: ageNum,
+      gender,
+      workoutsPerWeek,
+      goal,
+      desiredWeightKg: desiredWeightKgValue,
+      currentWeightKg: weightKg,
+    });
 
-    // Fator de atividade baseado em workouts
-    let activityFactor = 1.2; // Sedentário
-    if (workoutsPerWeek === '3-6') {
-      activityFactor = 1.55; // Moderadamente ativo
-    } else if (workoutsPerWeek === '6+') {
-      activityFactor = 1.725; // Muito ativo
-    }
-
-    // TDEE (Total Daily Energy Expenditure)
-    let tdee = bmr * activityFactor;
-
-    // Ajustar baseado no objetivo
-    if (goal === 'lose') {
-      tdee = tdee * 0.85; // Défice de 15%
-    } else if (goal === 'gain') {
-      tdee = tdee * 1.15; // Superávit de 15%
-    }
-    // Se 'maintain', usar TDEE como está
-
-    const calories = Math.round(tdee);
-
-    // Calcular macros (distribuição padrão)
-    // Proteína: 30% das calorias (4 kcal/g)
+    const calories = plan.calories;
     const proteinGrams = Math.round((calories * 0.30) / 4);
-    // Carboidratos: 40% das calorias (4 kcal/g)
     const carbsGrams = Math.round((calories * 0.40) / 4);
-    // Gordura: 30% das calorias (9 kcal/g)
     const fatGrams = Math.round((calories * 0.30) / 9);
 
     return {
@@ -164,8 +151,8 @@ export function OnboardingScreen({ navigation: _navigation }: any) {
       protein: proteinGrams,
       carbs: carbsGrams,
       fat: fatGrams,
-      bmr: Math.round(bmr),
-      tdee: Math.round(bmr * activityFactor),
+      bmr: plan.bmr,
+      tdee: plan.maintenanceCalories,
     };
   };
 

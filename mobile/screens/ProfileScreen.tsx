@@ -707,9 +707,9 @@ export function ProfileScreen({ navigation }: any) {
             <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary || '#9CA3AF'} />
           </TouchableOpacity>
 
-          {/* Preferências (Tema) */}
+          {/* Preferências */}
           <TouchableOpacity
-            onPress={toggleTheme}
+            onPress={() => navigation.navigate('Preferences')}
             activeOpacity={0.7}
             style={{
               flexDirection: 'row',
@@ -733,11 +733,7 @@ export function ProfileScreen({ navigation }: any) {
             }}>
               {t('profile.preferences') || 'Preferências'}
             </Text>
-            <Ionicons 
-              name={isDark ? "moon" : "sunny"} 
-              size={20} 
-              color={theme.colors.textSecondary || '#9CA3AF'} 
-            />
+            <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary || '#9CA3AF'} />
           </TouchableOpacity>
 
           {/* Divisor */}

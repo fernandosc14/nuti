@@ -10,12 +10,15 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator, TouchableOpacity, StyleSheet, Platform, Modal, Pressable, Text } from 'react-native';
+import { View, ActivityIndicator, TouchableOpacity, StyleSheet, Platform, Modal, Pressable, Text, LogBox } from 'react-native';
 import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
 import { UserProvider, useUser } from './context/UserContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
+import { UnitsProvider } from './context/UnitsContext';
+import { SelectedDateProvider, useSelectedDate } from './context/SelectedDateContext';
 import { WelcomeScreen } from './screens/WelcomeScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { RegisterScreen } from './screens/RegisterScreen';
@@ -28,8 +31,10 @@ import { ProfileScreen } from './screens/ProfileScreen';
 import { EditNameScreen } from './screens/EditNameScreen';
 import { EditPersonalDetailsScreen } from './screens/EditPersonalDetailsScreen';
 import { EditGoalAndWeightScreen } from './screens/EditGoalAndWeightScreen';
+import { UpdateWeightScreen } from './screens/UpdateWeightScreen';
 import { PremiumScreen } from './screens/PremiumScreen';
 import { ProgressScreen } from './screens/ProgressScreen';
+import { PreferencesScreen } from './screens/PreferencesScreen';
 import { PremiumWelcomeModal } from './components/PremiumWelcomeModal';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
@@ -79,6 +84,7 @@ function AddButton() {
   
   const { theme } = useTheme();
   const { t } = useLanguage();
+  const { selectedDate } = useSelectedDate();
   const [showMenu, setShowMenu] = useState(false);
   const buttonRef = useRef<TouchableOpacity>(null);
   const [buttonLayout, setButtonLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
@@ -86,7 +92,10 @@ function AddButton() {
   const handleOption = (mode: 'camera' | 'barcode' | 'search') => {
     setShowMenu(false);
     setTimeout(() => {
-      (navigation as any).getParent()?.navigate('AddMeal', { mode });
+      (navigation as any).getParent()?.navigate('AddMeal', { 
+        mode,
+        selectedDate: selectedDate ? selectedDate.toISOString() : null
+      });
     }, 200);
   };
 
@@ -374,13 +383,24 @@ function MainTabs() {
 function AppStack() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+    <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+      {!theme.isDark && (
+        <LinearGradient
+          colors={['#FFFFFF', '#F0FDF4']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+      )}
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
         animation: 'slide_from_right',
-          contentStyle: { backgroundColor: theme.colors.background },
+        contentStyle: !theme.isDark
+          ? { backgroundColor: 'transparent' }
+          : { backgroundColor: theme.colors.background },
       }}
     >
         <Stack.Screen name="MainTabs" component={MainTabs} />
@@ -388,7 +408,9 @@ function AppStack() {
       <Stack.Screen name="EditName" component={EditNameScreen} />
       <Stack.Screen name="EditPersonalDetails" component={EditPersonalDetailsScreen} />
       <Stack.Screen name="EditGoalAndWeight" component={EditGoalAndWeightScreen} />
+      <Stack.Screen name="UpdateWeight" component={UpdateWeightScreen} />
       <Stack.Screen name="Premium" component={PremiumScreen} />
+      <Stack.Screen name="Preferences" component={PreferencesScreen} />
     </Stack.Navigator>
     </View>
   );
@@ -499,15 +521,12 @@ function RootNavigator() {
   
 
   // Mostrar loading se:
-  // 1. Está a carregar
-  // 2. Está a verificar onboarding
-  // 3. Perfil foi criado recentemente
-  // 4. Perfil existe mas onboardingCompleted é undefined (pode estar a ser criado)
+  // 1. Está a carregar (sem user ou profile ainda)
+  // 2. Está a verificar onboarding (apenas por um tempo limitado)
+  // 3. Perfil foi criado recentemente (apenas por um tempo limitado)
   const shouldShowLoading = loading || 
-                            checkingOnboarding || 
-                            profileCreatedRecently || 
-                            isProfileRecent ||
-                            (user && profile && profile.onboardingCompleted === undefined);
+                            (checkingOnboarding && profileCreatedRecently) || 
+                            (profileCreatedRecently && isProfileRecent);
   
   if (shouldShowLoading) {
     return (
@@ -644,14 +663,18 @@ export default function App() {
       <SafeAreaProvider>
         <LanguageProvider>
           <ThemeProvider>
-            <UserProvider>
+            <UnitsProvider>
+              <SelectedDateProvider>
+                <UserProvider>
               <StatusBar style="auto" />
               <NavigationErrorBoundary>
                 <RootNavigator />
               </NavigationErrorBoundary>
               <PremiumWelcomeModal />
               <Toast />
-            </UserProvider>
+                </UserProvider>
+              </SelectedDateProvider>
+            </UnitsProvider>
           </ThemeProvider>
         </LanguageProvider>
       </SafeAreaProvider>
