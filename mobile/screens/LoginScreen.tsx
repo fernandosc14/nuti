@@ -8,13 +8,11 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '../context/UserContext';
@@ -23,61 +21,9 @@ import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 
 export function LoginScreen({ navigation }: any) {
-  const { signIn, signInWithGoogle, signInWithGoogleNative } = useUser();
+  const { signInWithGoogleNative } = useUser();
   const { t } = useLanguage();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-
-  const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      Toast.show({
-        type: 'error',
-        text1: t('common.error'),
-        text2: t('auth.invalidCredentials'),
-      });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await signIn(email.trim(), password);
-      Toast.show({
-        type: 'success',
-        text1: t('common.success'),
-        text2: t('auth.signIn') + ' ' + t('common.success'),
-      });
-    } catch (error: any) {
-      Toast.show({
-        type: 'error',
-        text1: t('common.error'),
-        text2: error.message || t('auth.invalidCredentials'),
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setLoading(true);
-    try {
-      await signInWithGoogle();
-      Toast.show({
-        type: 'success',
-        text1: t('common.success'),
-        text2: t('auth.signIn') + ' ' + t('common.success'),
-      });
-    } catch (error: any) {
-      Toast.show({
-        type: 'error',
-        text1: t('common.error'),
-        text2: error.message || t('common.error'),
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-gray-900">
@@ -100,73 +46,6 @@ export function LoginScreen({ navigation }: any) {
             <Text className="text-gray-500 dark:text-gray-400">
               {t('welcome.subtitle')}
             </Text>
-          </View>
-
-          {/* Formulário */}
-          <View className="space-y-4 mb-6">
-            <View>
-              <Text className="text-gray-700 dark:text-gray-300 mb-2 font-medium">
-                {t('auth.email')}
-              </Text>
-              <TextInput
-                className="bg-gray-100 dark:bg-gray-800 rounded-xl px-4 py-4 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700"
-                placeholder="exemplo@email.com"
-                placeholderTextColor="#9CA3AF"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoComplete="email"
-              />
-            </View>
-
-            <View>
-              <Text className="text-gray-700 dark:text-gray-300 mb-2 font-medium">
-                {t('auth.password')}
-              </Text>
-              <View className="relative">
-                <TextInput
-                  className="bg-gray-100 dark:bg-gray-800 rounded-xl px-4 py-4 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 pr-12"
-                  placeholder="••••••••"
-                  placeholderTextColor="#9CA3AF"
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                />
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-4"
-                >
-                  <Ionicons
-                    name={showPassword ? 'eye-off' : 'eye'}
-                    size={20}
-                    color="#9CA3AF"
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-
-          {/* Botão Login */}
-          <TouchableOpacity
-            onPress={handleLogin}
-            disabled={loading}
-            className="bg-green-500 rounded-xl py-4 items-center justify-center mb-4 shadow-lg"
-            activeOpacity={0.8}
-          >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text className="text-white font-semibold text-lg">{t('auth.signIn')}</Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Divisor */}
-          <View className="flex-row items-center my-6">
-            <View className="flex-1 h-px bg-gray-300 dark:bg-gray-700" />
-            <Text className="mx-4 text-gray-500 dark:text-gray-400">{t('auth.or')}</Text>
-            <View className="flex-1 h-px bg-gray-300 dark:bg-gray-700" />
           </View>
 
           {/* Google Sign-In */}

@@ -18,6 +18,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '../context/UserContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { sendChatMessage, ChatMessage } from '../services/api';
 import { collection, addDoc, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
@@ -35,6 +37,7 @@ interface Message {
 export function ChatScreen({ navigation }: any) {
   const { user, profile } = useUser();
   const { t } = useLanguage();
+  const { theme } = useTheme();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -192,38 +195,76 @@ export function ChatScreen({ navigation }: any) {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       style={{ flex: 1 }}
     >
-      <View className="flex-1 bg-white dark:bg-gray-900">
+      <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+        {!theme.isDark && (
+          <LinearGradient
+            colors={['#FFFFFF', '#F0FDF4']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          />
+        )}
         {/* Header */}
-        <View className="flex-row items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <TouchableOpacity onPress={() => navigation.goBack()} className="mr-4">
-            <Ionicons name="arrow-back" size={24} color="#3BB273" />
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: 24,
+          paddingVertical: 16,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.colors.border || '#E5E7EB',
+        }}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 16 }}>
+            <Ionicons name="arrow-back" size={24} color={theme.colors.primary || '#3BB273'} />
           </TouchableOpacity>
-        <View className="flex-1">
-          <Text className="text-2xl font-bold text-gray-900 dark:text-white">
-            {t('chat.title')}
-          </Text>
-          <Text className="text-sm text-gray-500 dark:text-gray-400">
-            {t('chat.subtitle')}
-          </Text>
-        </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{
+              fontSize: 24,
+              fontWeight: '700',
+              color: theme.colors.text,
+            }}>
+              {t('chat.title')}
+            </Text>
+            <Text style={{
+              fontSize: 14,
+              color: theme.colors.textSecondary || '#6B7280',
+            }}>
+              {t('chat.subtitle')}
+            </Text>
+          </View>
         </View>
 
         {/* Mensagens */}
         <ScrollView
           ref={scrollViewRef}
-          className="flex-1 px-6 py-4"
+          style={{ flex: 1, paddingHorizontal: 24, paddingVertical: 16 }}
           contentContainerStyle={{ paddingBottom: 100 }}
           keyboardShouldPersistTaps="handled"
         >
         {messages.length === 0 && (
-          <View className="items-center justify-center py-12">
-            <View className="w-20 h-20 bg-green-100 dark:bg-green-900 rounded-full items-center justify-center mb-4">
-              <Text className="text-4xl">💬</Text>
+          <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 48 }}>
+            <View style={{
+              width: 80,
+              height: 80,
+              borderRadius: 40,
+              backgroundColor: (theme.colors.primary || '#3BB273') + '20',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 16,
+            }}>
+              <Text style={{ fontSize: 40 }}>💬</Text>
             </View>
-            <Text className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            <Text style={{
+              fontSize: 20,
+              fontWeight: '600',
+              color: theme.colors.text,
+              marginBottom: 8,
+            }}>
               {t('chat.greeting')}
             </Text>
-            <Text className="text-gray-500 dark:text-gray-400 text-center">
+            <Text style={{
+              color: theme.colors.textSecondary || '#6B7280',
+              textAlign: 'center',
+            }}>
               {t('chat.greetingMessage')}
             </Text>
           </View>
@@ -235,30 +276,41 @@ export function ChatScreen({ navigation }: any) {
             from={{ opacity: 0, translateY: 10 }}
             animate={{ opacity: 1, translateY: 0 }}
             transition={{ type: 'timing', duration: 300 }}
-            className={`mb-4 ${message.role === 'user' ? 'items-end' : 'items-start'}`}
+            style={{
+              marginBottom: 16,
+              alignItems: message.role === 'user' ? 'flex-end' : 'flex-start',
+            }}
           >
             <View
-              className={`max-w-[80%] rounded-3xl px-4 py-3 ${
-                message.role === 'user'
-                  ? 'bg-green-500'
-                  : 'bg-gray-100 dark:bg-gray-800'
-              }`}
+              style={{
+                maxWidth: '80%',
+                borderRadius: 24,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                backgroundColor: message.role === 'user'
+                  ? (theme.colors.primary || '#3BB273')
+                  : (theme.colors.card || (theme.isDark ? '#1F2937' : '#F3F4F6')),
+              }}
             >
               <Text
-                className={`text-sm leading-relaxed ${
-                  message.role === 'user'
-                    ? 'text-white'
-                    : 'text-gray-900 dark:text-white'
-                }`}
+                style={{
+                  fontSize: 14,
+                  lineHeight: 20,
+                  color: message.role === 'user'
+                    ? '#FFFFFF'
+                    : theme.colors.text,
+                }}
               >
                 {message.content}
               </Text>
               <Text
-                className={`text-xs mt-1 ${
-                  message.role === 'user'
-                    ? 'text-white/70'
-                    : 'text-gray-500 dark:text-gray-400'
-                }`}
+                style={{
+                  fontSize: 11,
+                  marginTop: 4,
+                  color: message.role === 'user'
+                    ? 'rgba(255, 255, 255, 0.7)'
+                    : (theme.colors.textSecondary || '#6B7280'),
+                }}
               >
                 {message.timestamp.toLocaleTimeString('pt-PT', {
                   hour: '2-digit',
@@ -270,12 +322,17 @@ export function ChatScreen({ navigation }: any) {
         ))}
 
         {loading && (
-          <View className="mb-4 items-start">
-            <View className="bg-gray-100 dark:bg-gray-800 rounded-3xl px-4 py-3">
-              <View className="flex-row gap-2">
-                <View className="w-2 h-2 bg-green-500 rounded-full" />
-                <View className="w-2 h-2 bg-green-500 rounded-full" style={{ marginTop: 4 }} />
-                <View className="w-2 h-2 bg-green-500 rounded-full" />
+          <View style={{ marginBottom: 16, alignItems: 'flex-start' }}>
+            <View style={{
+              backgroundColor: theme.colors.card || (theme.isDark ? '#1F2937' : '#F3F4F6'),
+              borderRadius: 24,
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+            }}>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={{ width: 8, height: 8, backgroundColor: theme.colors.primary || '#3BB273', borderRadius: 4 }} />
+                <View style={{ width: 8, height: 8, backgroundColor: theme.colors.primary || '#3BB273', borderRadius: 4, marginTop: 4 }} />
+                <View style={{ width: 8, height: 8, backgroundColor: theme.colors.primary || '#3BB273', borderRadius: 4 }} />
               </View>
             </View>
           </View>
@@ -283,27 +340,46 @@ export function ChatScreen({ navigation }: any) {
       </ScrollView>
 
         {/* Input */}
-        <View className="px-6 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900" style={{ paddingTop: 12, paddingBottom: 60 }}>
-          <View className="flex-row items-center gap-2">
+        <View style={{
+          paddingHorizontal: 24,
+          borderTopWidth: 1,
+          borderTopColor: theme.colors.border || '#E5E7EB',
+          backgroundColor: theme.colors.background,
+          paddingTop: 12,
+          paddingBottom: 60,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <TextInput
-              className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-xl px-4 py-3 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700"
+              style={{
+                flex: 1,
+                backgroundColor: theme.colors.card || (theme.isDark ? '#1F2937' : '#F3F4F6'),
+                borderRadius: 16,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                color: theme.colors.text,
+                borderWidth: 1,
+                borderColor: theme.colors.border || '#E5E7EB',
+                maxHeight: 100,
+              }}
               placeholder={t('chat.placeholder')}
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
               value={inputText}
               onChangeText={setInputText}
               multiline
               maxLength={500}
               editable={!loading}
-              style={{ maxHeight: 100 }}
             />
             <TouchableOpacity
               onPress={handleSend}
               disabled={!inputText.trim() || loading}
-              className={`rounded-xl px-4 py-3 ${
-                inputText.trim() && !loading
-                  ? 'bg-green-500'
-                  : 'bg-gray-300 dark:bg-gray-700'
-              }`}
+              style={{
+                borderRadius: 16,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                backgroundColor: (inputText.trim() && !loading)
+                  ? (theme.colors.primary || '#3BB273')
+                  : (theme.isDark ? '#374151' : '#D1D5DB'),
+              }}
             >
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />

@@ -34,17 +34,21 @@ export interface UserProfile {
   createdAt: Date;
   // Onboarding fields
   gender?: 'male' | 'female' | 'other';
-  workoutsPerWeek?: '0-2' | '3-6' | '6+';
+  workoutsPerWeek?: 'none' | '1x' | '1-2x' | '2-3x' | '3-4x' | '5-6x' | 'daily' | '0-2' | '3-6' | '6+';
   heardFrom?: string;
   triedOtherApps?: boolean;
   dateOfBirth?: Date;
   desiredWeight?: number;
+  diet?: 'classic' | 'pescatarian' | 'vegetarian' | 'vegan';
+  goalSpeed?: number; // kg per week
   referralCode?: string;
   onboardingCompleted?: boolean;
   // Auth method
   authMethod?: 'google' | 'email';
   // Profile image
   profileImageUrl?: string;
+  // Weight history
+  weightHistory?: Array<{ weight: number; date: Date }>;
 }
 
 interface UserContextType {
@@ -255,12 +259,18 @@ export function UserProvider({ children }: { children: ReactNode }) {
           triedOtherApps: data.triedOtherApps,
           dateOfBirth: data.dateOfBirth?.toDate(),
           desiredWeight: data.desiredWeight,
+          diet: data.diet,
           referralCode: data.referralCode,
           onboardingCompleted: onboardingCompleted, // Garantir que é boolean (true ou false)
           // Auth method
           authMethod: data.authMethod,
           // Profile image
           profileImageUrl: data.profileImageUrl,
+          // Weight history
+          weightHistory: data.weightHistory?.map((entry: any) => ({
+            weight: entry.weight,
+            date: entry.date?.toDate() || new Date(),
+          })) || [],
         };
         
         setProfile(loadedProfile);
@@ -751,4 +761,5 @@ export function useUser() {
   }
   return context;
 }
+
 

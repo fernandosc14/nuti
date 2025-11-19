@@ -21,6 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
+import { LinearGradient } from 'expo-linear-gradient';
 import { BadgeItem } from '../components/BadgeItem';
 import { PremiumPromoCard } from '../components/PremiumPromoCard';
 import { Ionicons } from '@expo/vector-icons';
@@ -430,6 +431,14 @@ export function ProfileScreen({ navigation }: any) {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      {!theme.isDark && (
+        <LinearGradient
+          colors={['#FFFFFF', '#F0FDF4']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+      )}
       <ScrollView 
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 40 }}

@@ -11,8 +11,12 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Path, Circle, Line, G, Text as SvgText } from 'react-native-svg';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../context/ThemeContext';
 import { useUser } from '../context/UserContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -40,6 +44,23 @@ export function ProgressScreen({ navigation }: any) {
       unit: units.weight === 'kg' ? 'kg' : 'lbs',
     };
   }, [profile?.weight, units, convertWeight]);
+
+  // Preparar dados do gráfico incluindo peso inicial se não houver histórico
+  const chartData = useMemo(() => {
+    if (!profile?.weight) return [];
+    
+    const history = profile.weightHistory || [];
+    
+    // Se não há histórico, criar entrada inicial com o peso atual e data de criação do perfil
+    if (history.length === 0 && profile.createdAt) {
+      return [{
+        weight: profile.weight,
+        date: profile.createdAt,
+      }];
+    }
+    
+    return history;
+  }, [profile?.weight, profile?.weightHistory, profile?.createdAt]);
 
   const bmiData = useMemo(() => {
     if (!profile?.weight || !profile?.height || profile.height <= 0) {
@@ -94,16 +115,20 @@ export function ProgressScreen({ navigation }: any) {
 
   const bmiAvailable = !!bmiData;
 
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top']}>
-      <ScrollView
-        contentContainerStyle={[styles.container, { paddingBottom: 32 }]}
-        showsVerticalScrollIndicator={false}
-      >
-        <Text style={[styles.message, { color: theme.colors.text }]}>
-          {t('progress.underDevelopment') || 'This feature is under development'}
-        </Text>
+  // Verificar se o usuário tem plano premium
+  const isPremium = profile?.plan === 'premium';
 
+  // Renderizar skeleton de exemplo (sem dados reais, apenas formas)
+  const renderSkeletonContent = () => {
+    const skeletonColor = theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
+    
+    return (
+      <ScrollView
+        contentContainerStyle={[styles.container, { paddingBottom: 32, paddingTop: 24 }]}
+        showsVerticalScrollIndicator={false}
+        scrollEnabled={false}
+      >
+        {/* Card de peso skeleton */}
         <View style={[
           styles.card,
           {
@@ -111,35 +136,43 @@ export function ProgressScreen({ navigation }: any) {
             borderColor: theme.colors.border || '#E5E7EB',
           },
         ]}>
-          <View style={styles.cardHeader}>
-            <View>
-              <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
-                {t('progress.weightCardTitle')}
-              </Text>
-              <Text style={[styles.weightSubtitle, { color: theme.colors.textSecondary || '#6B7280' }]}>
-                {t('progress.weightCardSubtitle')}
-              </Text>
-            </View>
+          {/* Linhas de título skeleton */}
+          <View style={{ marginBottom: 20 }}>
+            <View style={{
+              width: '60%',
+              height: 16,
+              backgroundColor: skeletonColor,
+              borderRadius: 8,
+              marginBottom: 8,
+            }} />
+            <View style={{
+              width: '40%',
+              height: 12,
+              backgroundColor: skeletonColor,
+              borderRadius: 6,
+            }} />
           </View>
 
-          <Text style={[styles.weightValue, { color: theme.colors.text }]}>
-            {weightInfo ? `${weightInfo.value} ${weightInfo.unit}` : t('progress.weightMissing')}
-          </Text>
+          {/* Valor grande skeleton */}
+          <View style={{
+            width: '50%',
+            height: 48,
+            backgroundColor: skeletonColor,
+            borderRadius: 8,
+            marginBottom: 20,
+            alignSelf: 'center',
+          }} />
 
-          <TouchableOpacity
-            style={[
-              styles.weightButton,
-              { backgroundColor: theme.colors.primary || '#3BB273' },
-            ]}
-            onPress={() => navigation.navigate('UpdateWeight')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.weightButtonText}>
-              {t('progress.weightCardButton')}
-            </Text>
-          </TouchableOpacity>
+          {/* Botão skeleton */}
+          <View style={{
+            width: '100%',
+            height: 48,
+            backgroundColor: skeletonColor,
+            borderRadius: 12,
+          }} />
         </View>
 
+        {/* Gráfico skeleton */}
         <View style={[
           styles.card,
           {
@@ -147,101 +180,397 @@ export function ProgressScreen({ navigation }: any) {
             borderColor: theme.colors.border || '#E5E7EB',
           },
         ]}>
-          <View style={styles.cardHeader}>
-            <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
-              {t('progress.bmiTitle')}
-            </Text>
-            {bmiAvailable && bmiData && (
-              <View style={[
-                styles.statusPill,
-                { backgroundColor: bmiData.background },
-              ]}>
-                <Text style={[styles.statusText, { color: bmiData.color }]}>
-                  {bmiData.label}
-                </Text>
-              </View>
-            )}
+          {/* Linhas de título skeleton */}
+          <View style={{ marginBottom: 20 }}>
+            <View style={{
+              width: '50%',
+              height: 16,
+              backgroundColor: skeletonColor,
+              borderRadius: 8,
+              marginBottom: 8,
+            }} />
           </View>
 
-          <Text style={[styles.bmiValue, { color: theme.colors.text }]}>
-            {bmiAvailable && bmiData ? bmiData.bmi : '--'}
-          </Text>
-          <Text style={[styles.bmiLabel, { color: theme.colors.textSecondary || '#6B7280' }]}>
-            BMI
-          </Text>
-
-          {/* BMI Progress Bar */}
-          <View style={styles.progressWrapper}>
-            <View style={styles.progressBar}>
-              {bmiData?.segments.map(segment => (
+          {/* Gráfico de barras skeleton */}
+          <View style={{ height: 200, justifyContent: 'flex-end', alignItems: 'center', paddingHorizontal: 20 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', width: '100%', height: 150 }}>
+              {[0.8, 0.4, 0.6, 0.9, 0.7, 0.75, 0.85].map((height, index) => (
                 <View
-                  key={segment.key}
-                  style={[
-                    styles.progressSegment,
-                    {
-                      backgroundColor: segment.color,
-                      flex: (segment.max - segment.min) / (BMI_MAX - BMI_MIN),
-                    },
-                  ]}
+                  key={index}
+                  style={{
+                    width: '12%',
+                    height: `${height * 100}%`,
+                    backgroundColor: skeletonColor,
+                    borderRadius: 4,
+                    minHeight: 20,
+                  }}
                 />
               ))}
             </View>
-            {bmiAvailable && (
-              <View
-                style={[
-                  styles.indicatorContainer,
-                  { left: `${bmiData.indicatorPercent}%` },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.indicatorPointer,
-                    {
-                      backgroundColor: theme.mode === 'dark' ? '#F9FAFB' : '#111827',
-                      borderColor: theme.colors.card || '#FFFFFF',
-                    },
-                  ]}
-                />
-              </View>
-            )}
-            <View style={styles.scaleLabels}>
-              <Text style={[styles.scaleText, { color: theme.colors.textSecondary || '#6B7280' }]}>
-                {BMI_MIN}
-              </Text>
-              <Text style={[styles.scaleText, { color: theme.colors.textSecondary || '#6B7280' }]}>
-                {BMI_MAX}
-              </Text>
-            </View>
+          </View>
+        </View>
+
+        {/* Card BMI skeleton */}
+        <View style={[
+          styles.card,
+          {
+            backgroundColor: theme.colors.card || '#FFFFFF',
+            borderColor: theme.colors.border || '#E5E7EB',
+          },
+        ]}>
+          {/* Header skeleton */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <View style={{
+              width: '50%',
+              height: 16,
+              backgroundColor: skeletonColor,
+              borderRadius: 8,
+            }} />
+            <View style={{
+              width: 80,
+              height: 24,
+              backgroundColor: skeletonColor,
+              borderRadius: 12,
+            }} />
           </View>
 
-          <Text style={[styles.description, { color: theme.colors.textSecondary || '#6B7280' }]}>
-            {t('progress.bmiDescription')}
-          </Text>
+          {/* Valor BMI skeleton */}
+          <View style={{
+            width: '30%',
+            height: 48,
+            backgroundColor: skeletonColor,
+            borderRadius: 8,
+            marginBottom: 12,
+            alignSelf: 'center',
+          }} />
+          <View style={{
+            width: '20%',
+            height: 14,
+            backgroundColor: skeletonColor,
+            borderRadius: 6,
+            alignSelf: 'center',
+            marginBottom: 20,
+          }} />
 
-          <Text style={[
-            styles.statusDescription,
-            { color: bmiAvailable && bmiData ? bmiData.color : (theme.colors.textSecondary || '#6B7280') },
-          ]}>
-            {bmiAvailable && bmiData
-              ? bmiData.description
-              : t('progress.bmiMissingData')}
-          </Text>
+          {/* Barra de progresso skeleton */}
+          <View style={{
+            width: '100%',
+            height: 14,
+            backgroundColor: skeletonColor,
+            borderRadius: 7,
+            marginBottom: 8,
+          }} />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 }}>
+            <View style={{ width: 30, height: 12, backgroundColor: skeletonColor, borderRadius: 6 }} />
+            <View style={{ width: 30, height: 12, backgroundColor: skeletonColor, borderRadius: 6 }} />
+          </View>
+
+          {/* Descrição skeleton */}
+          <View style={{ marginBottom: 8 }}>
+            <View style={{ width: '100%', height: 12, backgroundColor: skeletonColor, borderRadius: 6, marginBottom: 6 }} />
+            <View style={{ width: '80%', height: 12, backgroundColor: skeletonColor, borderRadius: 6 }} />
+          </View>
+          <View style={{ width: '60%', height: 12, backgroundColor: skeletonColor, borderRadius: 6 }} />
         </View>
       </ScrollView>
+    );
+  };
+
+  // Renderizar conteúdo real da tela
+  const renderProgressContent = () => (
+    <ScrollView
+      contentContainerStyle={[styles.container, { paddingBottom: 32 }]}
+      showsVerticalScrollIndicator={false}
+      scrollEnabled={isPremium}
+    >
+      {/* Header */}
+      <View style={[
+        styles.header,
+        {
+          backgroundColor: theme.colors.background,
+          borderBottomColor: theme.colors.border || '#E5E7EB',
+        },
+      ]}>
+        <TouchableOpacity 
+          onPress={() => navigation.goBack()} 
+          style={styles.backButton}
+          activeOpacity={0.7}
+        >
+          <Ionicons 
+            name="arrow-back" 
+            size={24} 
+            color={theme.colors.primary || '#3BB273'} 
+          />
+        </TouchableOpacity>
+        <View style={styles.headerTextContainer}>
+          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
+            {t('progress.title')}
+          </Text>
+          <Text style={[styles.headerSubtitle, { color: theme.colors.textSecondary || '#6B7280' }]}>
+            {t('progress.subtitle')}
+          </Text>
+        </View>
+      </View>
+
+      <View style={[
+        styles.card,
+        {
+          backgroundColor: theme.colors.card || '#FFFFFF',
+          borderColor: theme.colors.border || '#E5E7EB',
+        },
+      ]}>
+        <View style={styles.cardHeader}>
+          <View>
+            <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
+              {t('progress.weightCardTitle')}
+            </Text>
+            <Text style={[styles.weightSubtitle, { color: theme.colors.textSecondary || '#6B7280' }]}>
+              {t('progress.weightCardSubtitle')}
+            </Text>
+          </View>
+        </View>
+
+        <Text style={[styles.weightValue, { color: theme.colors.text }]}>
+          {weightInfo ? `${weightInfo.value} ${weightInfo.unit}` : t('progress.weightMissing')}
+        </Text>
+
+        <TouchableOpacity
+          style={[
+            styles.weightButton,
+            { backgroundColor: theme.colors.primary || '#3BB273' },
+          ]}
+          onPress={() => navigation.navigate('UpdateWeight')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.weightButtonText}>
+            {t('progress.weightCardButton')}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Weight Progress Chart */}
+      {profile?.weight && chartData.length > 0 && (
+        <View style={[
+          styles.card,
+          {
+            backgroundColor: theme.colors.card || '#FFFFFF',
+            borderColor: theme.colors.border || '#E5E7EB',
+          },
+        ]}>
+          <Text style={[styles.cardTitle, { color: theme.colors.text, marginBottom: 16 }]}>
+            {t('progress.weightProgress')}
+          </Text>
+          <WeightChart 
+            data={chartData} 
+            units={units}
+            convertWeight={convertWeight}
+            theme={theme}
+            t={t}
+          />
+        </View>
+      )}
+
+      <View style={[
+        styles.card,
+        {
+          backgroundColor: theme.colors.card || '#FFFFFF',
+          borderColor: theme.colors.border || '#E5E7EB',
+        },
+      ]}>
+        <View style={styles.cardHeader}>
+          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
+            {t('progress.bmiTitle')}
+          </Text>
+          {bmiAvailable && bmiData && (
+            <View style={[
+              styles.statusPill,
+              { backgroundColor: bmiData.background },
+            ]}>
+              <Text style={[styles.statusText, { color: bmiData.color }]}>
+                {bmiData.label}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <Text style={[styles.bmiValue, { color: theme.colors.text }]}>
+          {bmiAvailable && bmiData ? bmiData.bmi : '--'}
+        </Text>
+        <Text style={[styles.bmiLabel, { color: theme.colors.textSecondary || '#6B7280' }]}>
+          BMI
+        </Text>
+
+        {/* BMI Progress Bar */}
+        <View style={styles.progressWrapper}>
+          <View style={styles.progressBar}>
+            {bmiData?.segments.map(segment => (
+              <View
+                key={segment.key}
+                style={[
+                  styles.progressSegment,
+                  {
+                    backgroundColor: segment.color,
+                    flex: (segment.max - segment.min) / (BMI_MAX - BMI_MIN),
+                  },
+                ]}
+              />
+            ))}
+          </View>
+          {bmiAvailable && (
+            <View
+              style={[
+                styles.indicatorContainer,
+                { left: `${bmiData.indicatorPercent}%` },
+              ]}
+            >
+              <View
+                style={[
+                  styles.indicatorPointer,
+                  {
+                    backgroundColor: theme.mode === 'dark' ? '#F9FAFB' : '#111827',
+                    borderColor: theme.colors.card || '#FFFFFF',
+                  },
+                ]}
+              />
+            </View>
+          )}
+          <View style={styles.scaleLabels}>
+            <Text style={[styles.scaleText, { color: theme.colors.textSecondary || '#6B7280' }]}>
+              {BMI_MIN}
+            </Text>
+            <Text style={[styles.scaleText, { color: theme.colors.textSecondary || '#6B7280' }]}>
+              {BMI_MAX}
+            </Text>
+          </View>
+        </View>
+
+        <Text style={[styles.description, { color: theme.colors.textSecondary || '#6B7280' }]}>
+          {t('progress.bmiDescription')}
+        </Text>
+
+        <Text style={[
+          styles.statusDescription,
+          { color: bmiAvailable && bmiData ? bmiData.color : (theme.colors.textSecondary || '#6B7280') },
+        ]}>
+          {bmiAvailable && bmiData
+            ? bmiData.description
+            : t('progress.bmiMissingData')}
+        </Text>
+      </View>
+    </ScrollView>
+  );
+
+  // Se não for premium, mostrar tela de bloqueio com skeleton atrás
+  if (!isPremium) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top']}>
+        {!theme.isDark && (
+          <LinearGradient
+            colors={['#FFFFFF', '#F0FDF4']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          />
+        )}
+        {/* Skeleton da tela por trás */}
+        <View style={styles.skeletonContainer}>
+          {renderSkeletonContent()}
+        </View>
+
+        {/* Overlay de bloqueio */}
+        <View style={[StyleSheet.absoluteFill, styles.lockOverlay]}>
+          <TouchableOpacity 
+            onPress={() => navigation.goBack()} 
+            style={styles.lockBackButton}
+            activeOpacity={0.7}
+          >
+            <Ionicons 
+              name="arrow-back" 
+              size={24} 
+              color={theme.colors.primary || '#3BB273'} 
+            />
+          </TouchableOpacity>
+
+          <View style={styles.lockContent}>
+            <View style={[
+              styles.lockIconContainer,
+              { backgroundColor: (theme.colors.primary || '#3BB273') + '20' },
+            ]}>
+              <Ionicons 
+                name="lock-closed" 
+                size={64} 
+                color={theme.colors.primary || '#3BB273'} 
+              />
+            </View>
+
+            <Text style={[styles.lockTitle, { color: theme.isDark ? theme.colors.text : '#111827' }]}>
+              {t('progress.premiumRequired') || 'Premium Required'}
+            </Text>
+            <Text style={[styles.lockDescription, { color: theme.isDark ? (theme.colors.textSecondary || '#6B7280') : '#6B7280' }]}>
+              {t('progress.premiumRequiredDescription') || 'This feature is available only for Premium users. Upgrade to unlock progress tracking and more features.'}
+            </Text>
+
+            <TouchableOpacity
+              style={[
+                styles.lockUpgradeButton,
+                { backgroundColor: theme.colors.primary || '#3BB273' },
+              ]}
+              onPress={() => navigation.navigate('Premium')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.lockUpgradeButtonText}>
+                {t('premium.upgradeButton') || 'Upgrade to Premium'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top']}>
+      {!theme.isDark && (
+        <LinearGradient
+          colors={['#FFFFFF', '#F0FDF4']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+      )}
+      {renderProgressContent()}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+  },
+  backButton: {
+    marginRight: 8,
+  },
+  headerTextContainer: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    fontWeight: '400',
+  },
   container: {
     paddingHorizontal: 24,
-    paddingTop: 32,
+    paddingTop: 0,
     gap: 24,
-  },
-  message: {
-    fontSize: 18,
-    fontWeight: '600',
-    textAlign: 'center',
   },
   card: {
     borderRadius: 18,
@@ -350,4 +679,233 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  skeletonContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.5,
+  },
+  lockOverlay: {
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 24,
+    paddingTop: 0,
+  },
+  lockBackButton: {
+    paddingTop: 16,
+    paddingBottom: 8,
+    marginLeft: -8,
+    zIndex: 10,
+  },
+  lockContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  lockIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 32,
+  },
+  lockTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  lockDescription: {
+    fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+    paddingHorizontal: 20,
+  },
+  lockUpgradeButton: {
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    minWidth: 200,
+    alignItems: 'center',
+    shadowColor: '#3BB273',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  lockUpgradeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
 });
+
+// Componente de gráfico de peso
+const WeightChart = ({ data, units, convertWeight, theme, t }: any) => {
+  const { width } = Dimensions.get('window');
+  const chartWidth = width - 88; // padding + borders
+  const chartHeight = 200;
+  const padding = 40;
+  const innerWidth = chartWidth - padding * 2;
+  const innerHeight = chartHeight - padding * 2;
+
+  // Processar dados
+  const processedData = useMemo(() => {
+    if (!data || data.length === 0) return [];
+    
+    // Ordenar por data
+    const sorted = [...data]
+      .map(entry => ({
+        weight: entry.weight,
+        date: entry.date instanceof Date ? entry.date : new Date(entry.date),
+      }))
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    // Converter unidades se necessário
+    return sorted.map(entry => ({
+      ...entry,
+      displayWeight: units.weight === 'lb' 
+        ? convertWeight(entry.weight, 'kg', 'lb')
+        : entry.weight,
+    }));
+  }, [data, units, convertWeight]);
+
+  if (processedData.length === 0) {
+    return (
+      <View style={{ height: chartHeight, justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ color: theme.colors.textSecondary || '#6B7280' }}>
+          {t('progress.noWeightData') || 'No weight data available'}
+        </Text>
+      </View>
+    );
+  }
+
+  // Calcular min/max para escala
+  const weights = processedData.map(d => d.displayWeight);
+  const minWeight = Math.min(...weights);
+  const maxWeight = Math.max(...weights);
+  const weightRange = maxWeight - minWeight || 1;
+  const paddingY = weightRange * 0.2; // 20% padding
+
+  // Gerar pontos do gráfico
+  const points = processedData.map((entry, index) => {
+    const x = padding + (index / (processedData.length - 1 || 1)) * innerWidth;
+    const normalizedWeight = (entry.displayWeight - minWeight + paddingY) / (weightRange + paddingY * 2);
+    const y = padding + innerHeight - (normalizedWeight * innerHeight);
+    return { x, y, weight: entry.displayWeight, date: entry.date };
+  });
+
+  // Gerar path para a linha
+  const pathData = points.map((point, index) => {
+    return `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`;
+  }).join(' ');
+
+  // Formatar datas para labels
+  const formatDate = (date: Date) => {
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return '1d';
+    if (diffDays < 7) return `${diffDays}d`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)}w`;
+    return `${Math.floor(diffDays / 30)}mo`;
+  };
+
+  // Labels do eixo Y (peso)
+  const yLabels = [0, 1, 2, 3].map(i => {
+    const value = minWeight - paddingY + (weightRange + paddingY * 2) * (1 - i / 3);
+    return {
+      value: value.toFixed(1),
+      y: padding + (i / 3) * innerHeight,
+    };
+  });
+
+  return (
+    <View style={{ height: chartHeight }}>
+      <Svg width={chartWidth} height={chartHeight}>
+        {/* Grid lines */}
+        {yLabels.map((label, i) => (
+          <Line
+            key={`grid-${i}`}
+            x1={padding}
+            y1={label.y}
+            x2={chartWidth - padding}
+            y2={label.y}
+            stroke={theme.colors.border || '#E5E7EB'}
+            strokeWidth={0.5}
+            strokeDasharray="4,4"
+            opacity={0.5}
+          />
+        ))}
+
+        {/* Path da linha */}
+        <Path
+          d={pathData}
+          fill="none"
+          stroke={theme.colors.primary || '#3BB273'}
+          strokeWidth={3}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+
+        {/* Pontos */}
+        {points.map((point, index) => (
+          <Circle
+            key={`point-${index}`}
+            cx={point.x}
+            cy={point.y}
+            r={4}
+            fill={theme.colors.primary || '#3BB273'}
+            stroke={theme.colors.card || '#FFFFFF'}
+            strokeWidth={2}
+          />
+        ))}
+
+        {/* Labels do eixo Y */}
+        <G>
+          {yLabels.map((label, i) => (
+            <SvgText
+              key={`y-label-${i}`}
+              x={padding - 8}
+              y={label.y + 4}
+              fontSize="11"
+              fill={theme.colors.textSecondary || '#6B7280'}
+              textAnchor="end"
+            >
+              {label.value}
+            </SvgText>
+          ))}
+        </G>
+
+        {/* Labels do eixo X (datas) */}
+        <G>
+          {points.map((point, index) => {
+            // Mostrar apenas alguns labels para não sobrecarregar
+            const showLabel = index === 0 || 
+                            index === points.length - 1 || 
+                            index === Math.floor(points.length / 2);
+            if (!showLabel) return null;
+            
+            return (
+              <SvgText
+                key={`x-label-${index}`}
+                x={point.x}
+                y={chartHeight - padding + 16}
+                fontSize="10"
+                fill={theme.colors.textSecondary || '#6B7280'}
+                textAnchor="middle"
+              >
+                {formatDate(point.date)}
+              </SvgText>
+            );
+          })}
+        </G>
+      </Svg>
+    </View>
+  );
+};

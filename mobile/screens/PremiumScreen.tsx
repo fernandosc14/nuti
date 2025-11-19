@@ -82,7 +82,7 @@ export function PremiumScreen({ navigation }: any) {
           flexDirection: 'row',
           alignItems: 'center',
           paddingHorizontal: 20,
-          paddingTop: 8,
+          paddingTop: 0,
           paddingBottom: 12,
           borderBottomWidth: 1,
           borderBottomColor: theme.colors.border || '#E5E7EB',

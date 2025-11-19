@@ -4,7 +4,7 @@
  * Componente principal da aplicação com navegação
  */
 
-import React, { useEffect, useState, useRef, ErrorInfo } from 'react';
+import React, { useEffect, useState, useRef, ErrorInfo, useCallback } from 'react';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -50,7 +50,8 @@ const Tab = createBottomTabNavigator();
 // Context para controlar quando mostrar onboarding (evita usar navegação que causa pré-carregamento)
 const OnboardingContext = React.createContext<{
   showOnboarding: () => void;
-}>({ showOnboarding: () => {} });
+  hideOnboarding: () => void;
+}>({ showOnboarding: () => {}, hideOnboarding: () => {} });
 
 function AuthStack() {
   const { showOnboarding } = React.useContext(OnboardingContext);
@@ -426,6 +427,10 @@ function RootNavigator() {
   const [checkingOnboarding, setCheckingOnboarding] = useState(false);
   const [profileCreatedRecently, setProfileCreatedRecently] = useState(false);
   const [OnboardingScreenComponent, setOnboardingScreenComponent] = useState<React.ComponentType<any> | null>(null);
+  
+  const hideOnboarding = useCallback(() => {
+    setShowOnboardingFromWelcome(false);
+  }, []);
 
   useEffect(() => {
     // Inicializar badges padrão
@@ -550,7 +555,7 @@ function RootNavigator() {
         </View>
       );
     }
-    return <OnboardingScreenComponent navigation={null} />;
+    return <OnboardingScreenComponent navigation={null} onClose={hideOnboarding} />;
   }
   
   // Caso contrário, renderizar NavigationContainer normalmente
@@ -560,7 +565,8 @@ function RootNavigator() {
     <OnboardingContext.Provider value={{
       showOnboarding: () => {
         setShowOnboardingFromWelcome(true);
-      }
+      },
+      hideOnboarding: hideOnboarding,
     }}>
       <NavigationContainer
         theme={{

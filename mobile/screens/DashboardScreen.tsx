@@ -644,7 +644,7 @@ export function DashboardScreen({ navigation }: any) {
                         : (theme.colors.text || '#000000'),
                     }}>
                       {profile.streak || 0}
-                    </Text>
+              </Text>
                   </View>
                 )}
                 
@@ -680,8 +680,8 @@ export function DashboardScreen({ navigation }: any) {
                       : (theme.colors.text || '#000000'),
                   }}>
                     {waterIntake > 0 ? `${Math.round(waterIntake / 1000)}L` : '0L'}
-                  </Text>
-                </View>
+              </Text>
+            </View>
                 
                 {/* Steps Badge */}
                 <View style={{
@@ -1378,8 +1378,8 @@ export function DashboardScreen({ navigation }: any) {
                           });
                           
                           const timeStr = mealDate.toLocaleTimeString(locale, {
-                            hour: '2-digit',
-                            minute: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
                           });
                           
                           return `${dateStr} ${timeStr}`;

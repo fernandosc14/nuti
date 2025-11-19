@@ -21,11 +21,13 @@ import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useUser } from '../context/UserContext';
 import { useUnits } from '../context/UnitsContext';
+import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
+import { db } from '../services/firebase';
 
 export function UpdateWeightScreen({ navigation }: any) {
   const { theme } = useTheme();
   const { t } = useLanguage();
-  const { profile, updateProfile, refreshProfile } = useUser();
+  const { user, profile, updateProfile, refreshProfile } = useUser();
   const { units, convertWeight } = useUnits();
 
   const [sliderValue, setSliderValue] = useState(70);
@@ -110,7 +112,39 @@ export function UpdateWeightScreen({ navigation }: any) {
           ? convertWeight(rawValue, 'lb', 'kg')
           : rawValue;
 
-      await updateProfile({ weight: parseFloat(weightInKg.toFixed(2)) });
+      const finalWeight = parseFloat(weightInKg.toFixed(2));
+      
+      // Atualizar peso atual
+      await updateProfile({ weight: finalWeight });
+      
+      // Adicionar ao histórico de peso
+      if (user) {
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+          const currentData = userSnap.data();
+          const currentHistory = currentData.weightHistory || [];
+          
+          // Adicionar nova entrada ao histórico
+          const newEntry = {
+            weight: finalWeight,
+            date: Timestamp.now(),
+          };
+          
+          // Manter apenas os últimos 90 dias de histórico (ou últimas 30 entradas)
+          const updatedHistory = [...currentHistory, newEntry]
+            .sort((a, b) => {
+              const dateA = a.date?.toMillis?.() || 0;
+              const dateB = b.date?.toMillis?.() || 0;
+              return dateA - dateB;
+            })
+            .slice(-30); // Manter últimas 30 entradas
+          
+          await setDoc(userRef, { weightHistory: updatedHistory }, { merge: true });
+        }
+      }
+      
       await refreshProfile();
 
       Toast.show({
