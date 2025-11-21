@@ -16,8 +16,12 @@ import {
   Pressable,
   TextInput,
   StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { useUser } from '../context/UserContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
@@ -27,10 +31,11 @@ import { MealCard } from '../components/MealCard';
 import { BadgeItem } from '../components/BadgeItem';
 import { PremiumPromoCard } from '../components/PremiumPromoCard';
 import { Ionicons } from '@expo/vector-icons';
-import { collection, query, where, getDocs, Timestamp, doc, deleteDoc, setDoc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, Timestamp, doc, deleteDoc, setDoc, getDoc, addDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { updateStreak } from '../utils/streakUtils';
 import { calculateCalorieGoalFromProfile } from '../utils/nutritionUtils';
+import { getCache, setCache, removeCache } from '../utils/cacheUtils';
 import Toast from 'react-native-toast-message';
 import { MotiView } from 'moti';
 import { Image, Dimensions } from 'react-native';
@@ -61,11 +66,21 @@ interface Badge {
   earnedAt?: Date;
 }
 
+interface Exercise {
+  id: string;
+  name: string;
+  duration: number; // em minutos
+  date: Date;
+  addedAt?: Date | null;
+}
+
 export function DashboardScreen({ navigation }: any) {
-  const { user, profile, refreshProfile } = useUser();
+  const { user, profile, refreshProfile, updateProfile } = useUser();
   const { t, language } = useLanguage();
   const { theme } = useTheme();
   const { setSelectedDate: setContextSelectedDate } = useSelectedDate();
+  const insets = useSafeAreaInsets();
+  const [logoError, setLogoError] = useState(false);
   const [consumed, setConsumed] = useState(0);
   const [goal, setGoal] = useState(2000);
   const [meals, setMeals] = useState<Meal[]>([]);
@@ -86,7 +101,18 @@ export function DashboardScreen({ navigation }: any) {
   const [currentMacroIndex, setCurrentMacroIndex] = useState(0);
   const [todayMealCount, setTodayMealCount] = useState(0);
   const [steps, setSteps] = useState(0);
+  const [daysWithMeals, setDaysWithMeals] = useState<Set<string>>(new Set()); // Armazena datas que têm refeições (formato: YYYY-MM-DD)
   const macroScrollViewRef = useRef<ScrollView>(null);
+  const [showEditCaloriesModal, setShowEditCaloriesModal] = useState(false);
+  const [showEditProteinModal, setShowEditProteinModal] = useState(false);
+  const [showEditCarbsModal, setShowEditCarbsModal] = useState(false);
+  const [showEditFatModal, setShowEditFatModal] = useState(false);
+  const [editCalories, setEditCalories] = useState('');
+  const [editProtein, setEditProtein] = useState('');
+  const [editCarbs, setEditCarbs] = useState('');
+  const [editFat, setEditFat] = useState('');
+  const [savingGoals, setSavingGoals] = useState(false);
+  const [exercises, setExercises] = useState<Exercise[]>([]);
 
   useEffect(() => {
     // Se não houver user, limpar estado e não carregar dados
@@ -101,8 +127,23 @@ export function DashboardScreen({ navigation }: any) {
     // Só carregar dados se houver user e profile
     if (user && profile) {
       loadDashboardData();
+      loadDaysWithMeals(); // Carregar quais dias têm refeições
+      loadExercises(selectedDate);
     }
   }, [user, profile, selectedDate]);
+
+  // Recarregar quando a tela recebe foco (quando volta de adicionar refeição, editar objetivo, etc)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user && profile) {
+        // Usar cache primeiro (não forçar refresh imediatamente)
+        // Só fazer refresh forçado se o utilizador fizer pull-to-refresh
+        loadDashboardData(false);
+        loadDaysWithMeals();
+        loadExercises(selectedDate, false);
+      }
+    }, [user, profile])
+  );
 
   // Atualizar contexto quando a data selecionada mudar
   useEffect(() => {
@@ -121,7 +162,7 @@ export function DashboardScreen({ navigation }: any) {
   }, [selectedDate, setContextSelectedDate]);
 
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = async (forceRefresh: boolean = false) => {
     // Verificar user antes de qualquer operação
     if (!user || !profile) {
       setLoading(false);
@@ -139,9 +180,14 @@ export function DashboardScreen({ navigation }: any) {
       }
 
       // Calcular meta de calorias baseada no perfil com fórmula precisa
-      const caloriePlan = calculateCalorieGoalFromProfile(profile);
-      if (caloriePlan?.calories) {
-        setGoal(caloriePlan.calories);
+      // Se houver dailyCalorieGoal no perfil, usar esse valor, senão calcular
+      if ((profile as any).dailyCalorieGoal) {
+        setGoal((profile as any).dailyCalorieGoal);
+      } else {
+        const caloriePlan = calculateCalorieGoalFromProfile(profile);
+        if (caloriePlan?.calories) {
+          setGoal(caloriePlan.calories);
+        }
       }
 
       // Verificar novamente antes de query
@@ -155,6 +201,7 @@ export function DashboardScreen({ navigation }: any) {
       const nextDay = new Date(selectedDay);
       nextDay.setDate(nextDay.getDate() + 1);
 
+      // Buscar do Firestore
       const mealsRef = collection(db, 'meals');
       const q = query(
         mealsRef,
@@ -205,7 +252,9 @@ export function DashboardScreen({ navigation }: any) {
         return;
       }
 
-      setMeals(mealsData.sort((a, b) => b.date.getTime() - a.date.getTime()));
+      const sortedMeals = mealsData.sort((a, b) => b.date.getTime() - a.date.getTime());
+      
+      setMeals(sortedMeals);
       setConsumed(totalCalories);
       setMacros({
         protein: Math.round(totalProtein),
@@ -213,41 +262,89 @@ export function DashboardScreen({ navigation }: any) {
         fat: Math.round(totalFat),
       });
 
-      // Buscar badges
-      if (profile?.badges && profile.badges.length > 0) {
-        const badgesRef = collection(db, 'badges');
-        const badgesData: Badge[] = [];
 
-        for (const badgeId of profile.badges.slice(0, 3)) {
-          // Verificar antes de cada query
-          if (!user || user.uid !== currentUserId) {
-            return;
+      // Buscar badges (usar cache - badges raramente mudam)
+      if (profile?.badges && profile.badges.length > 0) {
+        const badgesCacheKey = `badges_${currentUserId}`;
+        
+        // Tentar cache primeiro
+        if (!forceRefresh) {
+          const cachedBadges = await getCache<Badge[]>(badgesCacheKey);
+          if (cachedBadges && cachedBadges.length > 0) {
+            if (user && user.uid === currentUserId) {
+              setBadges(cachedBadges);
+            }
+          } else {
+            // Se não houver cache, buscar do Firestore
+            const badgesRef = collection(db, 'badges');
+            const badgesData: Badge[] = [];
+
+            for (const badgeId of profile.badges.slice(0, 3)) {
+              // Verificar antes de cada query
+              if (!user || user.uid !== currentUserId) {
+                return;
+              }
+
+              const badgeDoc = await getDocs(
+                query(badgesRef, where('__name__', '==', badgeId))
+              );
+              if (!badgeDoc.empty) {
+                const badgeData = badgeDoc.docs[0].data();
+                badgesData.push({
+                  id: badgeId,
+                  name: badgeData.name,
+                  icon: badgeData.icon,
+                  description: badgeData.description,
+                });
+              }
+            }
+
+            // Verificar antes de setState
+            if (user && user.uid === currentUserId) {
+              setBadges(badgesData);
+              // Guardar no cache (TTL padrão de 5 minutos é suficiente para badges)
+              await setCache(badgesCacheKey, badgesData);
+            }
+          }
+        } else {
+          // Se for refresh forçado, buscar do Firestore
+          const badgesRef = collection(db, 'badges');
+          const badgesData: Badge[] = [];
+
+          for (const badgeId of profile.badges.slice(0, 3)) {
+            // Verificar antes de cada query
+            if (!user || user.uid !== currentUserId) {
+              return;
+            }
+
+            const badgeDoc = await getDocs(
+              query(badgesRef, where('__name__', '==', badgeId))
+            );
+            if (!badgeDoc.empty) {
+              const badgeData = badgeDoc.docs[0].data();
+              badgesData.push({
+                id: badgeId,
+                name: badgeData.name,
+                icon: badgeData.icon,
+                description: badgeData.description,
+              });
+            }
           }
 
-          const badgeDoc = await getDocs(
-            query(badgesRef, where('__name__', '==', badgeId))
-          );
-          if (!badgeDoc.empty) {
-            const badgeData = badgeDoc.docs[0].data();
-            badgesData.push({
-              id: badgeId,
-              name: badgeData.name,
-              icon: badgeData.icon,
-              description: badgeData.description,
-            });
+          // Verificar antes de setState
+          if (user && user.uid === currentUserId) {
+            setBadges(badgesData);
+            // Atualizar cache
+            await setCache(badgesCacheKey, badgesData);
           }
         }
-
-        // Verificar antes de setState
-        if (user && user.uid === currentUserId) {
-        setBadges(badgesData);
-      }
       }
 
       // Carregar água do dia selecionado (só se ainda houver user)
       if (user && user.uid === currentUserId) {
         await loadWaterIntake(selectedDay);
         await loadSteps(selectedDay);
+        await loadExercises(selectedDay);
       }
 
       // Verificar antes de atualizar streak (só se for o dia atual)
@@ -295,13 +392,68 @@ export function DashboardScreen({ navigation }: any) {
       if (user && user.uid === currentUserId) {
       setLoading(false);
       setRefreshing(false);
-      }
+    }
     }
   };
 
   const handleDeleteMeal = (mealId: string) => {
     setMealToDelete(mealId);
     setShowDeleteModal(true);
+  };
+
+  const loadExercises = async (date: Date = selectedDate, forceRefresh: boolean = false) => {
+    if (!user) {
+      setExercises([]);
+      return;
+    }
+
+    const currentUserId = user.uid;
+
+    try {
+      const selectedDay = new Date(date);
+      selectedDay.setHours(0, 0, 0, 0);
+      const nextDay = new Date(selectedDay);
+      nextDay.setDate(nextDay.getDate() + 1);
+
+      const exercisesRef = collection(db, 'exercises');
+      const q = query(
+        exercisesRef,
+        where('userId', '==', user.uid),
+        where('date', '>=', Timestamp.fromDate(selectedDay)),
+        where('date', '<', Timestamp.fromDate(nextDay))
+      );
+
+      const snapshot = await getDocs(q);
+
+      if (!user || user.uid !== currentUserId) {
+        return;
+      }
+
+      const exercisesData: Exercise[] = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        const exerciseDate = data.date?.toDate ? data.date.toDate() : (data.date instanceof Date ? data.date : new Date(data.date));
+        const addedAt = data.addedAt?.toDate ? data.addedAt.toDate() : (data.addedAt instanceof Date ? data.addedAt : (data.addedAt ? new Date(data.addedAt) : null));
+        exercisesData.push({
+          id: doc.id,
+          name: data.name,
+          duration: data.duration || 0,
+          date: exerciseDate,
+          addedAt: addedAt,
+        });
+      });
+
+      if (user && user.uid === currentUserId) {
+        const sortedExercises = exercisesData.sort((a, b) => b.date.getTime() - a.date.getTime());
+        setExercises(sortedExercises);
+        
+      }
+    } catch (error: any) {
+      if (!user || error?.code === 'permission-denied') {
+        return;
+      }
+      console.error('Error loading exercises:', error);
+    }
   };
 
   const loadSteps = async (date: Date = selectedDate) => {
@@ -350,7 +502,78 @@ export function DashboardScreen({ navigation }: any) {
     }
   };
 
-  const loadWaterIntake = async (date: Date = selectedDate) => {
+  // Carregar quais dias dos últimos 5 dias têm refeições (usar cache - dados históricos não mudam)
+  const loadDaysWithMeals = async () => {
+    if (!user) {
+      setDaysWithMeals(new Set());
+      return;
+    }
+
+    const currentUserId = user.uid;
+    const cacheKey = `daysWithMeals_${currentUserId}`;
+
+    try {
+      if (!user || user.uid !== currentUserId) {
+        return;
+      }
+
+      // Tentar cache primeiro
+      const cachedDays = await getCache<string[]>(cacheKey);
+      if (cachedDays && cachedDays.length >= 0) {
+        setDaysWithMeals(new Set(cachedDays));
+        return;
+      }
+
+      // Se não houver cache, buscar do Firestore
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // Buscar refeições dos últimos 5 dias (4 anteriores + hoje)
+      const startDate = new Date(today);
+      startDate.setDate(startDate.getDate() - 4);
+      startDate.setHours(0, 0, 0, 0);
+      
+      const endDate = new Date(today);
+      endDate.setDate(endDate.getDate() + 1);
+      endDate.setHours(0, 0, 0, 0);
+
+      const mealsRef = collection(db, 'meals');
+      const q = query(
+        mealsRef,
+        where('userId', '==', user.uid),
+        where('date', '>=', Timestamp.fromDate(startDate)),
+        where('date', '<', Timestamp.fromDate(endDate))
+      );
+
+      const snapshot = await getDocs(q);
+      
+      if (!user || user.uid !== currentUserId) {
+        return;
+      }
+
+      const daysSet = new Set<string>();
+      
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.date) {
+          const mealDate = data.date.toDate();
+          // Normalizar para meia-noite no timezone local
+          mealDate.setHours(0, 0, 0, 0);
+          const dateKey = `${mealDate.getFullYear()}-${String(mealDate.getMonth() + 1).padStart(2, '0')}-${String(mealDate.getDate()).padStart(2, '0')}`;
+          daysSet.add(dateKey);
+        }
+      });
+
+      setDaysWithMeals(daysSet);
+      // Guardar no cache (TTL padrão de 5 minutos)
+      await setCache(cacheKey, Array.from(daysSet));
+    } catch (error) {
+      console.error('Error loading days with meals:', error);
+      setDaysWithMeals(new Set());
+    }
+  };
+
+  const loadWaterIntake = async (date: Date = selectedDate, forceRefresh: boolean = false) => {
     // Verificar user antes de qualquer operação
     if (!user) {
       setWaterIntake(0);
@@ -381,7 +604,8 @@ export function DashboardScreen({ navigation }: any) {
 
       if (waterDoc.exists()) {
         const data = waterDoc.data();
-        setWaterIntake(data.amount || 0);
+        const amount = data.amount || 0;
+        setWaterIntake(amount);
       } else {
         setWaterIntake(0);
       }
@@ -511,8 +735,15 @@ export function DashboardScreen({ navigation }: any) {
       setShowMealModal(false);
       setMealToDelete(null);
       
-      // Recarregar dados para atualizar totais e macros
-      await loadDashboardData();
+      // Invalidar cache de daysWithMeals (pode ter mudado)
+      if (user) {
+        const daysWithMealsCacheKey = `daysWithMeals_${user.uid}`;
+        await removeCache(daysWithMealsCacheKey);
+      }
+      
+      // Recarregar dados para atualizar totais e macros (forçar refresh)
+      await loadDashboardData(true);
+      await loadDaysWithMeals(); // Atualizar quais dias têm refeições
       
       Toast.show({
         type: 'success',
@@ -529,10 +760,14 @@ export function DashboardScreen({ navigation }: any) {
     }
   };
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     if (!user) return;
     setRefreshing(true);
-    loadDashboardData();
+    // Forçar refresh (ignorar cache)
+    await loadDashboardData(true);
+    await loadDaysWithMeals(); // Atualizar quais dias têm refeições
+    await loadExercises(selectedDate, true);
+    await loadWaterIntake(selectedDate, true);
   };
 
   // Se não houver user, não renderizar nada (navegação vai redirecionar)
@@ -592,23 +827,41 @@ export function DashboardScreen({ navigation }: any) {
             <View style={{
               flexDirection: 'row', 
               justifyContent: 'space-between', 
-              alignItems: 'flex-start',
+              alignItems: 'flex-end',
               marginBottom: 24,
             }}>
               <View style={{ flex: 1 }}>
-                {/* Logo "N" - usando imagem */}
-                <View style={{ height: 40, justifyContent: 'center', width: 40 }}>
-                  <Image
-                    source={require('../assets/logo-n.png')}
-                    style={{
-                      width: 40,
-                      height: 40,
-                      resizeMode: 'contain',
-                    }}
-                  />
+                {/* Logo - muda conforme o tema */}
+                <View style={{ height: 55, justifyContent: 'center', width: 55 }}>
+                  {!logoError ? (
+                    <Image
+                      source={theme.isDark ? require('../assets/logo-b.png') : require('../assets/logo-n.png')}
+                      style={{
+                        width: 55,
+                        height: 55,
+                        resizeMode: 'contain',
+                      }}
+                      onError={() => setLogoError(true)}
+                    />
+                  ) : (
+                    <View style={{
+                      width: 45,
+                      height: 45,
+                      borderRadius: 22.5,
+                      backgroundColor: theme.colors.primary || '#3BB273',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <Text style={{
+                        fontSize: 24,
+                        fontWeight: 'bold',
+                        color: '#FFFFFF',
+                      }}>N</Text>
+                    </View>
+                  )}
                 </View>
-            </View>
-              
+          </View>
+
               {/* Badges: Streak e Steps */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 16 }}>
                 {/* Streak Badge */}
@@ -649,23 +902,30 @@ export function DashboardScreen({ navigation }: any) {
                 )}
                 
                 {/* Water Badge */}
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: waterIntake > 0
-                    ? (theme.isDark ? '#1F2937' : '#DBEAFE')
-                    : (theme.colors.card || '#FFFFFF'),
-                  borderRadius: 20,
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderWidth: waterIntake > 0 ? 0 : 1,
-                  borderColor: theme.colors.border || '#E5E7EB',
-                  shadowColor: waterIntake > 0 ? '#3B82F6' : 'transparent',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: waterIntake > 0 ? (theme.isDark ? 0.2 : 0.1) : 0,
-                  shadowRadius: 4,
-                  elevation: waterIntake > 0 ? 2 : 0,
-                }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setEditWaterAmount(waterIntake.toString());
+                    setShowEditWaterModal(true);
+                  }}
+                  activeOpacity={0.7}
+              style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: waterIntake > 0
+                      ? (theme.isDark ? '#1F2937' : '#DBEAFE')
+                      : (theme.colors.card || '#FFFFFF'),
+                    borderRadius: 20,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderWidth: waterIntake > 0 ? 0 : 1,
+                    borderColor: theme.colors.border || '#E5E7EB',
+                    shadowColor: waterIntake > 0 ? '#3B82F6' : 'transparent',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: waterIntake > 0 ? (theme.isDark ? 0.2 : 0.1) : 0,
+                    shadowRadius: 4,
+                    elevation: waterIntake > 0 ? 2 : 0,
+              }}
+            >
                   <Ionicons 
                     name="water" 
                     size={16} 
@@ -679,9 +939,9 @@ export function DashboardScreen({ navigation }: any) {
                       ? (theme.isDark ? "#FFFFFF" : "#1E40AF") 
                       : (theme.colors.text || '#000000'),
                   }}>
-                    {waterIntake > 0 ? `${Math.round(waterIntake / 1000)}L` : '0L'}
-              </Text>
-            </View>
+                    {waterIntake > 0 ? `${(waterIntake / 1000).toFixed(1)}L` : '0.0L'}
+                </Text>
+            </TouchableOpacity>
                 
                 {/* Steps Badge */}
                 <View style={{
@@ -708,8 +968,8 @@ export function DashboardScreen({ navigation }: any) {
                     color: steps > 0 ? "#FFFFFF" : (theme.colors.text || '#000000'),
                   }}>
                     {steps > 0 ? steps.toLocaleString() : '0'}
-                  </Text>
-                </View>
+              </Text>
+            </View>
                 
                 {/* Badges/Conquistas Badge */}
                 <View style={{
@@ -739,8 +999,8 @@ export function DashboardScreen({ navigation }: any) {
                   </Text>
                 </View>
               </View>
-            </View>
-          </MotiView>
+              </View>
+            </MotiView>
 
           {/* Badges */}
           {badges.length > 0 && (
@@ -825,6 +1085,12 @@ export function DashboardScreen({ navigation }: any) {
                   
                   const isToday = date.getTime() === today.getTime();
                   const isSelected = date.getTime() === selectedDateNormalized.getTime();
+                  const isPastDay = !isToday;
+                  
+                  // Verificar se este dia tem refeições
+                  // date já está normalizado (setHours(0,0,0,0) foi chamado acima)
+                  const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                  const hasMeals = daysWithMeals.has(dateKey);
                   
                   const dayName = date.toLocaleDateString(
                     language === 'pt' ? 'pt-PT' :
@@ -836,6 +1102,22 @@ export function DashboardScreen({ navigation }: any) {
                   );
                   
                   const dayNumber = date.getDate();
+                  
+                  // Determinar cor e estilo do border para dias anteriores
+                  let borderColor = theme.colors.border || '#E5E7EB';
+                  let borderStyle: 'solid' | 'dashed' = 'dashed';
+                  
+                  if (isPastDay) {
+                    if (hasMeals) {
+                      // Dia anterior com refeições: verde sólido sutil
+                      borderColor = '#3BB27350'; // Verde com ~31% de opacidade
+                      borderStyle = 'solid';
+                    } else {
+                      // Dia anterior sem refeições: vermelho tracejado sutil
+                      borderColor = '#EF444450'; // Vermelho com ~31% de opacidade
+                      borderStyle = 'dashed';
+                    }
+                  }
                   
                   days.push(
             <TouchableOpacity
@@ -883,8 +1165,8 @@ export function DashboardScreen({ navigation }: any) {
                           ? theme.colors.primary || '#3BB273'
                           : isToday
                           ? theme.colors.primary || '#3BB273'
-                          : theme.colors.border || '#E5E7EB',
-                        borderStyle: isSelected || isToday ? 'solid' : 'dashed',
+                          : borderColor,
+                        borderStyle: isSelected || isToday ? 'solid' : borderStyle,
                         backgroundColor: isSelected
                           ? theme.colors.primary || '#3BB273'
                           : isToday
@@ -933,7 +1215,15 @@ export function DashboardScreen({ navigation }: any) {
             transition={{ type: 'timing', duration: 500, delay: 200 }}
             style={{ marginBottom: 24 }}
           >
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                setEditCalories(goal.toString());
+                setShowEditCaloriesModal(true);
+              }}
+            >
             <ChartCircle consumed={consumed} goal={goal} />
+            </TouchableOpacity>
           </MotiView>
 
           {/* Macros Cards com Swipe */}
@@ -1002,19 +1292,27 @@ export function DashboardScreen({ navigation }: any) {
                 alignItems: 'flex-start',
               }}>
                   {/* Proteína */}
-                  <View style={{
-                    width: Math.floor((screenWidth - 48 - 24) / 3),
-                    backgroundColor: theme.colors.card,
-                    borderRadius: 20,
-                    padding: 16,
-                    alignItems: 'center',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: theme.isDark ? 0.1 : 0.05,
-                    shadowRadius: 4,
-                    elevation: theme.isDark ? 2 : 1,
-                    overflow: 'visible',
-                  }}>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      const proteinGoal = (profile as any)?.dailyProteinGoal || Math.round((goal * 0.30) / 4);
+                      setEditProtein(proteinGoal.toString());
+                      setShowEditProteinModal(true);
+                    }}
+              style={{
+                      width: Math.floor((screenWidth - 48 - 24) / 3),
+                      backgroundColor: theme.colors.card,
+                      borderRadius: 20,
+                      padding: 16,
+                      alignItems: 'center',
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: theme.isDark ? 0.1 : 0.05,
+                      shadowRadius: 4,
+                      elevation: theme.isDark ? 2 : 1,
+                      overflow: 'visible',
+                    }}
+                  >
                   <View style={{
                     width: 48,
                     height: 48,
@@ -1041,23 +1339,31 @@ export function DashboardScreen({ navigation }: any) {
                   }}>
                     {t('dashboard.protein')}
                 </Text>
-              </View>
+          </TouchableOpacity>
 
                   {/* Carboidratos */}
-                  <View style={{
-                    width: Math.floor((screenWidth - 48 - 24) / 3),
-                    marginLeft: 12,
-                    backgroundColor: theme.colors.card,
-                    borderRadius: 20,
-                    padding: 16,
-                    alignItems: 'center',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: theme.isDark ? 0.1 : 0.05,
-                    shadowRadius: 4,
-                    elevation: theme.isDark ? 2 : 1,
-                    overflow: 'visible',
-                  }}>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      const carbsGoal = (profile as any)?.dailyCarbsGoal || Math.round((goal * 0.40) / 4);
+                      setEditCarbs(carbsGoal.toString());
+                      setShowEditCarbsModal(true);
+                    }}
+                    style={{
+                      width: Math.floor((screenWidth - 48 - 24) / 3),
+                      marginLeft: 12,
+                      backgroundColor: theme.colors.card,
+                      borderRadius: 20,
+                      padding: 16,
+                      alignItems: 'center',
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: theme.isDark ? 0.1 : 0.05,
+                      shadowRadius: 4,
+                      elevation: theme.isDark ? 2 : 1,
+                      overflow: 'visible',
+                    }}
+                  >
                   <View style={{
                     width: 48,
                     height: 48,
@@ -1068,7 +1374,7 @@ export function DashboardScreen({ navigation }: any) {
                     marginBottom: 8,
                   }}>
                     <Ionicons name="fast-food" size={24} color="#10B981" />
-                  </View>
+              </View>
                   <Text style={{
                     fontSize: 24,
                     fontWeight: '800',
@@ -1084,23 +1390,31 @@ export function DashboardScreen({ navigation }: any) {
                   }}>
                     {t('dashboard.carbs')}
                 </Text>
-              </View>
+              </TouchableOpacity>
 
                   {/* Gordura */}
-                  <View style={{
-                    width: Math.floor((screenWidth - 48 - 24) / 3),
-                    marginLeft: 12,
-                    backgroundColor: theme.colors.card,
-                    borderRadius: 20,
-                    padding: 16,
-                    alignItems: 'center',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: theme.isDark ? 0.1 : 0.05,
-                    shadowRadius: 4,
-                    elevation: theme.isDark ? 2 : 1,
-                    overflow: 'visible',
-                  }}>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      const fatGoal = (profile as any)?.dailyFatGoal || Math.round((goal * 0.30) / 9);
+                      setEditFat(fatGoal.toString());
+                      setShowEditFatModal(true);
+                    }}
+                    style={{
+                      width: Math.floor((screenWidth - 48 - 24) / 3),
+                      marginLeft: 12,
+                      backgroundColor: theme.colors.card,
+                      borderRadius: 20,
+                      padding: 16,
+                      alignItems: 'center',
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: theme.isDark ? 0.1 : 0.05,
+                      shadowRadius: 4,
+                      elevation: theme.isDark ? 2 : 1,
+                      overflow: 'visible',
+                    }}
+                  >
                   <View style={{
                     width: 48,
                     height: 48,
@@ -1119,7 +1433,7 @@ export function DashboardScreen({ navigation }: any) {
                     marginBottom: 4,
                   }}>
                     {macros.fat}g
-                  </Text>
+                </Text>
                   <Text style={{
                     fontSize: 12,
                     color: theme.colors.textSecondary || '#9CA3AF',
@@ -1127,7 +1441,7 @@ export function DashboardScreen({ navigation }: any) {
                   }}>
                     {t('dashboard.fat')}
                   </Text>
-                  </View>
+                  </TouchableOpacity>
               </View>
 
               {/* Slide 2: Água */}
@@ -1157,7 +1471,7 @@ export function DashboardScreen({ navigation }: any) {
                       marginRight: 12,
                     }}>
                       <Ionicons name="water" size={22} color="#3B82F6" />
-          </View>
+            </View>
                     <Text style={{
                       fontSize: 20,
                       fontWeight: '700',
@@ -1248,7 +1562,7 @@ export function DashboardScreen({ navigation }: any) {
                   }}
                 />
               ))}
-            </View>
+          </View>
           </MotiView>
 
           {/* Refeições de Hoje */}
@@ -1370,7 +1684,22 @@ export function DashboardScreen({ navigation }: any) {
                           
                           // Usar addedAt se disponível (quando foi realmente adicionada)
                           // Se não existir addedAt, usar date (para refeições antigas)
-                          const dateToShow = meal.addedAt || mealDate;
+                          let dateToShow: Date;
+                          if (meal.addedAt && meal.addedAt instanceof Date && !isNaN(meal.addedAt.getTime())) {
+                            dateToShow = meal.addedAt;
+                          } else if (meal.addedAt && (typeof meal.addedAt === 'string' || typeof meal.addedAt === 'number')) {
+                            dateToShow = new Date(meal.addedAt);
+                            if (isNaN(dateToShow.getTime())) {
+                              dateToShow = mealDate;
+                            }
+                          } else {
+                            dateToShow = mealDate;
+                          }
+                          
+                          // Garantir que dateToShow é válido
+                          if (!dateToShow || !(dateToShow instanceof Date) || isNaN(dateToShow.getTime())) {
+                            return '';
+                          }
                           
                           const dateStr = dateToShow.toLocaleDateString(locale, {
                             day: '2-digit',
@@ -1393,6 +1722,172 @@ export function DashboardScreen({ navigation }: any) {
                     </MotiView>
                   ))}
           </View>
+            )}
+          </MotiView>
+
+          {/* Exercícios de Hoje */}
+          <MotiView
+            from={{ opacity: 0, translateY: 20 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 400, delay: 350 }}
+            style={{ marginBottom: 24 }}
+          >
+            <View style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              marginBottom: 16 
+            }}>
+              <View style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: theme.colors.primary + '20',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: 12,
+              }}>
+                <Ionicons name="fitness-outline" size={22} color={theme.colors.primary || '#3BB273'} />
+              </View>
+              <Text style={{
+                fontSize: 20,
+                fontWeight: '700',
+                color: theme.colors.text,
+                flex: 1,
+              }}>
+                {t('dashboard.exercisesToday') || 'Exercícios de Hoje'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('AddExercise')}
+                activeOpacity={0.7}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: theme.colors.primary || '#3BB273',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="add" size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+            {exercises.length === 0 ? (
+              <View style={{
+                backgroundColor: theme.colors.card,
+                borderRadius: 20,
+                padding: 32,
+                alignItems: 'center',
+                borderWidth: 2,
+                borderColor: theme.colors.border || '#E5E7EB',
+                borderStyle: 'dashed',
+              }}>
+                <View style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 32,
+                  backgroundColor: theme.colors.primary + '15',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 16,
+                }}>
+                  <Ionicons 
+                    name="fitness-outline" 
+                    size={32} 
+                    color={theme.colors.primary || '#3BB273'} 
+                  />
+                </View>
+                <Text style={{
+                  color: theme.colors.textSecondary || '#9CA3AF',
+                  fontSize: 16,
+                  textAlign: 'center',
+                  marginBottom: 8,
+                  fontWeight: '600',
+                }}>
+                  {t('dashboard.noExercises') || 'Ainda não registaste exercícios hoje'}
+                </Text>
+                <Text style={{
+                  color: theme.colors.textSecondary || '#9CA3AF',
+                  fontSize: 14,
+                  textAlign: 'center',
+                }}>
+                  {t('dashboard.addFirstExercise') || 'Adiciona o teu primeiro exercício!'}
+                </Text>
+              </View>
+            ) : (
+              <View style={{ gap: 12 }}>
+                {exercises.map((exercise) => (
+                  <MotiView
+                    key={exercise.id}
+                    from={{ opacity: 0, translateX: -20 }}
+                    animate={{ opacity: 1, translateX: 0 }}
+                    transition={{ type: 'timing', duration: 300, delay: 0 }}
+                  >
+                    <View style={{
+                      backgroundColor: theme.colors.card,
+                      borderRadius: 16,
+                      padding: 16,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      borderWidth: 1,
+                      borderColor: theme.colors.border || '#E5E7EB',
+                    }}>
+                      <View style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 24,
+                        backgroundColor: theme.colors.primary + '20',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: 12,
+                      }}>
+                        <Ionicons name="fitness" size={24} color={theme.colors.primary || '#3BB273'} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{
+                          fontSize: 16,
+                          fontWeight: '700',
+                          color: theme.colors.text,
+                          marginBottom: 4,
+                        }}>
+                          {exercise.name}
+                        </Text>
+                        <Text style={{
+                          fontSize: 14,
+                          color: theme.colors.textSecondary || '#9CA3AF',
+                          fontWeight: '600',
+                        }}>
+                          {exercise.duration} {t('dashboard.minutes') || 'min'}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={async () => {
+                          try {
+                            await deleteDoc(doc(db, 'exercises', exercise.id));
+                            await loadExercises(selectedDate);
+                            Toast.show({
+                              type: 'success',
+                              text1: t('dashboard.exerciseDeleted') || 'Exercício eliminado',
+                            });
+                          } catch (error: any) {
+                            Toast.show({
+                              type: 'error',
+                              text1: t('common.error') || 'Erro',
+                              text2: t('dashboard.exerciseDeleteError') || 'Erro ao eliminar exercício',
+                            });
+                          }
+                        }}
+                        activeOpacity={0.7}
+                        style={{
+                          padding: 8,
+                        }}
+                      >
+                        <Ionicons name="trash-outline" size={20} color={theme.colors.textSecondary || '#9CA3AF'} />
+                      </TouchableOpacity>
+                    </View>
+                  </MotiView>
+                ))}
+              </View>
             )}
           </MotiView>
           </View>
@@ -1517,14 +2012,16 @@ export function DashboardScreen({ navigation }: any) {
                         color: theme.colors.text,
                         fontWeight: '700',
                       }}>
-                        {selectedMeal.date.toLocaleDateString('pt-PT', {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric',
-                        })} às {selectedMeal.date.toLocaleTimeString('pt-PT', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                        {selectedMeal.date && selectedMeal.date instanceof Date && !isNaN(selectedMeal.date.getTime()) 
+                          ? `${selectedMeal.date.toLocaleDateString('pt-PT', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                            })} às ${selectedMeal.date.toLocaleTimeString('pt-PT', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}`
+                          : ''}
                       </Text>
               </View>
 
@@ -2130,6 +2627,848 @@ export function DashboardScreen({ navigation }: any) {
             </View>
           </Pressable>
         </Pressable>
+      </Modal>
+
+      {/* Modal de Editar Calorias */}
+      <Modal
+        visible={showEditCaloriesModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowEditCaloriesModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <Pressable
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              justifyContent: 'center',
+              alignItems: 'center',
+              paddingHorizontal: 20,
+            }}
+            onPress={() => setShowEditCaloriesModal(false)}
+          >
+            <View style={{ width: '100%', maxWidth: 400 }}>
+            <Pressable
+              onPress={(e) => e.stopPropagation()}
+              style={{
+                backgroundColor: theme.colors.background,
+                borderRadius: 24,
+                padding: 28,
+                width: '100%',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.3,
+                shadowRadius: 16,
+                elevation: 12,
+              }}
+            >
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 24,
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                  <View style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 24,
+                    backgroundColor: '#FEE2E2',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 12,
+                  }}>
+                    <Ionicons name="flame" size={28} color="#EF4444" />
+                  </View>
+                  <Text style={{
+                    fontSize: 22,
+                    fontWeight: '700',
+                    color: theme.colors.text,
+                  }}>
+                    {t('dashboard.calories') || 'Calories'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setShowEditCaloriesModal(false)}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: theme.colors.card,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close" size={22} color={theme.colors.text} />
+                </TouchableOpacity>
+              </View>
+              <Text style={{
+                fontSize: 14,
+                color: theme.colors.textSecondary || '#9CA3AF',
+                marginBottom: 16,
+                textAlign: 'center',
+              }}>
+                {t('dashboard.editCaloriesDescription') || 'Change your daily calorie goal'}
+              </Text>
+              <View style={{
+                marginBottom: 24,
+              }}>
+                <TextInput
+                  style={{
+                    backgroundColor: theme.isDark ? '#1F2937' : '#F9FAFB',
+                    borderRadius: 12,
+                    paddingHorizontal: 20,
+                    paddingVertical: 18,
+                    fontSize: 36,
+                    fontWeight: '800',
+                    color: theme.colors.text,
+                    textAlign: 'center',
+                    borderWidth: 1,
+                    borderColor: theme.colors.border || '#E5E7EB',
+                  }}
+                  value={editCalories}
+                  onChangeText={setEditCalories}
+                  keyboardType="numeric"
+                  placeholder="2000"
+                  placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
+                  autoFocus
+                />
+                <Text style={{
+                  fontSize: 16,
+                  color: theme.colors.textSecondary || '#9CA3AF',
+                  textAlign: 'center',
+                  marginTop: 12,
+                  fontWeight: '700',
+                }}>
+                  kcal
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TouchableOpacity
+                  onPress={() => setShowEditCaloriesModal(false)}
+                  style={{
+                    flex: 1,
+                    backgroundColor: theme.colors.border || '#E5E7EB',
+                    borderRadius: 14,
+                    paddingVertical: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '600',
+                    color: theme.colors.text,
+                  }}>
+                    {t('common.cancel') || 'Cancelar'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={async () => {
+                    const calories = parseInt(editCalories) || 0;
+                    if (calories < 1200 || calories > 5000) {
+                      Toast.show({
+                        type: 'error',
+                        text1: t('common.error') || 'Erro',
+                        text2: t('dashboard.invalidCalories') || 'Calorias devem estar entre 1200 e 5000',
+                      });
+                      return;
+                    }
+                    setSavingGoals(true);
+                    try {
+                      await updateProfile({
+                        dailyCalorieGoal: calories,
+                      } as any);
+                      await refreshProfile();
+                      setGoal(calories);
+                      setShowEditCaloriesModal(false);
+                      setSavingGoals(false);
+                      Toast.show({
+                        type: 'success',
+                        text1: t('profile.updateSuccess') || 'Sucesso',
+                        text2: t('dashboard.goalsUpdated') || 'Metas atualizadas com sucesso',
+                      });
+                    } catch (error: any) {
+                      setSavingGoals(false);
+                      Toast.show({
+                        type: 'error',
+                        text1: t('common.error') || 'Erro',
+                        text2: error.message || t('profile.updateError') || 'Erro ao atualizar metas',
+                      });
+                    }
+                  }}
+                  disabled={savingGoals}
+                  style={{
+                    flex: 1,
+                    backgroundColor: savingGoals
+                      ? theme.colors.border || '#E5E7EB'
+                      : '#EF4444',
+                    borderRadius: 14,
+                    paddingVertical: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: savingGoals ? 0.5 : 1,
+                    shadowColor: '#EF4444',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 4,
+                  }}
+                  activeOpacity={0.8}
+                >
+                  {savingGoals ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={{
+                      fontSize: 16,
+                      fontWeight: '700',
+                      color: '#FFFFFF',
+                    }}>
+                      {t('common.save') || 'Guardar'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+            </View>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Modal de Editar Proteína */}
+      <Modal
+        visible={showEditProteinModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowEditProteinModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <Pressable
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              justifyContent: 'center',
+              alignItems: 'center',
+              paddingHorizontal: 20,
+            }}
+            onPress={() => setShowEditProteinModal(false)}
+          >
+            <View style={{ width: '100%', maxWidth: 400 }}>
+            <Pressable
+              onPress={(e) => e.stopPropagation()}
+              style={{
+                backgroundColor: theme.colors.background,
+                borderRadius: 24,
+                padding: 28,
+                width: '100%',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.3,
+                shadowRadius: 16,
+                elevation: 12,
+              }}
+            >
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 24,
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                  <View style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 24,
+                    backgroundColor: '#FEE2E2',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 12,
+                  }}>
+                    <Ionicons name="nutrition" size={28} color="#EF4444" />
+                  </View>
+                  <Text style={{
+                    fontSize: 22,
+                    fontWeight: '700',
+                    color: theme.colors.text,
+                  }}>
+                    {t('dashboard.protein') || 'Proteína'}
+                  </Text>
+                </View>
+            <TouchableOpacity
+                  onPress={() => setShowEditProteinModal(false)}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: theme.colors.card,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close" size={22} color={theme.colors.text} />
+                </TouchableOpacity>
+              </View>
+              <Text style={{
+                fontSize: 14,
+                color: theme.colors.textSecondary || '#9CA3AF',
+                marginBottom: 16,
+                textAlign: 'center',
+              }}>
+                {t('dashboard.editProteinDescription') || 'Change your daily protein goal'}
+                  </Text>
+              <View style={{
+                marginBottom: 24,
+              }}>
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: theme.isDark ? '#1F2937' : '#F9FAFB',
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: theme.colors.border || '#E5E7EB',
+                  paddingHorizontal: 16,
+                }}>
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      paddingVertical: 18,
+                      fontSize: 32,
+                      fontWeight: '800',
+                      color: theme.colors.text,
+                      textAlign: 'center',
+                      backgroundColor: 'transparent',
+                      borderWidth: 0,
+                    }}
+                    value={editProtein}
+                    onChangeText={setEditProtein}
+                    keyboardType="numeric"
+                    placeholder="150"
+                    placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
+                    autoFocus
+                  />
+                  <Text style={{
+                    fontSize: 20,
+                    fontWeight: '700',
+                    color: theme.colors.textSecondary || '#9CA3AF',
+                    marginLeft: 8,
+                  }}>
+                    g
+                  </Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TouchableOpacity
+                  onPress={() => setShowEditProteinModal(false)}
+                  style={{
+                    flex: 1,
+                    backgroundColor: theme.colors.border || '#E5E7EB',
+                    borderRadius: 14,
+                    paddingVertical: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '600',
+                    color: theme.colors.text,
+                  }}>
+                    {t('common.cancel') || 'Cancelar'}
+                  </Text>
+            </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={async () => {
+                    const protein = parseInt(editProtein) || 0;
+                    setSavingGoals(true);
+                    try {
+                      await updateProfile({
+                        dailyProteinGoal: protein,
+                      } as any);
+                      await refreshProfile();
+                      setShowEditProteinModal(false);
+                      setSavingGoals(false);
+                      Toast.show({
+                        type: 'success',
+                        text1: t('profile.updateSuccess') || 'Sucesso',
+                        text2: t('dashboard.goalsUpdated') || 'Metas atualizadas com sucesso',
+                      });
+                    } catch (error: any) {
+                      setSavingGoals(false);
+                      Toast.show({
+                        type: 'error',
+                        text1: t('common.error') || 'Erro',
+                        text2: error.message || t('profile.updateError') || 'Erro ao atualizar metas',
+                      });
+                    }
+                  }}
+                  disabled={savingGoals}
+                  style={{
+                    flex: 1,
+                    backgroundColor: savingGoals
+                      ? theme.colors.border || '#E5E7EB'
+                      : '#EF4444',
+                    borderRadius: 14,
+                    paddingVertical: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: savingGoals ? 0.5 : 1,
+                    shadowColor: '#EF4444',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 4,
+                  }}
+                  activeOpacity={0.8}
+                >
+                  {savingGoals ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={{
+                      fontSize: 16,
+                      fontWeight: '700',
+                      color: '#FFFFFF',
+                    }}>
+                      {t('common.save') || 'Guardar'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+            </View>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Modal de Editar Carboidratos */}
+      <Modal
+        visible={showEditCarbsModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowEditCarbsModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <Pressable
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              justifyContent: 'center',
+              alignItems: 'center',
+              paddingHorizontal: 20,
+            }}
+            onPress={() => setShowEditCarbsModal(false)}
+          >
+            <View style={{ width: '100%', maxWidth: 400 }}>
+            <Pressable
+              onPress={(e) => e.stopPropagation()}
+              style={{
+                backgroundColor: theme.colors.background,
+                borderRadius: 24,
+                padding: 28,
+                width: '100%',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.3,
+                shadowRadius: 16,
+                elevation: 12,
+              }}
+            >
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 24,
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                  <View style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 24,
+                    backgroundColor: '#D1FAE5',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 12,
+                  }}>
+                    <Ionicons name="fast-food" size={28} color="#10B981" />
+              </View>
+                  <Text style={{
+                    fontSize: 22,
+                    fontWeight: '700',
+                    color: theme.colors.text,
+                  }}>
+                    {t('dashboard.carbs') || 'Carboidratos'}
+                  </Text>
+                </View>
+      <TouchableOpacity
+                  onPress={() => setShowEditCarbsModal(false)}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: theme.colors.card,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close" size={22} color={theme.colors.text} />
+      </TouchableOpacity>
+              </View>
+              <Text style={{
+                fontSize: 14,
+                color: theme.colors.textSecondary || '#9CA3AF',
+                marginBottom: 16,
+                textAlign: 'center',
+              }}>
+                {t('dashboard.editCarbsDescription') || 'Change your daily carbs goal'}
+              </Text>
+              <View style={{
+                marginBottom: 24,
+              }}>
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: theme.isDark ? '#1F2937' : '#F9FAFB',
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: theme.colors.border || '#E5E7EB',
+                  paddingHorizontal: 16,
+                }}>
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      paddingVertical: 18,
+                      fontSize: 32,
+                      fontWeight: '800',
+                      color: theme.colors.text,
+                      textAlign: 'center',
+                      backgroundColor: 'transparent',
+                      borderWidth: 0,
+                    }}
+                    value={editCarbs}
+                    onChangeText={setEditCarbs}
+                    keyboardType="numeric"
+                    placeholder="200"
+                    placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
+                    autoFocus
+                  />
+                  <Text style={{
+                    fontSize: 20,
+                    fontWeight: '700',
+                    color: theme.colors.textSecondary || '#9CA3AF',
+                    marginLeft: 8,
+                  }}>
+                    g
+                  </Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TouchableOpacity
+                  onPress={() => setShowEditCarbsModal(false)}
+                  style={{
+                    flex: 1,
+                    backgroundColor: theme.colors.border || '#E5E7EB',
+                    borderRadius: 14,
+                    paddingVertical: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '600',
+                    color: theme.colors.text,
+                  }}>
+                    {t('common.cancel') || 'Cancelar'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={async () => {
+                    const carbs = parseInt(editCarbs) || 0;
+                    setSavingGoals(true);
+                    try {
+                      await updateProfile({
+                        dailyCarbsGoal: carbs,
+                      } as any);
+                      await refreshProfile();
+                      setShowEditCarbsModal(false);
+                      setSavingGoals(false);
+                      Toast.show({
+                        type: 'success',
+                        text1: t('profile.updateSuccess') || 'Sucesso',
+                        text2: t('dashboard.goalsUpdated') || 'Metas atualizadas com sucesso',
+                      });
+                    } catch (error: any) {
+                      setSavingGoals(false);
+                      Toast.show({
+                        type: 'error',
+                        text1: t('common.error') || 'Erro',
+                        text2: error.message || t('profile.updateError') || 'Erro ao atualizar metas',
+                      });
+                    }
+                  }}
+                  disabled={savingGoals}
+                  style={{
+                    flex: 1,
+                    backgroundColor: savingGoals
+                      ? theme.colors.border || '#E5E7EB'
+                      : '#10B981',
+                    borderRadius: 14,
+                    paddingVertical: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: savingGoals ? 0.5 : 1,
+                    shadowColor: '#10B981',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 4,
+                  }}
+                  activeOpacity={0.8}
+                >
+                  {savingGoals ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={{
+                      fontSize: 16,
+                      fontWeight: '700',
+                      color: '#FFFFFF',
+                    }}>
+                      {t('common.save') || 'Guardar'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+            </View>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Modal de Editar Gordura */}
+      <Modal
+        visible={showEditFatModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowEditFatModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <Pressable
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              justifyContent: 'center',
+              alignItems: 'center',
+              paddingHorizontal: 20,
+            }}
+            onPress={() => setShowEditFatModal(false)}
+          >
+            <View style={{ width: '100%', maxWidth: 400 }}>
+            <Pressable
+              onPress={(e) => e.stopPropagation()}
+              style={{
+                backgroundColor: theme.colors.background,
+                borderRadius: 24,
+                padding: 28,
+                width: '100%',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.3,
+                shadowRadius: 16,
+                elevation: 12,
+              }}
+            >
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 24,
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                  <View style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 24,
+                    backgroundColor: '#FEF9C3',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 12,
+                  }}>
+                    <Ionicons name="flame" size={28} color="#EAB308" />
+                  </View>
+                  <Text style={{
+                    fontSize: 22,
+                    fontWeight: '700',
+                    color: theme.colors.text,
+                  }}>
+                    {t('dashboard.fat') || 'Gordura'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setShowEditFatModal(false)}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: theme.colors.card,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close" size={22} color={theme.colors.text} />
+                </TouchableOpacity>
+              </View>
+              <Text style={{
+                fontSize: 14,
+                color: theme.colors.textSecondary || '#9CA3AF',
+                marginBottom: 16,
+                textAlign: 'center',
+              }}>
+                {t('dashboard.editFatDescription') || 'Change your daily fat goal'}
+              </Text>
+              <View style={{
+                marginBottom: 24,
+              }}>
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: theme.isDark ? '#1F2937' : '#F9FAFB',
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: theme.colors.border || '#E5E7EB',
+                  paddingHorizontal: 16,
+                }}>
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      paddingVertical: 18,
+                      fontSize: 32,
+                      fontWeight: '800',
+                      color: theme.colors.text,
+                      textAlign: 'center',
+                      backgroundColor: 'transparent',
+                      borderWidth: 0,
+                    }}
+                    value={editFat}
+                    onChangeText={setEditFat}
+                    keyboardType="numeric"
+                    placeholder="67"
+                    placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
+                    autoFocus
+                  />
+                  <Text style={{
+                    fontSize: 20,
+                    fontWeight: '700',
+                    color: theme.colors.textSecondary || '#9CA3AF',
+                    marginLeft: 8,
+                  }}>
+                    g
+                  </Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TouchableOpacity
+                  onPress={() => setShowEditFatModal(false)}
+                  style={{
+                    flex: 1,
+                    backgroundColor: theme.colors.border || '#E5E7EB',
+                    borderRadius: 14,
+                    paddingVertical: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '600',
+                    color: theme.colors.text,
+                  }}>
+                    {t('common.cancel') || 'Cancelar'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={async () => {
+                    const fat = parseInt(editFat) || 0;
+                    setSavingGoals(true);
+                    try {
+                      await updateProfile({
+                        dailyFatGoal: fat,
+                      } as any);
+                      await refreshProfile();
+                      setShowEditFatModal(false);
+                      setSavingGoals(false);
+                      Toast.show({
+                        type: 'success',
+                        text1: t('profile.updateSuccess') || 'Sucesso',
+                        text2: t('dashboard.goalsUpdated') || 'Metas atualizadas com sucesso',
+                      });
+                    } catch (error: any) {
+                      setSavingGoals(false);
+                      Toast.show({
+                        type: 'error',
+                        text1: t('common.error') || 'Erro',
+                        text2: error.message || t('profile.updateError') || 'Erro ao atualizar metas',
+                      });
+                    }
+                  }}
+                  disabled={savingGoals}
+                  style={{
+                    flex: 1,
+                    backgroundColor: savingGoals
+                      ? theme.colors.border || '#E5E7EB'
+                      : '#EAB308',
+                    borderRadius: 14,
+                    paddingVertical: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: savingGoals ? 0.5 : 1,
+                    shadowColor: '#EAB308',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 4,
+                  }}
+                  activeOpacity={0.8}
+                >
+                  {savingGoals ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={{
+                      fontSize: 16,
+                      fontWeight: '700',
+                      color: '#FFFFFF',
+                    }}>
+                      {t('common.save') || 'Guardar'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+            </View>
+          </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

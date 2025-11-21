@@ -179,7 +179,7 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top', 'bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top']}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1, backgroundColor: theme.colors.background }}
@@ -189,8 +189,8 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
           flexDirection: 'row',
           alignItems: 'center',
           paddingHorizontal: 20,
-          paddingTop: 16,
-          paddingBottom: 20,
+          paddingTop: 8,
+          paddingBottom: 12,
         }}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
@@ -221,28 +221,50 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
         {/* Conteúdo */}
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 32 }}
+          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 32 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Peso com slider */}
-          <View style={{ marginBottom: 32 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          {/* Card: Peso */}
+          <View style={{
+            backgroundColor: theme.colors.card,
+            borderRadius: 16,
+            padding: 20,
+            marginBottom: 16,
+            borderWidth: 1,
+            borderColor: theme.colors.border || '#E5E7EB',
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <Text style={{
-                fontSize: 16,
-                fontWeight: '600',
+                fontSize: 18,
+                fontWeight: '700',
                 color: theme.colors.text,
               }}>
                 {t('profile.weight')}
               </Text>
-              <Text style={{
-                fontSize: 14,
-                fontWeight: '600',
-                color: theme.colors.primary || '#3BB273',
+              <View style={{
+                backgroundColor: (theme.colors.primary || '#3BB273') + '15',
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 8,
               }}>
-                {units.weight}
-              </Text>
+                <Text style={{
+                  fontSize: 12,
+                  fontWeight: '700',
+                  color: theme.colors.primary || '#3BB273',
+                  textTransform: 'uppercase',
+                }}>
+                  {units.weight}
+                </Text>
+              </View>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+            {/* Input de peso com botões +/- */}
+            <View style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              marginBottom: 16,
+              paddingVertical: 20,
+            }}>
               <TouchableOpacity
                 onPress={() => {
                   let currentValue = parseFloat(weight) || (units.weight === 'lb' ? MIN_WEIGHT_LB + (MAX_WEIGHT_LB - MIN_WEIGHT_LB) / 2 : 70);
@@ -274,62 +296,71 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
                 }}
                 activeOpacity={0.7}
                 style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  backgroundColor: theme.colors.border || '#E5E7EB',
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: theme.isDark ? '#374151' : '#F3F4F6',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  marginRight: 12,
+                  marginRight: 16,
                 }}
               >
-                <Ionicons name="remove" size={20} color={theme.colors.text} />
+                <Ionicons name="remove" size={24} color={theme.colors.text} />
               </TouchableOpacity>
               
-              <TextInput
-                style={{
-                  fontSize: 32,
-                  fontWeight: '700',
-                  color: theme.colors.primary || '#3BB273',
-                  textAlign: 'center',
-                  minWidth: 120,
-                }}
-                value={weightText !== '' ? weightText : (weightIsEmpty ? '' : weight)}
-                onChangeText={(text) => {
-                  setWeightText(text);
-                  if (text === '') {
-                    setWeightIsEmpty(true);
-                  } else {
-                    setWeightIsEmpty(false);
-                  }
-                }}
-                onBlur={() => {
-                  if (weightText === '') {
-                    setWeightIsEmpty(true);
-                    return;
-                  }
-                  const num = parseFloat(weightText.replace(/[^0-9.]/g, ''));
-                  if (!isNaN(num)) {
-                    if (units.weight === 'lb') {
-                      const kg = convertWeight(num, 'lb', 'kg');
-                      if (kg >= MIN_WEIGHT_KG && kg <= MAX_WEIGHT_KG) {
-                        const displayKg = convertWeight(kg, 'kg', units.weight);
-                        setWeight(formatWeight(displayKg));
-                        setWeightIsEmpty(false);
-                        setWeightText('');
-                      }
+              <View style={{ alignItems: 'center', minWidth: 140 }}>
+                <TextInput
+                  style={{
+                    fontSize: 42,
+                    fontWeight: '700',
+                    color: theme.colors.primary || '#3BB273',
+                    textAlign: 'center',
+                    minWidth: 120,
+                  }}
+                  value={weightText !== '' ? weightText : (weightIsEmpty ? '' : weight)}
+                  onChangeText={(text) => {
+                    setWeightText(text);
+                    if (text === '') {
+                      setWeightIsEmpty(true);
                     } else {
-                      if (num >= MIN_WEIGHT_KG && num <= MAX_WEIGHT_KG) {
-                        setWeight(formatWeight(num));
-                        setWeightIsEmpty(false);
-                        setWeightText('');
+                      setWeightIsEmpty(false);
+                    }
+                  }}
+                  onBlur={() => {
+                    if (weightText === '') {
+                      setWeightIsEmpty(true);
+                      return;
+                    }
+                    const num = parseFloat(weightText.replace(/[^0-9.]/g, ''));
+                    if (!isNaN(num)) {
+                      if (units.weight === 'lb') {
+                        const kg = convertWeight(num, 'lb', 'kg');
+                        if (kg >= MIN_WEIGHT_KG && kg <= MAX_WEIGHT_KG) {
+                          const displayKg = convertWeight(kg, 'kg', units.weight);
+                          setWeight(formatWeight(displayKg));
+                          setWeightIsEmpty(false);
+                          setWeightText('');
+                        }
+                      } else {
+                        if (num >= MIN_WEIGHT_KG && num <= MAX_WEIGHT_KG) {
+                          setWeight(formatWeight(num));
+                          setWeightIsEmpty(false);
+                          setWeightText('');
+                        }
                       }
                     }
-                  }
-                }}
-                keyboardType="numeric"
-                selectTextOnFocus={false}
-              />
+                  }}
+                  keyboardType="numeric"
+                  selectTextOnFocus={false}
+                />
+                <Text style={{
+                  fontSize: 14,
+                  color: theme.colors.textSecondary || '#9CA3AF',
+                  marginTop: 4,
+                }}>
+                  {units.weight}
+                </Text>
+              </View>
               
               <TouchableOpacity
                 onPress={() => {
@@ -362,26 +393,19 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
                 }}
                 activeOpacity={0.7}
                 style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  backgroundColor: theme.colors.border || '#E5E7EB',
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: theme.isDark ? '#374151' : '#F3F4F6',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  marginLeft: 12,
+                  marginLeft: 16,
                 }}
               >
-                <Ionicons name="add" size={20} color={theme.colors.text} />
+                <Ionicons name="add" size={24} color={theme.colors.text} />
               </TouchableOpacity>
             </View>
-            <Text style={{
-              textAlign: 'center',
-              fontSize: 12,
-              color: theme.colors.textSecondary || '#9CA3AF',
-              marginBottom: 8,
-            }}>
-              {units.weight}
-            </Text>
+            {/* Slider */}
             <Slider
               style={{ width: '100%', height: 40 }}
               minimumValue={units.weight === 'lb' ? MIN_WEIGHT_LB : MIN_WEIGHT_KG}
@@ -394,30 +418,52 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
                 setWeightIsEmpty(false);
               }}
               minimumTrackTintColor={theme.colors.primary || '#3BB273'}
-              maximumTrackTintColor={theme.colors.border || '#E5E7EB'}
+              maximumTrackTintColor={theme.isDark ? '#374151' : '#E5E7EB'}
               thumbTintColor={theme.colors.primary || '#3BB273'}
             />
           </View>
 
-          {/* Altura com slider */}
-          <View style={{ marginBottom: 32 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          {/* Card: Altura */}
+          <View style={{
+            backgroundColor: theme.colors.card,
+            borderRadius: 16,
+            padding: 20,
+            marginBottom: 16,
+            borderWidth: 1,
+            borderColor: theme.colors.border || '#E5E7EB',
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <Text style={{
-                fontSize: 16,
-                fontWeight: '600',
+                fontSize: 18,
+                fontWeight: '700',
                 color: theme.colors.text,
               }}>
                 {t('profile.height')}
               </Text>
-              <Text style={{
-                fontSize: 14,
-                fontWeight: '600',
-                color: theme.colors.primary || '#3BB273',
+              <View style={{
+                backgroundColor: (theme.colors.primary || '#3BB273') + '15',
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 8,
               }}>
-                {units.height === 'cm' ? 'cm' : "ft'in"}
-              </Text>
+                <Text style={{
+                  fontSize: 12,
+                  fontWeight: '700',
+                  color: theme.colors.primary || '#3BB273',
+                  textTransform: 'uppercase',
+                }}>
+                  {units.height === 'cm' ? 'cm' : "ft'in"}
+                </Text>
+              </View>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+            {/* Input de altura com botões +/- */}
+            <View style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              marginBottom: 16,
+              paddingVertical: 20,
+            }}>
               <TouchableOpacity
                 onPress={() => {
                   let currentValueCm = 175;
@@ -447,63 +493,72 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
                 }}
                 activeOpacity={0.7}
                 style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  backgroundColor: theme.colors.border || '#E5E7EB',
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: theme.isDark ? '#374151' : '#F3F4F6',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  marginRight: 12,
+                  marginRight: 16,
                 }}
               >
-                <Ionicons name="remove" size={20} color={theme.colors.text} />
+                <Ionicons name="remove" size={24} color={theme.colors.text} />
               </TouchableOpacity>
               
-              <TextInput
-                style={{
-                  fontSize: units.height === 'in' ? 24 : 32,
-                  fontWeight: '700',
-                  color: theme.colors.primary || '#3BB273',
-                  textAlign: 'center',
-                  minWidth: units.height === 'in' ? 140 : 120,
-                }}
-                value={heightText !== '' ? heightText : (heightIsEmpty ? '' : height)}
-                onChangeText={(text) => {
-                  setHeightText(text);
-                  if (text === '') {
-                    setHeightIsEmpty(true);
-                  } else {
-                    setHeightIsEmpty(false);
-                  }
-                }}
-                onBlur={() => {
-                  if (heightText === '') {
-                    setHeightIsEmpty(true);
-                    return;
-                  }
-                  
-                  // Converter altura da unidade selecionada para cm
-                  const heightInCm = parseHeight(heightText, units.height);
-                  
-                  // Validar
-                  if (heightInCm >= MIN_HEIGHT_CM && heightInCm <= MAX_HEIGHT_CM) {
-                    // Converter de volta para a unidade selecionada
-                    if (units.height === 'in') {
-                      const inches = convertHeight(heightInCm, 'cm', 'in');
-                      const feet = Math.floor(inches / 12);
-                      const remainingInches = Math.round(inches % 12);
-                      setHeight(`${feet}'${remainingInches}"`);
+              <View style={{ alignItems: 'center', minWidth: 140 }}>
+                <TextInput
+                  style={{
+                    fontSize: units.height === 'in' ? 32 : 42,
+                    fontWeight: '700',
+                    color: theme.colors.primary || '#3BB273',
+                    textAlign: 'center',
+                    minWidth: units.height === 'in' ? 140 : 120,
+                  }}
+                  value={heightText !== '' ? heightText : (heightIsEmpty ? '' : height)}
+                  onChangeText={(text) => {
+                    setHeightText(text);
+                    if (text === '') {
+                      setHeightIsEmpty(true);
                     } else {
-                      setHeight(Math.round(heightInCm).toString());
+                      setHeightIsEmpty(false);
                     }
-                  }
-                  setHeightIsEmpty(false);
-                  setHeightText('');
-                }}
-                keyboardType="numeric"
-                selectTextOnFocus={false}
-                placeholder={units.height === 'in' ? "5'10\"" : '175'}
-              />
+                  }}
+                  onBlur={() => {
+                    if (heightText === '') {
+                      setHeightIsEmpty(true);
+                      return;
+                    }
+                    
+                    // Converter altura da unidade selecionada para cm
+                    const heightInCm = parseHeight(heightText, units.height);
+                    
+                    // Validar
+                    if (heightInCm >= MIN_HEIGHT_CM && heightInCm <= MAX_HEIGHT_CM) {
+                      // Converter de volta para a unidade selecionada
+                      if (units.height === 'in') {
+                        const inches = convertHeight(heightInCm, 'cm', 'in');
+                        const feet = Math.floor(inches / 12);
+                        const remainingInches = Math.round(inches % 12);
+                        setHeight(`${feet}'${remainingInches}"`);
+                      } else {
+                        setHeight(Math.round(heightInCm).toString());
+                      }
+                    }
+                    setHeightIsEmpty(false);
+                    setHeightText('');
+                  }}
+                  keyboardType="numeric"
+                  selectTextOnFocus={false}
+                  placeholder={units.height === 'in' ? "5'10\"" : '175'}
+                />
+                <Text style={{
+                  fontSize: 14,
+                  color: theme.colors.textSecondary || '#9CA3AF',
+                  marginTop: 4,
+                }}>
+                  {units.height === 'cm' ? 'cm' : "ft'in"}
+                </Text>
+              </View>
               
               <TouchableOpacity
                 onPress={() => {
@@ -534,26 +589,19 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
                 }}
                 activeOpacity={0.7}
                 style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  backgroundColor: theme.colors.border || '#E5E7EB',
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: theme.isDark ? '#374151' : '#F3F4F6',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  marginLeft: 12,
+                  marginLeft: 16,
                 }}
               >
-                <Ionicons name="add" size={20} color={theme.colors.text} />
+                <Ionicons name="add" size={24} color={theme.colors.text} />
               </TouchableOpacity>
             </View>
-            <Text style={{
-              textAlign: 'center',
-              fontSize: 12,
-              color: theme.colors.textSecondary || '#9CA3AF',
-              marginBottom: 8,
-            }}>
-              {units.height === 'cm' ? 'cm' : "ft'in"}
-            </Text>
+            {/* Slider */}
             <Slider
               style={{ width: '100%', height: 40 }}
               minimumValue={MIN_HEIGHT_CM}
@@ -586,7 +634,7 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
                 setHeightIsEmpty(false);
               }}
               minimumTrackTintColor={theme.colors.primary || '#3BB273'}
-              maximumTrackTintColor={theme.colors.border || '#E5E7EB'}
+              maximumTrackTintColor={theme.isDark ? '#374151' : '#E5E7EB'}
               thumbTintColor={theme.colors.primary || '#3BB273'}
             />
           </View>
@@ -596,8 +644,8 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
         {/* Botão Salvar */}
         <View style={{
           paddingHorizontal: 24,
-          paddingBottom: 32,
-          paddingTop: 20,
+          paddingBottom: Platform.OS === 'ios' ? 32 : 24,
+          paddingTop: 16,
           borderTopWidth: 1,
           borderTopColor: theme.colors.border || '#E5E7EB',
         }}>

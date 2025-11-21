@@ -49,6 +49,11 @@ export interface UserProfile {
   profileImageUrl?: string;
   // Weight history
   weightHistory?: Array<{ weight: number; date: Date }>;
+  // Daily goals (can be manually set)
+  dailyCalorieGoal?: number;
+  dailyProteinGoal?: number;
+  dailyCarbsGoal?: number;
+  dailyFatGoal?: number;
 }
 
 interface UserContextType {
@@ -119,19 +124,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
   // Configurar Google Signin nativo quando o módulo existir (dev-client/standalone)
   useEffect(() => {
     (async () => {
-      try {
+    try {
         const mod = await import('@react-native-google-signin/google-signin');
         const GS = (mod as any)?.GoogleSignin;
         if (GS && typeof GS.configure === 'function') {
-          const webId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '';
+      const webId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '';
           GS.configure({
-            webClientId: webId || undefined,
-            offlineAccess: true,
-          });
+        webClientId: webId || undefined,
+        offlineAccess: true,
+      });
         }
       } catch {
         // Módulo não disponível neste ambiente (por ex., Expo Go)
-      }
+    }
     })();
   }, []);
 
@@ -139,21 +144,21 @@ export function UserProvider({ children }: { children: ReactNode }) {
   // Se não estiver, o request será null e vamos dar erro claro quando tentar usar
   const authRequestConfig = webClientId
     ? (useProxyByDefault
-        ? {
-            // Use only the web client id when using the Expo proxy
-            clientId: webClientId,
-            webClientId: webClientId,
-            redirectUri: expoProxyRedirect,
-            scopes: ['profile', 'email'],
-          }
-        : {
-            // Native flow (standalone/dev-client) - provide native client ids
-            clientId: webClientId,
+    ? {
+        // Use only the web client id when using the Expo proxy
+        clientId: webClientId,
+        webClientId: webClientId,
+        redirectUri: expoProxyRedirect,
+        scopes: ['profile', 'email'],
+      }
+    : {
+        // Native flow (standalone/dev-client) - provide native client ids
+        clientId: webClientId,
             iosClientId: iosClientId || undefined,
             androidClientId: androidClientId || undefined,
-            webClientId: webClientId,
-            redirectUri: expoProxyRedirect,
-            scopes: ['profile', 'email'],
+        webClientId: webClientId,
+        redirectUri: expoProxyRedirect,
+        scopes: ['profile', 'email'],
           })
     : null;
 
@@ -260,6 +265,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           dateOfBirth: data.dateOfBirth?.toDate(),
           desiredWeight: data.desiredWeight,
           diet: data.diet,
+          goalSpeed: data.goalSpeed,
           referralCode: data.referralCode,
           onboardingCompleted: onboardingCompleted, // Garantir que é boolean (true ou false)
           // Auth method
@@ -271,6 +277,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
             weight: entry.weight,
             date: entry.date?.toDate() || new Date(),
           })) || [],
+          // Daily goals
+          dailyCalorieGoal: data.dailyCalorieGoal,
+          dailyProteinGoal: data.dailyProteinGoal,
+          dailyCarbsGoal: data.dailyCarbsGoal,
+          dailyFatGoal: data.dailyFatGoal,
         };
         
         setProfile(loadedProfile);
@@ -431,7 +442,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         console.error('Google sign-in error (Expo Go):', error);
         if (error instanceof Error) {
           throw error;
-        }
+      }
         throw new Error(error.message || 'Erro ao fazer login com Google');
       }
     }
@@ -441,12 +452,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
       // Tentar login nativo primeiro (apenas em dev-client/standalone)
       try {
         await signInWithGoogleNative();
-        return;
+            return;
       } catch (nativeError: any) {
         // Se não for erro de "não disponível", relançar
         if (nativeError.message && !nativeError.message.includes('não está disponível')) {
           throw nativeError;
-        }
+      }
         // Caso contrário, continuar para web flow
       }
 
@@ -476,7 +487,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       // Verificar se GoogleSignin está disponível
       if (!GS || typeof GS.hasPlayServices !== 'function') {
         throw new Error('GoogleSignin nativo não está disponível. Garante dev client e plugin configurado.');
-      }
+    }
 
       // Forçar seletor de conta: garantir que não há sessão cacheada
       try {
@@ -498,14 +509,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
       // Fazer login
       const userInfo = await GS.signIn();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const idTokenNative = (userInfo as any)?.idToken;
+    const idTokenNative = (userInfo as any)?.idToken;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const googleEmail = (userInfo as any)?.user?.email;
 
-      if (!idTokenNative) {
+    if (!idTokenNative) {
         throw new Error('Google Sign-In não retornou idToken');
-      }
-      
+    }
+
       // Criar credencial Firebase e fazer login
       const credentialNative = GoogleAuthProvider.credential(idTokenNative);
       const userCredential = await signInWithCredential(auth, credentialNative);
@@ -573,10 +584,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
       const result = await promptAsync({ useProxy: useProxyByDefault } as any);
 
       if ((result as any).type === 'success') {
-        const authPayload: any = (result as any).authentication || (result as any).params || {};
-        const idToken = authPayload?.idToken || authPayload?.id_token;
-        const accessToken = authPayload?.accessToken || authPayload?.access_token;
-        
+    const authPayload: any = (result as any).authentication || (result as any).params || {};
+    const idToken = authPayload?.idToken || authPayload?.id_token;
+    const accessToken = authPayload?.accessToken || authPayload?.access_token;
+
         if (idToken || accessToken) {
           const credential = GoogleAuthProvider.credential(idToken || undefined, accessToken || undefined);
           const userCredential = await signInWithCredential(auth, credential);

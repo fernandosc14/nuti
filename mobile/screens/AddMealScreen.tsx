@@ -30,6 +30,7 @@ import { db } from '../services/firebase';
 // Removido: import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 // Usando base64 em vez de Firebase Storage (solução gratuita)
 import { updateStreak } from '../utils/streakUtils';
+import { removeCache } from '../utils/cacheUtils';
 import Toast from 'react-native-toast-message';
 import { MotiView } from 'moti';
 
@@ -596,6 +597,10 @@ export function AddMealScreen({ navigation, route }: any) {
       await updateStreak(user.uid);
       await refreshProfile();
 
+      // Invalidar cache de daysWithMeals (pode ter mudado)
+      const daysWithMealsCacheKey = `daysWithMeals_${user.uid}`;
+      await removeCache(daysWithMealsCacheKey);
+
       Toast.show({
         type: 'success',
         text1: t('addMeal.mealAdded') || 'Meal added!',
@@ -669,6 +674,10 @@ export function AddMealScreen({ navigation, route }: any) {
       // Atualizar streak
       await updateStreak(user.uid);
       await refreshProfile();
+
+      // Invalidar cache de daysWithMeals (pode ter mudado)
+      const daysWithMealsCacheKey = `daysWithMeals_${user.uid}`;
+      await removeCache(daysWithMealsCacheKey);
 
       Toast.show({
         type: 'success',

@@ -31,6 +31,10 @@ import { ProfileScreen } from './screens/ProfileScreen';
 import { EditNameScreen } from './screens/EditNameScreen';
 import { EditPersonalDetailsScreen } from './screens/EditPersonalDetailsScreen';
 import { EditGoalAndWeightScreen } from './screens/EditGoalAndWeightScreen';
+import { EditWorkoutsPerWeekScreen } from './screens/EditWorkoutsPerWeekScreen';
+import { EditDietScreen } from './screens/EditDietScreen';
+import { EditCaloriesAndMacrosScreen } from './screens/EditCaloriesAndMacrosScreen';
+import { AddExerciseScreen } from './screens/AddExerciseScreen';
 import { UpdateWeightScreen } from './screens/UpdateWeightScreen';
 import { PremiumScreen } from './screens/PremiumScreen';
 import { ProgressScreen } from './screens/ProgressScreen';
@@ -409,6 +413,10 @@ function AppStack() {
       <Stack.Screen name="EditName" component={EditNameScreen} />
       <Stack.Screen name="EditPersonalDetails" component={EditPersonalDetailsScreen} />
       <Stack.Screen name="EditGoalAndWeight" component={EditGoalAndWeightScreen} />
+      <Stack.Screen name="EditWorkoutsPerWeek" component={EditWorkoutsPerWeekScreen} />
+      <Stack.Screen name="EditDiet" component={EditDietScreen} />
+      <Stack.Screen name="EditCaloriesAndMacros" component={EditCaloriesAndMacrosScreen} />
+      <Stack.Screen name="AddExercise" component={AddExerciseScreen} />
       <Stack.Screen name="UpdateWeight" component={UpdateWeightScreen} />
       <Stack.Screen name="Premium" component={PremiumScreen} />
       <Stack.Screen name="Preferences" component={PreferencesScreen} />

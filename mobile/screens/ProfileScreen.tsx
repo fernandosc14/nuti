@@ -673,6 +673,93 @@ export function ProfileScreen({ navigation }: any) {
             <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary || '#9CA3AF'} />
           </TouchableOpacity>
 
+          {/* Calorias e Macros */}
+          <TouchableOpacity
+            onPress={() => navigation.navigate('EditCaloriesAndMacros')}
+            activeOpacity={0.7}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingVertical: 16,
+              paddingHorizontal: 16,
+              backgroundColor: theme.colors.card,
+              borderRadius: 12,
+              marginBottom: 8,
+              borderWidth: 1,
+              borderColor: theme.colors.border || '#E5E7EB',
+            }}
+          >
+            <Ionicons name="flame-outline" size={24} color={theme.colors.text} />
+            <Text style={{
+              fontSize: 16,
+              fontWeight: '600',
+              color: theme.colors.text,
+              marginLeft: 12,
+              flex: 1,
+            }}>
+              {t('profile.caloriesAndMacros') || 'Calorias e Macros'}
+            </Text>
+            <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary || '#9CA3AF'} />
+          </TouchableOpacity>
+
+          {/* Treinos por Semana */}
+          <TouchableOpacity
+            onPress={() => navigation.navigate('EditWorkoutsPerWeek')}
+            activeOpacity={0.7}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingVertical: 16,
+              paddingHorizontal: 16,
+              backgroundColor: theme.colors.card,
+              borderRadius: 12,
+              marginBottom: 8,
+              borderWidth: 1,
+              borderColor: theme.colors.border || '#E5E7EB',
+            }}
+          >
+            <Ionicons name="fitness-outline" size={24} color={theme.colors.text} />
+            <Text style={{
+              fontSize: 16,
+              fontWeight: '600',
+              color: theme.colors.text,
+              marginLeft: 12,
+              flex: 1,
+            }}>
+              {t('profile.workoutsPerWeek') || 'Treinos por semana'}
+            </Text>
+            <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary || '#9CA3AF'} />
+          </TouchableOpacity>
+
+          {/* Dieta */}
+          <TouchableOpacity
+            onPress={() => navigation.navigate('EditDiet')}
+            activeOpacity={0.7}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingVertical: 16,
+              paddingHorizontal: 16,
+              backgroundColor: theme.colors.card,
+              borderRadius: 12,
+              marginBottom: 8,
+              borderWidth: 1,
+              borderColor: theme.colors.border || '#E5E7EB',
+            }}
+          >
+            <Ionicons name="restaurant-outline" size={24} color={theme.colors.text} />
+            <Text style={{
+              fontSize: 16,
+              fontWeight: '600',
+              color: theme.colors.text,
+              marginLeft: 12,
+              flex: 1,
+            }}>
+              {t('profile.diet') || 'Dieta'}
+            </Text>
+            <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary || '#9CA3AF'} />
+          </TouchableOpacity>
+
           {/* Idioma */}
           <TouchableOpacity
             onPress={() => setShowLanguageModal(true)}

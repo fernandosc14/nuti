@@ -151,9 +151,81 @@ service cloud.firestore {
       allow create, update: if request.auth != null && request.auth.uid == request.resource.data.userId;
       allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
+    
+    // Regras para exercises (exercícios físicos)
+    match /exercises/{exerciseId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
   }
 }
 `;
+
+/**
+ * COLEÇÃO: exercises
+ * 
+ * Documento ID = auto-gerado
+ * 
+ * Estrutura base:
+ */
+const exerciseDocument = {
+  userId: "string",                   // ID do utilizador
+  type: "running" | "walking" | "cycling" | "swimming" | "gym" | "yoga" | "pilates" | "dance" | "hiking" | "tennis" | "football" | "basketball" | "other", // Tipo de exercício
+  name: "string",                     // Nome do exercício (tipo ou nome customizado)
+  duration: 30,                       // Duração em minutos (obrigatório)
+  date: Timestamp,                    // Data do exercício
+  addedAt: Timestamp,                 // Data de quando foi adicionado
+  
+  // Campos específicos por tipo (opcionais):
+  
+  // Running, Walking, Cycling, Hiking
+  distance: 5.0,                      // Distância em km ou mi
+  distanceUnit: "km" | "mi",          // Unidade de distância
+  
+  // Walking
+  steps: 5000,                        // Número de passos (opcional)
+  
+  // Cycling
+  averageSpeed: 20.0,                 // Velocidade média em km/h ou mph
+  speedUnit: "km/h" | "mph",          // Unidade de velocidade
+  
+  // Swimming
+  style: "freestyle" | "backstroke" | "breaststroke" | "butterfly" | "mixed", // Estilo de natação
+  
+  // GYM
+  trainingType: "strength" | "hypertrophy" | "cardio", // Tipo de treino
+  
+  // Yoga
+  level: "beginner" | "intermediate" | "advanced", // Nível
+  style: "hatha" | "vinyasa" | "power" | "yin" | "ashtanga" | "bikram", // Estilo de yoga
+  
+  // Pilates
+  pilatesType: "mat" | "machine",     // Tipo de pilates
+  
+  // Dance
+  style: "zumba" | "ballet" | "salsa" | "hip-hop" | "free", // Estilo de dança
+  
+  // Hiking
+  elevationGain: 500,                 // Ganho de elevação em m ou ft (essencial para cálculo MET)
+  elevationUnit: "m" | "ft",          // Unidade de elevação
+  backpackWeight: 10.0,               // Peso da mochila em kg ou lbs (opcional)
+  weightUnit: "kg" | "lbs",           // Unidade de peso
+  
+  // Tennis
+  gameType: "individual" | "doubles", // Tipo de jogo
+  effectiveGameDuration: 60,          // Duração efetiva do jogo em minutos (opcional)
+  
+  // Football
+  position: "forward" | "midfielder" | "defender" | "goalkeeper", // Posição
+  
+  // Basketball
+  gameType: "game" | "training",      // Tipo de jogo
+  
+  // Other
+  customName: "string",                // Nome customizado do exercício (obrigatório para "other")
+  perceivedIntensity: 7,              // Intensidade percebida 1-10 (obrigatório para "other", opcional para outros)
+};
 
 /**
  * ÍNDICES NECESSÁRIOS
@@ -166,7 +238,10 @@ service cloud.firestore {
  * 
  * Coleção: messages
  * - userId (Ascending) + createdAt (Ascending)
+ * 
+ * Coleção: exercises
+ * - userId (Ascending) + date (Ascending)
  */
 
-export { userDocument, mealDocument, messageDocument, badges, securityRules };
+export { userDocument, mealDocument, messageDocument, exerciseDocument, badges, securityRules };
 

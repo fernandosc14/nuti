@@ -34,23 +34,21 @@ export function PremiumWelcomeModal() {
         return;
       }
 
-      // Obter o último plano conhecido
-      const lastKnownPlan = await AsyncStorage.getItem('last_known_plan');
       const currentPlan = profile.plan || 'free';
 
       // Se o plano atual é premium
       if (currentPlan === 'premium') {
-        // Se o último plano era 'free' ou não existe (primeira vez premium), mostrar modal
-        if (lastKnownPlan !== 'premium') {
+        // Verificar se o modal de boas-vindas já foi mostrado
+        const welcomeShown = await AsyncStorage.getItem('premium_welcome_shown');
+        
+        // Se ainda não foi mostrado, mostrar o modal
+        if (welcomeShown !== 'true') {
           // Pequeno delay para garantir que a UI está pronta
           setTimeout(() => {
             setShowModal(true);
           }, 500);
         }
       }
-
-      // Sempre atualizar o último plano conhecido
-      await AsyncStorage.setItem('last_known_plan', currentPlan);
     };
 
     checkPremiumWelcome();
@@ -58,9 +56,9 @@ export function PremiumWelcomeModal() {
 
   const handleClose = async () => {
     setShowModal(false);
-    // Atualizar o último plano conhecido para premium (para não mostrar novamente)
+    // Marcar que o modal de boas-vindas já foi mostrado (apenas uma vez)
     if (profile?.plan === 'premium') {
-      await AsyncStorage.setItem('last_known_plan', 'premium');
+      await AsyncStorage.setItem('premium_welcome_shown', 'true');
     }
   };
 

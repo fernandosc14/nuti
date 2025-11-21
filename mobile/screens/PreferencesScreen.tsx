@@ -50,22 +50,31 @@ export function PreferencesScreen({ navigation }: any) {
       <View style={{
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 24,
-        paddingVertical: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: theme.colors.border || '#E5E7EB',
+        paddingHorizontal: 20,
+        paddingTop: 8,
+        paddingBottom: 12,
       }}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
-          style={{ marginRight: 16 }}
+          activeOpacity={0.7}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: theme.colors.card,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
         >
           <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
         </TouchableOpacity>
         <Text style={{
-          fontSize: 20,
+          fontSize: 28,
           fontWeight: '700',
           color: theme.colors.text,
           flex: 1,
+          textAlign: 'center',
+          marginRight: 40,
         }}>
           {t('profile.preferences') || 'Preferências'}
         </Text>

@@ -33,11 +33,13 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
   const { units, convertWeight } = useUnits();
   const [weight, setWeight] = useState('');
   const [goal, setGoal] = useState<'lose' | 'maintain' | 'gain'>('maintain');
+  const [goalSpeed, setGoalSpeed] = useState<number>(0.5); // kg per week
   const [loading, setLoading] = useState(false);
   const [weightText, setWeightText] = useState('');
   const [weightIsEmpty, setWeightIsEmpty] = useState(false);
   const [showGoalModal, setShowGoalModal] = useState(false);
   const initialized = useRef(false);
+  const goalSpeedFromProfile = useRef<number | null>(null); // Guardar o valor do perfil para comparar
 
   // Função para formatar peso com 1 casa decimal (arredondar corretamente)
   const formatWeight = (value: number): string => {
@@ -53,7 +55,7 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
   const MAX_WEIGHT_LB = Math.round(convertWeight(MAX_WEIGHT_KG, 'kg', 'lb'));
 
   useEffect(() => {
-    if (profile && !initialized.current) {
+    if (profile) {
       // Converter peso desejado (ou atual) de kg (Firestore) para a unidade selecionada
       const desiredWeightKg = profile.desiredWeight ?? profile.weight ?? 0;
       const weightInKg = desiredWeightKg;
@@ -63,9 +65,23 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
       
       setWeight(displayWeight > 0 ? formatWeight(displayWeight) : '');
       setGoal(profile.goal || 'maintain');
+      
+      // Só atualizar goalSpeed se o valor do perfil mudou (não durante edição local)
+      const profileGoalSpeed = profile.goalSpeed !== undefined && profile.goalSpeed !== null 
+        ? profile.goalSpeed 
+        : 0.5;
+      
+      // Só atualizar se o valor do perfil for diferente do que está guardado
+      if (goalSpeedFromProfile.current === null || goalSpeedFromProfile.current !== profileGoalSpeed) {
+        setGoalSpeed(profileGoalSpeed);
+        goalSpeedFromProfile.current = profileGoalSpeed;
+      }
+      
       setWeightText('');
       setWeightIsEmpty(false);
-      initialized.current = true;
+      if (!initialized.current) {
+        initialized.current = true;
+      }
     }
   }, [profile, units.weight, convertWeight]);
 
@@ -177,6 +193,7 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
       await updateProfile({
         desiredWeight: parseFloat(finalWeight),
         goal,
+        goalSpeed: goal === 'maintain' ? undefined : goalSpeed,
       });
 
       // Forçar refresh do profile para garantir que o Dashboard recalcula as calorias
@@ -203,7 +220,7 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top', 'bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top']}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1, backgroundColor: theme.colors.background }}
@@ -213,8 +230,8 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
           flexDirection: 'row',
           alignItems: 'center',
           paddingHorizontal: 20,
-          paddingTop: 16,
-          paddingBottom: 20,
+          paddingTop: 8,
+          paddingBottom: 12,
         }}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
@@ -245,28 +262,50 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
         {/* Conteúdo */}
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 32 }}
+          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 0, paddingTop: 16 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Peso desejado com slider */}
-          <View style={{ marginBottom: 32 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          {/* Card: Peso Desejado */}
+          <View style={{
+            backgroundColor: theme.colors.card,
+            borderRadius: 16,
+            padding: 20,
+            marginBottom: 16,
+            borderWidth: 1,
+            borderColor: theme.colors.border || '#E5E7EB',
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <Text style={{
-                fontSize: 16,
-                fontWeight: '600',
+                fontSize: 18,
+                fontWeight: '700',
                 color: theme.colors.text,
               }}>
                 {t('profile.desiredWeight') || 'Peso desejado'}
               </Text>
-              <Text style={{
-                fontSize: 14,
-                fontWeight: '600',
-                color: theme.colors.primary || '#3BB273',
+              <View style={{
+                backgroundColor: (theme.colors.primary || '#3BB273') + '15',
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 8,
               }}>
-                {units.weight}
-              </Text>
+                <Text style={{
+                  fontSize: 12,
+                  fontWeight: '700',
+                  color: theme.colors.primary || '#3BB273',
+                  textTransform: 'uppercase',
+                }}>
+                  {units.weight}
+                </Text>
+              </View>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+            {/* Input de peso com botões +/- */}
+            <View style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              marginBottom: 16,
+              paddingVertical: 20,
+            }}>
               <TouchableOpacity
                 onPress={() => {
                   let currentValue = parseFloat(weight) || (units.weight === 'lb' ? MIN_WEIGHT_LB + (MAX_WEIGHT_LB - MIN_WEIGHT_LB) / 2 : 70);
@@ -298,26 +337,27 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
                 }}
                 activeOpacity={0.7}
                 style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  backgroundColor: theme.colors.border || '#E5E7EB',
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: theme.isDark ? '#374151' : '#F3F4F6',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  marginRight: 12,
+                  marginRight: 16,
                 }}
               >
-                <Ionicons name="remove" size={20} color={theme.colors.text} />
+                <Ionicons name="remove" size={24} color={theme.colors.text} />
               </TouchableOpacity>
               
-              <TextInput
-                style={{
-                  fontSize: 32,
-                  fontWeight: '700',
-                  color: theme.colors.primary || '#3BB273',
-                  textAlign: 'center',
-                  minWidth: 120,
-                }}
+              <View style={{ alignItems: 'center', minWidth: 140 }}>
+                <TextInput
+                  style={{
+                    fontSize: 42,
+                    fontWeight: '700',
+                    color: theme.colors.primary || '#3BB273',
+                    textAlign: 'center',
+                    minWidth: 120,
+                  }}
                 value={weightText !== '' ? weightText : (weightIsEmpty ? '' : weight)}
                 onChangeText={(text) => {
                   setWeightText(text);
@@ -351,9 +391,17 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
                     }
                   }
                 }}
-                keyboardType="numeric"
-                selectTextOnFocus={false}
-              />
+                  keyboardType="numeric"
+                  selectTextOnFocus={false}
+                />
+                <Text style={{
+                  fontSize: 14,
+                  color: theme.colors.textSecondary || '#9CA3AF',
+                  marginTop: 4,
+                }}>
+                  {units.weight}
+                </Text>
+              </View>
               
               <TouchableOpacity
                 onPress={() => {
@@ -386,26 +434,20 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
                 }}
                 activeOpacity={0.7}
                 style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  backgroundColor: theme.colors.border || '#E5E7EB',
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: theme.isDark ? '#374151' : '#F3F4F6',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  marginLeft: 12,
+                  marginLeft: 16,
                 }}
               >
-                <Ionicons name="add" size={20} color={theme.colors.text} />
+                <Ionicons name="add" size={24} color={theme.colors.text} />
               </TouchableOpacity>
             </View>
-            <Text style={{
-              textAlign: 'center',
-              fontSize: 12,
-              color: theme.colors.textSecondary || '#9CA3AF',
-              marginBottom: 8,
-            }}>
-              {units.weight}
-            </Text>
+            
+            {/* Slider */}
             <Slider
               style={{ width: '100%', height: 40 }}
               minimumValue={units.weight === 'lb' ? MIN_WEIGHT_LB : MIN_WEIGHT_KG}
@@ -423,13 +465,20 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
             />
           </View>
 
-          {/* Objetivo */}
-          <View style={{ marginBottom: 32 }}>
+          {/* Card: Objetivo */}
+          <View style={{
+            backgroundColor: theme.colors.card,
+            borderRadius: 16,
+            padding: 20,
+            marginBottom: 16,
+            borderWidth: 1,
+            borderColor: theme.colors.border || '#E5E7EB',
+          }}>
             <Text style={{
-              fontSize: 16,
-              fontWeight: '600',
+              fontSize: 18,
+              fontWeight: '700',
               color: theme.colors.text,
-              marginBottom: 12,
+              marginBottom: 16,
             }}>
               {t('profile.goal')}
             </Text>
@@ -437,7 +486,7 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
               onPress={() => setShowGoalModal(true)}
               activeOpacity={0.7}
               style={{
-                backgroundColor: theme.colors.card,
+                backgroundColor: theme.isDark ? '#1F2937' : '#F9FAFB',
                 borderRadius: 12,
                 padding: 16,
                 borderWidth: 1,
@@ -448,9 +497,6 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
               }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                <Text style={{ fontSize: 24, marginRight: 12 }}>
-                  {goal === 'lose' ? '📉' : goal === 'gain' ? '📈' : '⚖️'}
-                </Text>
                 <Text style={{
                   fontSize: 16,
                   fontWeight: '600',
@@ -535,9 +581,6 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
                         borderLeftColor: theme.colors.primary || '#3BB273',
                       }}
                     >
-                      <Text style={{ fontSize: 28, marginRight: 16 }}>
-                        {g === 'lose' ? '📉' : g === 'gain' ? '📈' : '⚖️'}
-                      </Text>
                       <Text style={{
                         fontSize: 16,
                         fontWeight: goal === g ? '700' : '500',
@@ -559,13 +602,130 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
               </Pressable>
             </Pressable>
           </Modal>
+
+          {/* Card: Rapidez por Semana - Só mostrar se não for maintain */}
+          {goal !== 'maintain' && (
+            <View style={{
+              backgroundColor: theme.colors.card,
+              borderRadius: 16,
+              padding: 20,
+              marginBottom: 16,
+              borderWidth: 1,
+              borderColor: theme.colors.border || '#E5E7EB',
+            }}>
+              <Text style={{
+                fontSize: 18,
+                fontWeight: '700',
+                color: theme.colors.text,
+                marginBottom: 8,
+              }}>
+                {t('onboarding.goalSpeed.title') || 'Rapidez por semana'}
+              </Text>
+              <Text style={{
+                fontSize: 14,
+                color: theme.colors.textSecondary || '#6B7280',
+                marginBottom: 24,
+                lineHeight: 20,
+              }}>
+                {goal === 'gain' 
+                  ? t('onboarding.goalSpeed.descriptionGain') || 'Quanto peso queres ganhar por semana?'
+                  : t('onboarding.goalSpeed.descriptionLose') || 'Quanto peso queres perder por semana?'}
+              </Text>
+
+              {/* Valor atual destacado */}
+              <View style={{ 
+                alignItems: 'center', 
+                marginBottom: 24,
+                paddingVertical: 20,
+                backgroundColor: (theme.colors.primary || '#3BB273') + '10',
+                borderRadius: 12,
+              }}>
+                <Text style={{
+                  fontSize: 42,
+                  fontWeight: '700',
+                  color: theme.colors.primary || '#3BB273',
+                  marginBottom: 4,
+                }}>
+                  {(units.weight === 'lb' ? goalSpeed * 2.20462 : goalSpeed).toFixed(1)} {units.weight === 'lb' ? 'lbs' : 'kg'}
+                </Text>
+                <Text style={{
+                  fontSize: 13,
+                  color: theme.colors.textSecondary || '#6B7280',
+                  fontWeight: '500',
+                }}>
+                  {t('onboarding.goalSpeed.perWeek') || 'por semana'}
+                </Text>
+              </View>
+
+              {/* Slider */}
+              <View style={{ marginBottom: 16 }}>
+                <Slider
+                  style={{ width: '100%', height: 40 }}
+                  minimumValue={0.1}
+                  maximumValue={goal === 'gain' ? 3.0 : 2.0}
+                  value={goalSpeed}
+                  onValueChange={(value) => {
+                    setGoalSpeed(value);
+                  }}
+                  minimumTrackTintColor={theme.colors.primary || '#3BB273'}
+                  maximumTrackTintColor={theme.isDark ? '#374151' : '#E5E7EB'}
+                  thumbTintColor={theme.colors.primary || '#3BB273'}
+                  step={0.1}
+                />
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
+                  <Text style={{ fontSize: 12, color: theme.colors.textSecondary || '#6B7280', fontWeight: '500' }}>
+                    {(units.weight === 'lb' ? 0.1 * 2.20462 : 0.1).toFixed(1)} {units.weight === 'lb' ? 'lbs' : 'kg'}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: theme.colors.textSecondary || '#6B7280', fontWeight: '500' }}>
+                    {(units.weight === 'lb' ? (goal === 'gain' ? 3.0 : 2.0) * 2.20462 : (goal === 'gain' ? 3.0 : 2.0)).toFixed(1)} {units.weight === 'lb' ? 'lbs' : 'kg'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Texto informativo sobre limites */}
+              <Text style={{
+                fontSize: 12,
+                color: theme.colors.textSecondary || '#6B7280',
+                marginTop: 8,
+                marginBottom: 16,
+                lineHeight: 16,
+                textAlign: 'center',
+                fontStyle: 'italic',
+              }}>
+                {t('onboarding.goalSpeed.safetyNote') || 'Para a tua segurança, o ajuste calórico real pode ser limitado para garantir uma ingestão diária segura, mesmo que velocidades mais altas sejam selecionadas.'}
+              </Text>
+
+              {/* Botão Recommended */}
+              <TouchableOpacity
+                onPress={() => {
+                  setGoalSpeed(0.5);
+                }}
+                activeOpacity={0.7}
+                style={{
+                  backgroundColor: theme.isDark ? '#374151' : '#F3F4F6',
+                  paddingVertical: 12,
+                  paddingHorizontal: 20,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{
+                  color: theme.colors.text,
+                  fontSize: 14,
+                  fontWeight: '600',
+                }}>
+                  {t('onboarding.goalSpeed.recommended') || 'Recomendado'} ({(units.weight === 'lb' ? 0.5 * 2.20462 : 0.5).toFixed(1)} {units.weight === 'lb' ? 'lbs' : 'kg'})
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </ScrollView>
 
         {/* Botão Salvar */}
         <View style={{
           paddingHorizontal: 24,
-          paddingBottom: 32,
-          paddingTop: 20,
+          paddingBottom: Platform.OS === 'ios' ? 20 : 16,
+          paddingTop: 16,
           borderTopWidth: 1,
           borderTopColor: theme.colors.border || '#E5E7EB',
         }}>

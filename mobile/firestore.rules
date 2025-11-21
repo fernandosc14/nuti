@@ -39,5 +39,23 @@ service cloud.firestore {
       // Permitir eliminação se o utilizador estiver autenticado e o userId corresponder
       allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
+    
+    // Regras para customExerciseTypes (tipos de exercício customizados por usuário)
+    match /customExerciseTypes/{typeId} {
+      allow read: if request.auth != null && (
+        !exists(/databases/$(database)/documents/customExerciseTypes/$(typeId)) ||
+        request.auth.uid == resource.data.userId
+      );
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    
+    // Regras para exercises (exercícios físicos)
+    match /exercises/{exerciseId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
   }
 }
