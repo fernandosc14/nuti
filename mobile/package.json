@@ -10,7 +10,10 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "build:android": "eas build --platform android",
-    "eas:build:dev": "eas build --platform android --profile development"
+    "eas:build:dev": "eas build --platform android --profile development",
+    "test": "npx jest",
+    "test:watch": "npx jest --watch",
+    "test:coverage": "npx jest --coverage"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -54,9 +57,12 @@
   },
   "devDependencies": {
     "@babel/core": "^7.24.0",
+    "@types/jest": "^29.5.12",
     "@types/react": "~19.1.10",
     "babel-preset-expo": "^54.0.6",
+    "jest": "^29.7.0",
     "metro": "^0.83.1",
+    "ts-jest": "^29.4.5",
     "typescript": "~5.9.2"
   },
   "overrides": {

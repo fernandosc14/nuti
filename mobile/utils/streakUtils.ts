@@ -9,28 +9,15 @@ import { collection, query, where, getDocs, Timestamp, doc, getDoc, setDoc } fro
 
 /**
  * Verifica e atualiza o streak do utilizador
- * Streak aumenta se o utilizador registou ≥1 refeição no dia
+ * Conta todos os dias consecutivos anteriores que têm refeições
+ * Streak só quebra se passar para o próximo dia sem ter refeições no dia anterior
  */
 export async function updateStreak(userId: string): Promise<number> {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    // Contar refeições de hoje
+    
     const mealsRef = collection(db, 'meals');
-    const q = query(
-      mealsRef,
-      where('userId', '==', userId),
-      where('date', '>=', Timestamp.fromDate(today)),
-      where('date', '<', Timestamp.fromDate(tomorrow))
-    );
-
-    const snapshot = await getDocs(q);
-    const mealCount = snapshot.size;
-
-    // Buscar perfil do utilizador
     const userRef = doc(db, 'users', userId);
     const userSnap = await getDoc(userRef);
 
@@ -38,50 +25,96 @@ export async function updateStreak(userId: string): Promise<number> {
       return 0;
     }
 
-    const userData = userSnap.data();
-    const lastStreakDate = userData.lastStreakDate?.toDate();
-    const currentStreak = userData.streak || 0;
-
-    const todayStr = today.toDateString();
-    const lastStreakStr = lastStreakDate?.toDateString();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toDateString();
-
-    // Se tem ≥1 refeição hoje, atualizar streak
-    if (mealCount >= 1) {
-      // Verificar se já atualizou hoje
-      if (lastStreakStr !== todayStr) {
-        // Verificar se foi ontem (continua streak) ou outro dia (reset)
-        let newStreak = 1;
-        if (lastStreakStr === yesterdayStr) {
-          // Continua streak
-          newStreak = currentStreak + 1;
-        }
-
-        await setDoc(userRef, {
-          streak: newStreak,
-          lastStreakDate: Timestamp.fromDate(today),
-        }, { merge: true });
-
-        return newStreak;
+    // Buscar todas as refeições do utilizador (para verificar dias consecutivos)
+    const allMealsQuery = query(
+      mealsRef,
+      where('userId', '==', userId)
+    );
+    const allMealsSnapshot = await getDocs(allMealsQuery);
+    
+    // Criar um Set com todas as datas que têm refeições (formato: YYYY-MM-DD)
+    const daysWithMeals = new Set<string>();
+    allMealsSnapshot.forEach((doc) => {
+      const mealData = doc.data();
+      const mealDate = mealData.date?.toDate();
+      if (mealDate) {
+        const dateStr = mealDate.toDateString();
+        daysWithMeals.add(dateStr);
       }
+    });
 
-      return currentStreak;
+    // Calcular streak: contar dias consecutivos desde hoje para trás
+    let streak = 0;
+    let currentDate = new Date(today);
+    
+    // Verificar se hoje tem refeições
+    const todayStr = today.toDateString();
+    const hasMealsToday = daysWithMeals.has(todayStr);
+    
+    // Se hoje tem refeições, começar a contar
+    if (hasMealsToday) {
+      streak = 1;
+      currentDate.setDate(currentDate.getDate() - 1);
+      
+      // Continuar contando dias anteriores consecutivos
+      while (true) {
+        const dateStr = currentDate.toDateString();
+        if (daysWithMeals.has(dateStr)) {
+          streak++;
+          currentDate.setDate(currentDate.getDate() - 1);
+        } else {
+          // Encontrou um dia sem refeições, parar
+          break;
+        }
+      }
     } else {
-      // Se tem <1 refeição hoje, verificar se perdeu o streak
-      // Se o último streak foi há mais de 1 dia, resetar para 0
-      if (lastStreakStr && lastStreakStr !== todayStr && lastStreakStr !== yesterdayStr) {
-        // Perdeu o streak (último streak foi há 2+ dias)
-        await setDoc(userRef, {
-          streak: 0,
-        }, { merge: true });
-        return 0;
+      // Hoje não tem refeições, verificar dias anteriores
+      currentDate.setDate(currentDate.getDate() - 1);
+      
+      // Contar dias consecutivos anteriores
+      while (true) {
+        const dateStr = currentDate.toDateString();
+        if (daysWithMeals.has(dateStr)) {
+          streak++;
+          currentDate.setDate(currentDate.getDate() - 1);
+        } else {
+          // Encontrou um dia sem refeições, parar
+          break;
+        }
       }
     }
 
-    // Retornar streak atual
-    return currentStreak;
+    // Atualizar streak no perfil
+    // lastStreakDate será a data do último dia com refeições no streak
+    let lastStreakDate: Date | null = null;
+    if (streak > 0) {
+      if (hasMealsToday) {
+        // Se hoje tem refeições, lastStreakDate é hoje
+        lastStreakDate = new Date(today);
+      } else {
+        // Se hoje não tem, encontrar o último dia consecutivo com refeições
+        // (que seria o primeiro dia do streak, contando de trás para frente)
+        const checkDate = new Date(today);
+        checkDate.setDate(checkDate.getDate() - 1);
+        
+        // Encontrar o último dia consecutivo com refeições
+        for (let i = 0; i < streak; i++) {
+          const dateStr = checkDate.toDateString();
+          if (daysWithMeals.has(dateStr)) {
+            lastStreakDate = new Date(checkDate);
+            break;
+          }
+          checkDate.setDate(checkDate.getDate() - 1);
+        }
+      }
+    }
+
+    await setDoc(userRef, {
+      streak: streak,
+      lastStreakDate: lastStreakDate ? Timestamp.fromDate(lastStreakDate) : null,
+    }, { merge: true });
+
+    return streak;
   } catch (error: any) {
     // Ignorar erros de permissões silenciosamente (pode ser que o utilizador não esteja autenticado)
     if (error?.code === 'permission-denied') {
@@ -90,6 +123,15 @@ export async function updateStreak(userId: string): Promise<number> {
     console.error('Error updating streak:', error);
     return 0;
   }
+}
+
+/**
+ * Verifica e atualiza o streak após eliminar uma refeição
+ * Recalcula o streak completo usando a mesma lógica de updateStreak
+ */
+export async function updateStreakAfterDelete(userId: string, deletedMealDate: Date): Promise<number> {
+  // Simplesmente recalcular o streak completo
+  return await updateStreak(userId);
 }
 
 /**

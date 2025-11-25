@@ -6,6 +6,9 @@
  * - Open Food Facts API (pesquisa de alimentos)
  */
 
+import { getCache, setCache } from '../utils/cacheUtils';
+import { FOOD_DATABASE, enhanceNutritionalValues } from './foodDatabase';
+
 /**
  * Interface para itens de comida
  */
@@ -18,6 +21,12 @@ export interface FoodItem {
   fat: number;
   image?: string;
   plateFoods?: PlateFoodItem[]; // Lista de alimentos quando há múltiplos no prato
+  // Dados nutricionais adicionais para cálculo mais preciso do health score
+  sugars?: number; // Açúcares em g/100g
+  fiber?: number; // Fibra em g/100g
+  sodium?: number; // Sódio em mg/100g
+  saturatedFat?: number; // Gordura saturada em g/100g
+  transFat?: number; // Gordura trans em g/100g
 }
 
 /**
@@ -30,6 +39,12 @@ export interface PlateFoodItem {
   carbsPer100g: number;
   fatPer100g: number;
   weight: number; // peso em gramas
+  // Dados nutricionais adicionais (opcionais)
+  sugarsPer100g?: number;
+  fiberPer100g?: number;
+  sodiumPer100g?: number;
+  saturatedFatPer100g?: number;
+  transFatPer100g?: number;
 }
 
 /**
@@ -45,8 +60,11 @@ export interface PlateAnalysis {
 
 /**
  * Pesquisa alimentos através do Open Food Facts API
+ * Com cache e busca local primeiro para melhor performance
+ * @param query - Termo de pesquisa
+ * @param language - Idioma da app ('pt', 'en', 'es', 'fr', 'de', 'it') para priorizar resultados no idioma correto
  */
-export async function searchFood(query: string): Promise<FoodItem[]> {
+export async function searchFood(query: string, language: string = 'en'): Promise<FoodItem[]> {
   try {
     const queryLower = query.toLowerCase().trim();
     
@@ -54,71 +72,259 @@ export async function searchFood(query: string): Promise<FoodItem[]> {
       return [];
     }
     
-    // Buscar diretamente no Open Food Facts
+    // 1. Verificar cache primeiro (TTL de 24 horas)
+    // Incluir idioma na chave do cache para evitar resultados em idioma errado
+    const cacheKey = `food_search_${queryLower}_${language}`;
+    const cachedResults = await getCache<FoodItem[]>(cacheKey);
+    if (cachedResults && cachedResults.length > 0) {
+      // Aplicar deduplicação nos resultados do cache (caso tenham duplicatas antigas)
+      const deduplicatedCache: FoodItem[] = [];
+      const seenCache = new Set<string>();
+      
+      cachedResults.forEach(item => {
+        const nameKey = item.name.toLowerCase().trim();
+        if (!seenCache.has(nameKey)) {
+          seenCache.add(nameKey);
+          deduplicatedCache.push(item);
+        }
+      });
+      
+      // Se houve deduplicação, atualizar o cache
+      if (deduplicatedCache.length !== cachedResults.length) {
+        await setCache(cacheKey, deduplicatedCache, 24 * 60 * 60 * 1000);
+      }
+      
+      return deduplicatedCache;
+    }
+    
+    // 2. Buscar primeiro na base local (instantâneo)
+    
+    // Função para calcular similaridade
+    const calculateSimilarity = (q: string, foodName: string): number => {
+      const qLower = q.toLowerCase().trim();
+      const nameLower = foodName.toLowerCase().trim();
+      
+      if (nameLower === qLower) return 1000;
+      if (nameLower.startsWith(qLower)) return 800;
+      if (nameLower.includes(qLower)) return 600;
+      
+      const queryWords = qLower.split(/\s+/).filter(w => w.length > 2);
+      const nameWords = nameLower.split(/\s+/).filter(w => w.length > 2);
+      const commonWords = queryWords.filter(qw => nameWords.some(nw => nw.includes(qw) || qw.includes(nw)));
+      const wordScore = commonWords.length * 100;
+      
+      let charMatches = 0;
+      let queryIndex = 0;
+      for (let i = 0; i < nameLower.length && queryIndex < qLower.length; i++) {
+        if (nameLower[i] === qLower[queryIndex]) {
+          charMatches++;
+          queryIndex++;
+        }
+      }
+      const charScore = (charMatches / qLower.length) * 50;
+      
+      return wordScore + charScore;
+    };
+    
+    // Detectar idioma do nome do alimento (heurística otimizada)
+    // Cache de detecções para evitar recalcular
+    const languageCache = new Map<string, string>();
+    const detectFoodLanguage = (foodName: string): string => {
+      // Verificar cache primeiro
+      const cached = languageCache.get(foodName);
+      if (cached) return cached;
+      
+      const nameLower = foodName.toLowerCase();
+      let detectedLang = 'en'; // Default
+      
+      // Verificar acentos primeiro (mais rápido)
+      if (/[àáâãéêíóôõúç]/.test(foodName)) {
+        detectedLang = 'pt';
+      } else {
+        // Palavras-chave por idioma (verificar em ordem de probabilidade)
+        const ptWords = ['queijo', 'pão', 'leite', 'ovo', 'carne', 'peixe', 'fruta', 'verdura', 'batata', 'arroz', 'massa'];
+        const esWords = ['queso', 'pan', 'leche', 'huevo', 'pescado', 'patata', 'pasta'];
+        const frWords = ['fromage', 'pain', 'lait', 'œuf', 'viande', 'poisson', 'pomme de terre', 'riz', 'pâtes'];
+        const deWords = ['käse', 'brot', 'milch', 'ei', 'fleisch', 'fisch', 'kartoffel', 'reis', 'nudeln'];
+        const itWords = ['formaggio', 'pane', 'latte', 'uovo', 'pesce', 'patata', 'riso'];
+        
+        if (ptWords.some(w => nameLower.includes(w))) {
+          detectedLang = 'pt';
+        } else if (esWords.some(w => nameLower.includes(w))) {
+          detectedLang = 'es';
+        } else if (frWords.some(w => nameLower.includes(w))) {
+          detectedLang = 'fr';
+        } else if (deWords.some(w => nameLower.includes(w))) {
+          detectedLang = 'de';
+        } else if (itWords.some(w => nameLower.includes(w))) {
+          detectedLang = 'it';
+        }
+      }
+      
+      // Guardar no cache
+      languageCache.set(foodName, detectedLang);
+      return detectedLang;
+    };
+    
+    // Prioridades: idioma da app = 1000, inglês = 500, outros = 0 (não mostrar)
+    const getLanguagePriority = (foodLang: string): number => {
+      if (foodLang === language) return 1000; // Idioma da app - maior prioridade
+      if (foodLang === 'en') return 500;     // Inglês - segunda prioridade
+      return 0;                               // Outros idiomas - não mostrar
+    };
+    
+    // Buscar na base local e remover duplicatas exatas
+    const localResultsMap = new Map<string, FoodItem>();
+    const localResultsWithPriority: Array<{item: FoodItem, priority: number}> = [];
+    
+    FOOD_DATABASE
+      .filter(food => {
+        const foodNameLower = food.name.toLowerCase().trim();
+        return foodNameLower.includes(queryLower) || queryLower.includes(foodNameLower);
+      })
+      .forEach((food) => {
+        // Normalizar nome e usar como chave para evitar duplicatas exatas
+        const normalizedName = food.name.trim();
+        const nameKey = normalizedName.toLowerCase();
+        
+        // Se já existe um resultado com exatamente o mesmo nome, ignorar
+        if (!localResultsMap.has(nameKey)) {
+          // Detectar idioma do nome do alimento
+          const foodLang = detectFoodLanguage(normalizedName);
+          const priority = getLanguagePriority(foodLang);
+          
+          // Apenas adicionar se for do idioma da app ou inglês
+          if (priority > 0) {
+            const item: FoodItem = {
+              id: `local_${nameKey}`,
+              name: normalizedName.charAt(0).toUpperCase() + normalizedName.slice(1),
+              calories: food.caloriesPer100g,
+              protein: food.proteinPer100g,
+              carbs: food.carbsPer100g,
+              fat: food.fatPer100g,
+              image: undefined,
+            };
+            
+            localResultsMap.set(nameKey, item);
+            localResultsWithPriority.push({ item, priority });
+          }
+        }
+      });
+    
+    // Converter para array, ordenar por prioridade de idioma primeiro, depois por similaridade
+    const localResults: FoodItem[] = localResultsWithPriority
+      .sort((a, b) => {
+        // Primeiro ordenar por prioridade de idioma (maior primeiro)
+        if (b.priority !== a.priority) {
+          return b.priority - a.priority;
+        }
+        // Se mesma prioridade, ordenar por similaridade
+        const aSimilarity = calculateSimilarity(queryLower, a.item.name);
+        const bSimilarity = calculateSimilarity(queryLower, b.item.name);
+        return bSimilarity - aSimilarity;
+      })
+      .map(entry => entry.item)
+      .slice(0, 10);
+    
+    // Se encontrou resultados suficientes na base local (>= 5), retornar e cachear
+    if (localResults.length >= 5) {
+      await setCache(cacheKey, localResults, 24 * 60 * 60 * 1000); // 24 horas - cacheKey já inclui idioma
+      return localResults;
+    }
+    
+    // 3. Se não encontrou resultados suficientes na base local, buscar na API
     const response = await fetch(
-      `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=50&fields=code,product_name,nutriments,image_url,image_small_url`
+      `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=20&fields=code,product_name,nutriments,image_url,image_small_url`
     );
     
     if (!response.ok) {
+      // Se a API falhar, retornar resultados locais (mesmo que sejam poucos)
+      if (localResults.length > 0) {
+        await setCache(cacheKey, localResults, 24 * 60 * 60 * 1000); // cacheKey já inclui idioma
+        return localResults;
+      }
       throw new Error('Failed to fetch food data from Open Food Facts');
     }
 
     const data = await response.json();
     
     if (!data.products || data.products.length === 0) {
-      // Se não encontrou no Open Food Facts, usar base local como fallback
-      const { FOOD_DATABASE } = await import('./foodDatabase');
-      
-      // Função para calcular similaridade (mesma lógica)
-      const calculateSimilarity = (query: string, foodName: string): number => {
-        const queryLower = query.toLowerCase().trim();
-        const nameLower = foodName.toLowerCase().trim();
-        
-        if (nameLower === queryLower) return 1000;
-        if (nameLower.startsWith(queryLower)) return 800;
-        if (nameLower.includes(queryLower)) return 600;
-        
-        const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
-        const nameWords = nameLower.split(/\s+/).filter(w => w.length > 2);
-        const commonWords = queryWords.filter(qw => nameWords.some(nw => nw.includes(qw) || qw.includes(nw)));
-        const wordScore = commonWords.length * 100;
-        
-        let charMatches = 0;
-        let queryIndex = 0;
-        for (let i = 0; i < nameLower.length && queryIndex < queryLower.length; i++) {
-          if (nameLower[i] === queryLower[queryIndex]) {
-            charMatches++;
-            queryIndex++;
-          }
-        }
-        const charScore = (charMatches / queryLower.length) * 50;
-        
-        return wordScore + charScore;
-      };
-      
-      const localResults: FoodItem[] = FOOD_DATABASE
-        .filter(food => {
-          const foodNameLower = food.name.toLowerCase();
-          return foodNameLower.includes(queryLower) || queryLower.includes(foodNameLower);
-        })
-        .map((food, index) => ({
-          id: `local_${food.name}_${index}`,
-          name: food.name.charAt(0).toUpperCase() + food.name.slice(1),
-          calories: food.caloriesPer100g,
-          protein: food.proteinPer100g,
-          carbs: food.carbsPer100g,
-          fat: food.fatPer100g,
-          image: undefined,
-        }))
-        .sort((a, b) => {
-          const aSimilarity = calculateSimilarity(queryLower, a.name);
-          const bSimilarity = calculateSimilarity(queryLower, b.name);
-          return bSimilarity - aSimilarity;
-        })
-        .slice(0, 10);
-      
-      return localResults;
+      // Se não encontrou no Open Food Facts, retornar resultados locais
+      if (localResults.length > 0) {
+        await setCache(cacheKey, localResults, 24 * 60 * 60 * 1000); // cacheKey já inclui idioma
+        return localResults;
+      }
+      return [];
     }
+    
+    // Função para calcular similaridade (reutilizar a mesma lógica)
+    const calculateSimilarityForAPI = (q: string, foodName: string): number => {
+      const qLower = q.toLowerCase().trim();
+      const nameLower = foodName.toLowerCase().trim();
+      
+      // Match exato
+      if (nameLower === qLower) return 10000;
+      
+      // Remove plural/singular para comparação
+      const qSingular = qLower.replace(/s$/, '');
+      const nameSingular = nameLower.replace(/s$/, '');
+      
+      // Match exato sem plural
+      if (nameSingular === qSingular || nameLower === qSingular || qLower === nameSingular) return 9000;
+      
+      // Começa com a query (ou singular/plural)
+      if (nameLower.startsWith(qLower) || nameLower.startsWith(qSingular)) return 8000;
+      if (qLower.startsWith(nameSingular)) return 7500;
+      
+      // Contém a query completa no início (primeira palavra)
+      const nameFirstWord = nameLower.split(/\s+/)[0];
+      const nameWordCount = nameLower.split(/\s+/).length;
+      
+      if (nameFirstWord === qLower || nameFirstWord === qSingular || qLower === nameFirstWord.replace(/s$/, '')) {
+        // Se for apenas uma palavra (ex: "bananas" quando pesquisa "banana"), máxima prioridade
+        if (nameWordCount === 1) {
+          return 8500;
+        }
+        // Se tiver palavras extras, penalizar fortemente
+        const extraWordsPenalty = (nameWordCount - 1) * 500;
+        const lengthPenalty = Math.max(0, (nameLower.length - qLower.length) * 10);
+        return 7000 - lengthPenalty - extraWordsPenalty;
+      }
+      
+      // Contém a query completa
+      if (nameLower.includes(qLower) || nameLower.includes(qSingular)) {
+        // Penalizar nomes muito longos e dar bônus se for palavra única
+        const wordCount = nameLower.split(/\s+/).length;
+        const lengthPenalty = Math.max(0, (nameLower.length - qLower.length) * 5);
+        const singleWordBonus = wordCount === 1 ? 500 : 0;
+        return 6000 - lengthPenalty + singleWordBonus;
+      }
+      
+      // Palavras em comum
+      const queryWords = qLower.split(/\s+/).filter(w => w.length > 2);
+      const nameWords = nameLower.split(/\s+/).filter(w => w.length > 2);
+      const commonWords = queryWords.filter(qw => {
+        const qwSingular = qw.replace(/s$/, '');
+        return nameWords.some(nw => {
+          const nwSingular = nw.replace(/s$/, '');
+          return nw === qw || nw === qwSingular || nwSingular === qw || nw.includes(qw) || qw.includes(nw);
+        });
+      });
+      const wordScore = commonWords.length * 1000;
+      
+      // Similaridade de caracteres
+      let charMatches = 0;
+      let queryIndex = 0;
+      for (let i = 0; i < nameLower.length && queryIndex < qLower.length; i++) {
+        if (nameLower[i] === qLower[queryIndex]) {
+          charMatches++;
+          queryIndex++;
+        }
+      }
+      const charScore = (charMatches / qLower.length) * 500;
+      
+      return wordScore + charScore;
+    };
     
     // Processar produtos do Open Food Facts
     const results: FoodItem[] = [];
@@ -135,12 +341,27 @@ export async function searchFood(query: string): Promise<FoodItem[]> {
       const carbs = parseFloat((nutriments.carbohydrates_100g || nutriments.carbohydrates || 0).toFixed(1));
       const fat = parseFloat((nutriments.fat_100g || nutriments.fat || 0).toFixed(1));
       
+      // Dados nutricionais adicionais para cálculo mais preciso do health score
+      const sugars = parseFloat((nutriments.sugars_100g || nutriments.sugars || 0).toFixed(1));
+      const fiber = parseFloat((nutriments.fiber_100g || nutriments.fiber || nutriments['fiber_100g'] || 0).toFixed(1));
+      // Sódio: se não tiver sodium_100g, tentar converter de salt_100g (1g sal = 400mg sódio)
+      const sodium = parseFloat((
+        nutriments.sodium_100g || 
+        nutriments.sodium || 
+        (nutriments.salt_100g ? nutriments.salt_100g * 400 : 0) || 
+        (nutriments.salt ? nutriments.salt * 400 : 0) || 
+        0
+      ).toFixed(1));
+      const saturatedFat = parseFloat((nutriments['saturated-fat_100g'] || nutriments['saturated-fat'] || nutriments.saturated_fat_100g || 0).toFixed(1));
+      const transFat = parseFloat((nutriments['trans-fat_100g'] || nutriments['trans-fat'] || nutriments.trans_fat_100g || 0).toFixed(1));
+      
       // Filtrar produtos sem informações nutricionais básicas
       if (calories === 0 && protein === 0 && carbs === 0 && fat === 0) return;
       
       // Normalizar nome para evitar duplicados
       const normalizedName = normalizeFoodName(productName);
-      const nameKey = normalizedName.toLowerCase();
+      // Usar nome normalizado em lowercase e trim para comparação exata
+      const nameKey = normalizedName.toLowerCase().trim();
       
       // Evitar duplicados exatos
       if (seenNames.has(nameKey)) return;
@@ -154,53 +375,19 @@ export async function searchFood(query: string): Promise<FoodItem[]> {
         carbs: carbs || 0,
         fat: fat || 0,
         image: product.image_url || product.image_small_url || undefined,
+        // Dados nutricionais adicionais para cálculo mais preciso do health score
+        sugars: sugars > 0 ? sugars : undefined,
+        fiber: fiber > 0 ? fiber : undefined,
+        sodium: sodium > 0 ? sodium : undefined,
+        saturatedFat: saturatedFat > 0 ? saturatedFat : undefined,
+        transFat: transFat > 0 ? transFat : undefined,
       });
     });
     
-    // Função para calcular similaridade entre query e nome do alimento
-    const calculateSimilarity = (query: string, foodName: string): number => {
-      const queryLower = query.toLowerCase().trim();
-      const nameLower = foodName.toLowerCase().trim();
-      
-      // Match exato
-      if (nameLower === queryLower) {
-        return 1000;
-      }
-      
-      // Começa com a query
-      if (nameLower.startsWith(queryLower)) {
-        return 800;
-      }
-      
-      // Contém a query completa
-      if (nameLower.includes(queryLower)) {
-        return 600;
-      }
-      
-      // Conta palavras em comum
-      const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
-      const nameWords = nameLower.split(/\s+/).filter(w => w.length > 2);
-      const commonWords = queryWords.filter(qw => nameWords.some(nw => nw.includes(qw) || qw.includes(nw)));
-      const wordScore = commonWords.length * 100;
-      
-      // Similaridade de caracteres (Levenshtein simplificado)
-      let charMatches = 0;
-      let queryIndex = 0;
-      for (let i = 0; i < nameLower.length && queryIndex < queryLower.length; i++) {
-        if (nameLower[i] === queryLower[queryIndex]) {
-          charMatches++;
-          queryIndex++;
-        }
-      }
-      const charScore = (charMatches / queryLower.length) * 50;
-      
-      return wordScore + charScore;
-    };
-    
     // Ordenar por similaridade do nome primeiro, depois por informações nutricionais
     results.sort((a, b) => {
-      const aSimilarity = calculateSimilarity(queryLower, a.name);
-      const bSimilarity = calculateSimilarity(queryLower, b.name);
+      const aSimilarity = calculateSimilarityForAPI(queryLower, a.name);
+      const bSimilarity = calculateSimilarityForAPI(queryLower, b.name);
       
       // Se a similaridade for muito diferente, ordenar por similaridade
       if (Math.abs(aSimilarity - bSimilarity) > 50) {
@@ -213,14 +400,73 @@ export async function searchFood(query: string): Promise<FoodItem[]> {
       return bNutritionScore - aNutritionScore;
     });
     
-    // Limitar a 15 resultados
-    return results.slice(0, 15);
+    // Aplicar priorização de idioma também aos resultados da API
+    const apiResultsWithPriority: Array<{item: FoodItem, priority: number}> = results.map(item => {
+      const itemLang = detectFoodLanguage(item.name);
+      const priority = getLanguagePriority(itemLang);
+      return { item, priority };
+    });
+    
+    // Filtrar e ordenar resultados da API por prioridade de idioma
+    const filteredApiResults = apiResultsWithPriority
+      .filter(entry => entry.priority > 0) // Apenas idioma da app ou inglês
+      .sort((a, b) => {
+        // Primeiro por prioridade de idioma
+        if (b.priority !== a.priority) {
+          return b.priority - a.priority;
+        }
+        // Depois por similaridade
+        const aSimilarity = calculateSimilarityForAPI(queryLower, a.item.name);
+        const bSimilarity = calculateSimilarityForAPI(queryLower, b.item.name);
+        return bSimilarity - aSimilarity;
+      })
+      .map(entry => entry.item)
+      .slice(0, 10);
+    
+    // Combinar resultados da API (já filtrados e ordenados) com resultados locais
+    // Priorizar resultados locais se tiverem maior prioridade de idioma
+    const combinedResults: FoodItem[] = [];
+    const combinedNames = new Set<string>();
+    
+    // Primeiro adicionar resultados locais (já ordenados por prioridade)
+    localResults.forEach(local => {
+      const localNameKey = local.name.toLowerCase().trim();
+      if (!combinedNames.has(localNameKey)) {
+        combinedNames.add(localNameKey);
+        combinedResults.push(local);
+      }
+    });
+    
+    // Depois adicionar resultados da API que não estão duplicados
+    filteredApiResults.forEach(api => {
+      const apiNameKey = api.name.toLowerCase().trim();
+      if (!combinedNames.has(apiNameKey) && combinedResults.length < 10) {
+        combinedNames.add(apiNameKey);
+        combinedResults.push(api);
+      }
+    });
+    
+    // Remover duplicatas finais (caso ainda existam)
+    const finalDeduplicated: FoodItem[] = [];
+    const seenFinal = new Set<string>();
+    
+    combinedResults.forEach(item => {
+      const nameKey = item.name.toLowerCase().trim();
+      if (!seenFinal.has(nameKey)) {
+        seenFinal.add(nameKey);
+        finalDeduplicated.push(item);
+      }
+    });
+    
+    // Cachear resultados (24 horas) - usar chave com idioma
+    await setCache(cacheKey, finalDeduplicated, 24 * 60 * 60 * 1000);
+    
+    return finalDeduplicated;
   } catch (error) {
     console.error('Error searching food:', error);
     
-    // Em caso de erro, tentar base local como fallback
+    // Em caso de erro, retornar resultados locais se houver
     try {
-      const { FOOD_DATABASE } = await import('./foodDatabase');
       const queryLower = query.toLowerCase().trim();
       
       // Função para calcular similaridade (mesma lógica)
@@ -250,28 +496,102 @@ export async function searchFood(query: string): Promise<FoodItem[]> {
         return wordScore + charScore;
       };
       
-      const localResults: FoodItem[] = FOOD_DATABASE
+      // Detectar idioma do nome do alimento (mesma lógica do try principal)
+      const detectFoodLanguage = (foodName: string): string => {
+        const nameLower = foodName.toLowerCase();
+        if (/[àáâãéêíóôõúç]/.test(foodName) || 
+            ['queijo', 'pão', 'leite', 'ovo', 'carne', 'peixe', 'fruta', 'verdura', 'batata', 'arroz', 'massa'].some(w => nameLower.includes(w))) {
+          return 'pt';
+        }
+        if (['queso', 'pan', 'leche', 'huevo', 'carne', 'pescado', 'patata', 'arroz', 'pasta'].some(w => nameLower.includes(w))) {
+          return 'es';
+        }
+        if (['fromage', 'pain', 'lait', 'œuf', 'viande', 'poisson', 'pomme de terre', 'riz', 'pâtes'].some(w => nameLower.includes(w))) {
+          return 'fr';
+        }
+        if (['käse', 'brot', 'milch', 'ei', 'fleisch', 'fisch', 'kartoffel', 'reis', 'nudeln'].some(w => nameLower.includes(w))) {
+          return 'de';
+        }
+        if (['formaggio', 'pane', 'latte', 'uovo', 'carne', 'pesce', 'patata', 'riso', 'pasta'].some(w => nameLower.includes(w))) {
+          return 'it';
+        }
+        return 'en';
+      };
+      
+      // Prioridades: idioma da app = 1000, inglês = 500, outros = 0 (não mostrar)
+      const getLanguagePriority = (foodLang: string): number => {
+        if (foodLang === language) return 1000;
+        if (foodLang === 'en') return 500;
+        return 0;
+      };
+      
+      // Buscar na base local e remover duplicatas exatas
+      const localResultsMap = new Map<string, FoodItem>();
+      const localResultsWithPriority: Array<{item: FoodItem, priority: number}> = [];
+      
+      FOOD_DATABASE
         .filter(food => {
-          const foodNameLower = food.name.toLowerCase();
+          const foodNameLower = food.name.toLowerCase().trim();
           return foodNameLower.includes(queryLower) || queryLower.includes(foodNameLower);
         })
-        .map((food, index) => ({
-          id: `local_${food.name}_${index}`,
-          name: food.name.charAt(0).toUpperCase() + food.name.slice(1),
-          calories: food.caloriesPer100g,
-          protein: food.proteinPer100g,
-          carbs: food.carbsPer100g,
-          fat: food.fatPer100g,
-          image: undefined,
-        }))
+        .forEach((food) => {
+          const normalizedName = food.name.trim();
+          const nameKey = normalizedName.toLowerCase();
+          
+          if (!localResultsMap.has(nameKey)) {
+            const foodLang = detectFoodLanguage(normalizedName);
+            const priority = getLanguagePriority(foodLang);
+            
+            // Apenas adicionar se for do idioma da app ou inglês
+            if (priority > 0) {
+              const item: FoodItem = {
+                id: `local_${nameKey}`,
+                name: normalizedName.charAt(0).toUpperCase() + normalizedName.slice(1),
+                calories: food.caloriesPer100g,
+                protein: food.proteinPer100g,
+                carbs: food.carbsPer100g,
+                fat: food.fatPer100g,
+                image: undefined,
+              };
+              
+              localResultsMap.set(nameKey, item);
+              localResultsWithPriority.push({ item, priority });
+            }
+          }
+        });
+      
+      // Converter para array, ordenar por prioridade de idioma primeiro, depois por similaridade
+      const localResults: FoodItem[] = localResultsWithPriority
         .sort((a, b) => {
-          const aSimilarity = calculateSimilarity(queryLower, a.name);
-          const bSimilarity = calculateSimilarity(queryLower, b.name);
+          if (b.priority !== a.priority) {
+            return b.priority - a.priority;
+          }
+          const aSimilarity = calculateSimilarity(queryLower, a.item.name);
+          const bSimilarity = calculateSimilarity(queryLower, b.item.name);
           return bSimilarity - aSimilarity;
         })
+        .map(entry => entry.item)
         .slice(0, 10);
       
-      return localResults;
+      // Remover duplicatas finais (caso ainda existam)
+      const finalDeduplicated: FoodItem[] = [];
+      const seenFinal = new Set<string>();
+      
+      localResults.forEach(item => {
+        const nameKey = item.name.toLowerCase().trim();
+        if (!seenFinal.has(nameKey)) {
+          seenFinal.add(nameKey);
+          finalDeduplicated.push(item);
+        }
+      });
+      
+      // Cachear resultados locais mesmo em caso de erro
+      if (finalDeduplicated.length > 0) {
+        const cacheKey = `food_search_${queryLower}_${language}`;
+        await setCache(cacheKey, finalDeduplicated, 24 * 60 * 60 * 1000);
+      }
+      
+      return finalDeduplicated;
     } catch (fallbackError) {
       console.error('Error in fallback search:', fallbackError);
       return [];
@@ -472,12 +792,10 @@ async function getFoodFromUPCitemdb(barcode: string): Promise<FoodItem | null> {
     console.log('[Barcode] Produto encontrado no UPCitemdb:', productName);
 
     // UPCitemdb não fornece valores nutricionais diretamente
-    // Vamos normalizar o nome e retornar (valores nutricionais serão 0)
-    const normalizedName = normalizeFoodName(productName);
-    
+    // Para código de barras, usar o nome original completo (sem normalização)
     return {
       id: cleanBarcode,
-      name: normalizedName,
+      name: productName.trim(),
       calories: 0,
       protein: 0,
       carbs: 0,
@@ -552,22 +870,48 @@ async function getFoodFromOpenFoodFacts(barcode: string): Promise<FoodItem | nul
     const product = data.product;
     console.log('[Barcode] Produto encontrado:', product.product_name || 'Sem nome');
     
-    // Tentar obter nome em várias línguas
-    const productName = product.product_name || 
-                       product.product_name_en || 
-                       product.product_name_pt || 
-                       product.product_name_es || 
-                       product.product_name_fr || 
-                       product.product_name_de || 
-                       product.product_name_it ||
-                       product.generic_name ||
-                       product.abbreviated_product_name ||
-                       '';
+    // Para código de barras, usar o nome COMPLETO sem normalização
+    // Priorizar product_name completo (pode conter marca, tamanho, etc.)
+    // Tentar obter nome em várias línguas, mas SEM normalizar
+    let productName = product.product_name || 
+                      product.product_name_en || 
+                      product.product_name_pt || 
+                      product.product_name_es || 
+                      product.product_name_fr || 
+                      product.product_name_de || 
+                      product.product_name_it ||
+                      product.generic_name ||
+                      product.abbreviated_product_name ||
+                      '';
     
-    if (!productName || productName.trim().length === 0) {
+    // Se product_name existe mas parece truncado, tentar usar outros campos também
+    // Mas apenas para código de barras, queremos o nome mais completo possível
+    if (productName && product.product_name && product.product_name.length < 20) {
+      // Se o nome parece curto, tentar ver se há um nome mais completo em outros campos
+      const alternativeNames = [
+        product.product_name_en,
+        product.product_name_pt,
+        product.product_name_es,
+        product.product_name_fr,
+      ].filter(name => name && name.length > productName.length);
+      
+      if (alternativeNames.length > 0) {
+        // Usar o nome mais longo disponível
+        productName = alternativeNames.reduce((longest, current) => 
+          current.length > longest.length ? current : longest
+        );
+      }
+    }
+    
+    // Apenas trim, SEM normalização
+    productName = productName.trim();
+    
+    if (!productName || productName.length === 0) {
       console.log('[Barcode] Produto sem nome');
       return null;
     }
+    
+    console.log('[Barcode] Nome do produto (sem normalização):', productName);
 
     // Verificar se é realmente um alimento (Open Food Facts já filtra, mas vamos garantir)
     const categories = product.categories || product.categories_tags || [];
@@ -599,15 +943,27 @@ async function getFoodFromOpenFoodFacts(barcode: string): Promise<FoodItem | nul
     // Gordura
     const fat = parseFloat((nutriments.fat_100g || nutriments.fat || nutriments['fat_100g'] || 0).toFixed(1));
     
-    console.log('[Barcode] Valores nutricionais:', { calories, protein, carbs, fat });
+    // Dados nutricionais adicionais para cálculo mais preciso do health score
+    const sugars = parseFloat((nutriments.sugars_100g || nutriments.sugars || 0).toFixed(1));
+    const fiber = parseFloat((nutriments.fiber_100g || nutriments.fiber || nutriments['fiber_100g'] || 0).toFixed(1));
+    // Sódio: se não tiver sodium_100g, tentar converter de salt_100g (1g sal = 400mg sódio)
+    const sodium = parseFloat((
+      nutriments.sodium_100g || 
+      nutriments.sodium || 
+      (nutriments.salt_100g ? nutriments.salt_100g * 400 : 0) || 
+      (nutriments.salt ? nutriments.salt * 400 : 0) || 
+      0
+    ).toFixed(1));
+    const saturatedFat = parseFloat((nutriments['saturated-fat_100g'] || nutriments['saturated-fat'] || nutriments.saturated_fat_100g || 0).toFixed(1));
+    const transFat = parseFloat((nutriments['trans-fat_100g'] || nutriments['trans-fat'] || nutriments.trans_fat_100g || 0).toFixed(1));
+    
+    console.log('[Barcode] Valores nutricionais:', { calories, protein, carbs, fat, sugars, fiber, sodium, saturatedFat, transFat });
     
     // Se não tiver valores nutricionais, tentar buscar na base local pelo nome
     if (calories === 0 && protein === 0 && carbs === 0 && fat === 0) {
       console.log('[Barcode] Produto sem valores nutricionais, tentando base local...');
-      const { FOOD_DATABASE } = await import('./foodDatabase');
       
-      const normalizedName = normalizeFoodName(productName);
-      const nameLower = normalizedName.toLowerCase();
+      const nameLower = productName.toLowerCase();
       
       // Buscar na base local
       const localMatch = FOOD_DATABASE.find(food => {
@@ -619,12 +975,13 @@ async function getFoodFromOpenFoodFacts(barcode: string): Promise<FoodItem | nul
         console.log('[Barcode] Encontrado na base local:', localMatch.name);
         return {
           id: product.code || cleanBarcode,
-          name: normalizedName,
+          name: productName, // Usar nome original, não normalizado
           calories: localMatch.caloriesPer100g,
           protein: localMatch.proteinPer100g,
           carbs: localMatch.carbsPer100g,
           fat: localMatch.fatPer100g,
           image: product.image_url || product.image_small_url || undefined,
+          // Dados adicionais não disponíveis na base local, deixar undefined
         };
       }
       
@@ -633,47 +990,23 @@ async function getFoodFromOpenFoodFacts(barcode: string): Promise<FoodItem | nul
       console.log('[Barcode] Produto sem valores nutricionais, retornando mesmo assim');
     }
     
-    // Normalizar nome do produto
-    const normalizedName = normalizeFoodName(productName);
-    
-    // Verificar se é líquido usando o nome original (antes da normalização)
-    // para garantir que marcas como "Monster" sejam detectadas
-    const isLiquidCheck = (name: string): boolean => {
-      const nameLower = name.toLowerCase();
-      const liquidKeywords = [
-        'água', 'water', 'agua',
-        'sumo', 'suco', 'juice',
-        'bebida', 'drink', 'beverage',
-        'refrigerante', 'soda', 'cola',
-        'cerveja', 'beer', 'cerveza', 'bière',
-        'vinho', 'wine', 'vino', 'vin',
-        'leite', 'milk', 'lait', 'latte',
-        'café', 'coffee', 'cafè', 'café',
-        'chá', 'tea', 'tè', 'thé',
-        'limonada', 'lemonade', 'limonade',
-        'água com gás', 'sparkling water',
-        'energético', 'energy drink', 'energetico',
-        'isotónico', 'sports drink', 'isotonico',
-        'iogurte líquido', 'liquid yogurt',
-        'smoothie', 'batido',
-        'monster', 'red bull', 'redbull', 'rockstar', 'burn', 'powerade', 'gatorade',
-        'coca-cola', 'coca cola', 'pepsi', 'fanta', 'sprite', '7up',
-        'ml', 'litro', 'litros', 'l', 'cl', 'dl',
-      ];
-      return liquidKeywords.some(keyword => nameLower.includes(keyword));
-    };
-    
-    // Usar nome normalizado (sem adicionar indicadores de líquido, pois tudo é em gramas agora)
-    const finalName = normalizedName;
-    
+    // Para código de barras, usar o nome original completo (sem normalização)
+    // O usuário quer ver o nome completo do produto
+    // productName já foi trimado acima, usar diretamente
     return {
       id: product.code || cleanBarcode,
-      name: finalName,
+      name: productName, // Nome completo sem normalização
       calories: calories || 0,
       protein: protein || 0,
       carbs: carbs || 0,
       fat: fat || 0,
       image: product.image_url || product.image_small_url || undefined,
+      // Dados nutricionais adicionais para cálculo mais preciso do health score
+      sugars: sugars > 0 ? sugars : undefined,
+      fiber: fiber > 0 ? fiber : undefined,
+      sodium: sodium > 0 ? sodium : undefined,
+      saturatedFat: saturatedFat > 0 ? saturatedFat : undefined,
+      transFat: transFat > 0 ? transFat : undefined,
     };
   } catch (error: any) {
     console.error('[Barcode] Erro ao buscar produto:', error);
@@ -722,7 +1055,6 @@ export async function getFoodByBarcode(barcode: string): Promise<FoodItem | null
       console.log('[Barcode] Produto encontrado no UPCitemdb');
       // Tentar buscar valores nutricionais na base local pelo nome
       if (result.calories === 0 && result.protein === 0 && result.carbs === 0 && result.fat === 0) {
-        const { FOOD_DATABASE } = await import('./foodDatabase');
         const nameLower = result.name.toLowerCase();
         const localMatch = FOOD_DATABASE.find(food => {
           const foodNameLower = food.name.toLowerCase();
@@ -753,7 +1085,6 @@ export async function getFoodByBarcode(barcode: string): Promise<FoodItem | null
       console.log('[Barcode] Produto encontrado na API alternativa');
       // Tentar buscar valores nutricionais na base local pelo nome
       if (result.calories === 0 && result.protein === 0 && result.carbs === 0 && result.fat === 0) {
-        const { FOOD_DATABASE } = await import('./foodDatabase');
         const nameLower = result.name.toLowerCase();
         const localMatch = FOOD_DATABASE.find(food => {
           const foodNameLower = food.name.toLowerCase();
@@ -932,7 +1263,12 @@ IMPORTANT:
       "caloriesPer100g": calories_per_100g,
       "proteinPer100g": protein_grams_per_100g,
       "carbsPer100g": carbs_grams_per_100g,
-      "fatPer100g": fat_grams_per_100g
+      "fatPer100g": fat_grams_per_100g,
+      "sugarsPer100g": sugars_grams_per_100g (optional, 0 if not applicable),
+      "fiberPer100g": fiber_grams_per_100g (optional, 0 if not applicable),
+      "sodiumPer100g": sodium_mg_per_100g (optional, 0 if not applicable),
+      "saturatedFatPer100g": saturated_fat_grams_per_100g (optional, 0 if not applicable),
+      "transFatPer100g": trans_fat_grams_per_100g (optional, 0 if not applicable)
     }
   ]
 }
@@ -1017,8 +1353,6 @@ CRITICAL NUTRITIONAL ACCURACY RULES - BE CONSERVATIVE WITH CALORIES:
           const plateName = plateData.plateName || plateData.foods.map((f: any) => f.name).join(', ') || 'Alimento não identificado';
           
           // Melhorar valores nutricionais usando base de dados local
-          const { enhanceNutritionalValues } = await import('./foodDatabase');
-          
           return {
             id: Date.now().toString(),
             name: plateName,
@@ -1043,6 +1377,12 @@ CRITICAL NUTRITIONAL ACCURACY RULES - BE CONSERVATIVE WITH CALORIES:
                 carbsPer100g: enhanced.carbsPer100g,
                 fatPer100g: enhanced.fatPer100g,
                 weight: Math.round(f.estimatedWeight || 100), // usar peso estimado da AI
+                // Dados nutricionais adicionais (se fornecidos pela IA)
+                sugarsPer100g: f.sugarsPer100g && f.sugarsPer100g > 0 ? parseFloat(f.sugarsPer100g.toFixed(1)) : undefined,
+                fiberPer100g: f.fiberPer100g && f.fiberPer100g > 0 ? parseFloat(f.fiberPer100g.toFixed(1)) : undefined,
+                sodiumPer100g: f.sodiumPer100g && f.sodiumPer100g > 0 ? parseFloat(f.sodiumPer100g.toFixed(1)) : undefined,
+                saturatedFatPer100g: f.saturatedFatPer100g && f.saturatedFatPer100g > 0 ? parseFloat(f.saturatedFatPer100g.toFixed(1)) : undefined,
+                transFatPer100g: f.transFatPer100g && f.transFatPer100g > 0 ? parseFloat(f.transFatPer100g.toFixed(1)) : undefined,
               };
             }),
           };
@@ -1161,7 +1501,12 @@ IMPORTANT:
       "caloriesPer100g": calories_per_100g,
       "proteinPer100g": protein_grams_per_100g,
       "carbsPer100g": carbs_grams_per_100g,
-      "fatPer100g": fat_grams_per_100g
+      "fatPer100g": fat_grams_per_100g,
+      "sugarsPer100g": sugars_grams_per_100g (optional, 0 if not applicable),
+      "fiberPer100g": fiber_grams_per_100g (optional, 0 if not applicable),
+      "sodiumPer100g": sodium_mg_per_100g (optional, 0 if not applicable),
+      "saturatedFatPer100g": saturated_fat_grams_per_100g (optional, 0 if not applicable),
+      "transFatPer100g": trans_fat_grams_per_100g (optional, 0 if not applicable)
     }
   ]
 }
@@ -1251,8 +1596,6 @@ CRITICAL NUTRITIONAL ACCURACY RULES - BE CONSERVATIVE WITH CALORIES:
     const plateName = plateData.plateName || plateData.foods.map((f: any) => f.name).join(', ') || 'Alimento não identificado';
     
     // Melhorar valores nutricionais usando base de dados local
-    const { enhanceNutritionalValues } = await import('./foodDatabase');
-    
     return {
       id: Date.now().toString(),
       name: plateName,
@@ -1277,6 +1620,12 @@ CRITICAL NUTRITIONAL ACCURACY RULES - BE CONSERVATIVE WITH CALORIES:
           carbsPer100g: enhanced.carbsPer100g,
           fatPer100g: enhanced.fatPer100g,
           weight: Math.round(f.estimatedWeight || 100), // usar peso estimado da AI
+          // Dados nutricionais adicionais (se fornecidos pela IA)
+          sugarsPer100g: f.sugarsPer100g && f.sugarsPer100g > 0 ? parseFloat(f.sugarsPer100g.toFixed(1)) : undefined,
+          fiberPer100g: f.fiberPer100g && f.fiberPer100g > 0 ? parseFloat(f.fiberPer100g.toFixed(1)) : undefined,
+          sodiumPer100g: f.sodiumPer100g && f.sodiumPer100g > 0 ? parseFloat(f.sodiumPer100g.toFixed(1)) : undefined,
+          saturatedFatPer100g: f.saturatedFatPer100g && f.saturatedFatPer100g > 0 ? parseFloat(f.saturatedFatPer100g.toFixed(1)) : undefined,
+          transFatPer100g: f.transFatPer100g && f.transFatPer100g > 0 ? parseFloat(f.transFatPer100g.toFixed(1)) : undefined,
         };
       }),
     };

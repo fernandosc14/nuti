@@ -98,3 +98,19 @@ export async function invalidateUserCache(userId: string): Promise<void> {
   }
 }
 
+/**
+ * Limpa apenas o cache de pesquisas de alimentos
+ */
+export async function clearFoodSearchCache(): Promise<void> {
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    const cacheKeys = keys.filter(key => 
+      key.startsWith(CACHE_PREFIX) && key.includes('food_search_')
+    );
+    await AsyncStorage.multiRemove(cacheKeys);
+    console.log(`Cleared ${cacheKeys.length} food search cache entries`);
+  } catch (error) {
+    console.error('Error clearing food search cache:', error);
+  }
+}
+

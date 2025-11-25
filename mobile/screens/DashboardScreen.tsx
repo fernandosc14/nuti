@@ -33,7 +33,7 @@ import { PremiumPromoCard } from '../components/PremiumPromoCard';
 import { Ionicons } from '@expo/vector-icons';
 import { collection, query, where, getDocs, Timestamp, doc, deleteDoc, setDoc, getDoc, addDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { updateStreak } from '../utils/streakUtils';
+import { updateStreak, updateStreakAfterDelete } from '../utils/streakUtils';
 import { calculateCalorieGoalFromProfile } from '../utils/nutritionUtils';
 import { getCache, setCache, removeCache } from '../utils/cacheUtils';
 import Toast from 'react-native-toast-message';
@@ -56,6 +56,16 @@ interface Meal {
   protein?: number;
   carbs?: number;
   fat?: number;
+  healthScore?: number; // Score de saúde (0-10)
+  foods?: Array<{
+    name: string;
+    caloriesPer100g: number;
+    proteinPer100g: number;
+    carbsPer100g: number;
+    fatPer100g: number;
+    weight: number;
+    quantity?: number;
+  }>; // Lista de alimentos individuais da refeição
 }
 
 interface Badge {
@@ -72,7 +82,68 @@ interface Exercise {
   duration: number; // em minutos
   date: Date;
   addedAt?: Date | null;
+  calories?: number; // calorias queimadas
 }
+
+// Função para calcular Health Score (0-10)
+const calculateHealthScore = (meal: Meal): number => {
+  if (!meal.calories || meal.calories === 0) return 5; // Score neutro se não houver dados
+  
+  const protein = meal.protein || 0;
+  const carbs = meal.carbs || 0;
+  const fat = meal.fat || 0;
+  const calories = meal.calories;
+  
+  // Calcular proporções
+  const totalMacros = protein + carbs + fat;
+  if (totalMacros === 0) return 5;
+  
+  const proteinRatio = protein / totalMacros;
+  const carbsRatio = carbs / totalMacros;
+  const fatRatio = fat / totalMacros;
+  
+  let score = 5; // Base score
+  
+  // Proteína: idealmente 20-35% das calorias (1g proteína = 4 kcal)
+  const proteinCalories = protein * 4;
+  const proteinPercent = (proteinCalories / calories) * 100;
+  if (proteinPercent >= 20 && proteinPercent <= 35) {
+    score += 2; // Bom
+  } else if (proteinPercent >= 15 && proteinPercent < 20) {
+    score += 1; // Moderado
+  } else if (proteinPercent > 35) {
+    score += 1.5; // Muito bom
+  } else if (proteinPercent < 10) {
+    score -= 1.5; // Baixo
+  }
+  
+  // Carboidratos: idealmente 45-65% das calorias (1g carb = 4 kcal)
+  const carbsCalories = carbs * 4;
+  const carbsPercent = (carbsCalories / calories) * 100;
+  if (carbsPercent >= 45 && carbsPercent <= 65) {
+    score += 1.5; // Bom
+  } else if (carbsPercent > 70) {
+    score -= 1; // Muito alto
+  } else if (carbsPercent < 30) {
+    score -= 0.5; // Muito baixo
+  }
+  
+  // Gordura: idealmente 20-35% das calorias (1g gordura = 9 kcal)
+  const fatCalories = fat * 9;
+  const fatPercent = (fatCalories / calories) * 100;
+  if (fatPercent >= 20 && fatPercent <= 35) {
+    score += 1; // Bom
+  } else if (fatPercent > 40) {
+    score -= 1.5; // Muito alto
+  } else if (fatPercent < 15) {
+    score -= 0.5; // Muito baixo
+  }
+  
+  // Ajustar para escala 0-10
+  score = Math.max(0, Math.min(10, Math.round(score * 10) / 10));
+  
+  return score;
+};
 
 export function DashboardScreen({ navigation }: any) {
   const { user, profile, refreshProfile, updateProfile } = useUser();
@@ -90,8 +161,13 @@ export function DashboardScreen({ navigation }: any) {
   const [macros, setMacros] = useState({ protein: 0, carbs: 0, fat: 0 });
   const [selectedMeal, setSelectedMeal] = useState<Meal | null>(null);
   const [showMealModal, setShowMealModal] = useState(false);
+  const [showFoodsDropdown, setShowFoodsDropdown] = useState(false);
+  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+  const [showExerciseModal, setShowExerciseModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [mealToDelete, setMealToDelete] = useState<string | null>(null);
+  const [showDeleteExerciseModal, setShowDeleteExerciseModal] = useState(false);
+  const [exerciseToDelete, setExerciseToDelete] = useState<{id: string, name: string} | null>(null);
   const [waterIntake, setWaterIntake] = useState(0); // em ml
   const [showWaterModal, setShowWaterModal] = useState(false);
   const [showEditWaterModal, setShowEditWaterModal] = useState(false);
@@ -104,6 +180,7 @@ export function DashboardScreen({ navigation }: any) {
   const [daysWithMeals, setDaysWithMeals] = useState<Set<string>>(new Set()); // Armazena datas que têm refeições (formato: YYYY-MM-DD)
   const macroScrollViewRef = useRef<ScrollView>(null);
   const [showEditCaloriesModal, setShowEditCaloriesModal] = useState(false);
+  const [caloriesBurned, setCaloriesBurned] = useState(0); // Calorias queimadas pelos exercícios
   const [showEditProteinModal, setShowEditProteinModal] = useState(false);
   const [showEditCarbsModal, setShowEditCarbsModal] = useState(false);
   const [showEditFatModal, setShowEditFatModal] = useState(false);
@@ -113,6 +190,9 @@ export function DashboardScreen({ navigation }: any) {
   const [editFat, setEditFat] = useState('');
   const [savingGoals, setSavingGoals] = useState(false);
   const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [showStreakModal, setShowStreakModal] = useState(false);
+  const [last7DaysWithMeals, setLast7DaysWithMeals] = useState<Set<string>>(new Set());
+  const [checkingStreakModal, setCheckingStreakModal] = useState(false);
 
   useEffect(() => {
     // Se não houver user, limpar estado e não carregar dados
@@ -160,6 +240,13 @@ export function DashboardScreen({ navigation }: any) {
       setContextSelectedDate(selectedDate);
     }
   }, [selectedDate, setContextSelectedDate]);
+
+  // Recalcular calorias líquidas sempre que meals ou caloriesBurned mudarem
+  useEffect(() => {
+    const mealsCalories = meals.reduce((sum, meal) => sum + (meal.calories || 0), 0);
+    const netCalories = mealsCalories - caloriesBurned;
+    setConsumed(Math.max(0, netCalories)); // Não permitir valores negativos
+  }, [meals, caloriesBurned]);
 
 
   const loadDashboardData = async (forceRefresh: boolean = false) => {
@@ -240,6 +327,8 @@ export function DashboardScreen({ navigation }: any) {
           protein: data.protein,
           carbs: data.carbs,
           fat: data.fat,
+          healthScore: data.healthScore,
+          foods: data.foods || undefined, // Lista de alimentos individuais (se existir)
         });
         totalCalories += data.calories || 0;
         totalProtein += data.protein || 0;
@@ -255,7 +344,8 @@ export function DashboardScreen({ navigation }: any) {
       const sortedMeals = mealsData.sort((a, b) => b.date.getTime() - a.date.getTime());
       
       setMeals(sortedMeals);
-      setConsumed(totalCalories);
+      // O useEffect vai recalcular as calorias líquidas automaticamente
+      
       setMacros({
         protein: Math.round(totalProtein),
         carbs: Math.round(totalCarbs),
@@ -366,10 +456,14 @@ export function DashboardScreen({ navigation }: any) {
             where('date', '<', Timestamp.fromDate(tomorrow))
           );
           const todayMealsSnapshot = await getDocs(todayMealsQuery);
-          setTodayMealCount(todayMealsSnapshot.size);
+          const todayMealCountValue = todayMealsSnapshot.size;
+          setTodayMealCount(todayMealCountValue);
           
-      await updateStreak(user.uid);
-      await refreshProfile();
+          await updateStreak(user.uid);
+          await refreshProfile();
+          
+          // Verificar se deve mostrar o modal do streak automaticamente
+          await checkAndShowStreakModal(todayMealCountValue);
         } else {
           // Se não for hoje, usar o número de refeições do dia selecionado
           setTodayMealCount(mealsData.length);
@@ -396,9 +490,76 @@ export function DashboardScreen({ navigation }: any) {
     }
   };
 
+  // Função para verificar e mostrar o modal do streak automaticamente
+  const checkAndShowStreakModal = async (todayMealCount: number) => {
+    if (!user || checkingStreakModal) return;
+    
+    try {
+      setCheckingStreakModal(true);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = today.toDateString();
+      
+      // Verificar se já mostrou o modal hoje
+      const lastShownKey = `streakModalShown_${user.uid}`;
+      const lastShownDate = await getCache<string>(lastShownKey);
+      
+      // Só mostrar se:
+      // 1. Não tiver refeições hoje (todayMealCount === 0)
+      // 2. Ainda não tiver mostrado hoje (lastShownDate !== todayStr)
+      // 3. O modal não estiver já visível
+      if (todayMealCount === 0 && lastShownDate !== todayStr && !showStreakModal) {
+        // Salvar no cache ANTES de mostrar o modal para evitar múltiplas chamadas
+        await setCache(lastShownKey, todayStr);
+        
+        // Buscar refeições dos últimos 6 dias para mostrar no modal
+        const sixDaysAgo = new Date(today);
+        sixDaysAgo.setDate(sixDaysAgo.getDate() - 5); // Últimos 6 dias (incluindo hoje)
+        
+        const mealsRef = collection(db, 'meals');
+        const q = query(
+          mealsRef,
+          where('userId', '==', user.uid),
+          where('date', '>=', Timestamp.fromDate(sixDaysAgo)),
+          where('date', '<', Timestamp.fromDate(new Date(today.getTime() + 24 * 60 * 60 * 1000)))
+        );
+        
+        const snapshot = await getDocs(q);
+        const daysWithMealsSet = new Set<string>();
+        
+        snapshot.forEach((doc) => {
+          const mealData = doc.data();
+          const mealDate = mealData.date?.toDate();
+          if (mealDate) {
+            const dateStr = mealDate.toDateString();
+            daysWithMealsSet.add(dateStr);
+          }
+        });
+        
+        setLast7DaysWithMeals(daysWithMealsSet);
+        
+        // Pequeno delay para garantir que a UI está pronta
+        setTimeout(() => {
+          setShowStreakModal(true);
+          setCheckingStreakModal(false);
+        }, 1000); // 1 segundo de delay após carregar os dados
+      } else {
+        setCheckingStreakModal(false);
+      }
+    } catch (error) {
+      console.error('Error checking streak modal:', error);
+      setCheckingStreakModal(false);
+    }
+  };
+
   const handleDeleteMeal = (mealId: string) => {
     setMealToDelete(mealId);
     setShowDeleteModal(true);
+  };
+
+  const handleDeleteExercise = (exerciseId: string, exerciseName: string) => {
+    setExerciseToDelete({ id: exerciseId, name: exerciseName });
+    setShowDeleteExerciseModal(true);
   };
 
   const loadExercises = async (date: Date = selectedDate, forceRefresh: boolean = false) => {
@@ -430,6 +591,8 @@ export function DashboardScreen({ navigation }: any) {
       }
 
       const exercisesData: Exercise[] = [];
+      let totalCaloriesBurned = 0;
+      
       snapshot.forEach((doc) => {
         const data = doc.data();
         const exerciseDate = data.date?.toDate ? data.date.toDate() : (data.date instanceof Date ? data.date : new Date(data.date));
@@ -440,13 +603,17 @@ export function DashboardScreen({ navigation }: any) {
           duration: data.duration || 0,
           date: exerciseDate,
           addedAt: addedAt,
+          calories: data.calories || 0, // Adicionar calorias ao objeto Exercise
         });
+        // Somar calorias queimadas do exercício
+        totalCaloriesBurned += data.calories || 0;
       });
 
       if (user && user.uid === currentUserId) {
         const sortedExercises = exercisesData.sort((a, b) => b.date.getTime() - a.date.getTime());
         setExercises(sortedExercises);
-        
+        setCaloriesBurned(totalCaloriesBurned);
+        // O useEffect vai recalcular as calorias líquidas automaticamente
       }
     } catch (error: any) {
       if (!user || error?.code === 'permission-denied') {
@@ -727,7 +894,16 @@ export function DashboardScreen({ navigation }: any) {
     if (!mealToDelete) return;
     
     try {
+      // Buscar a refeição antes de eliminá-la para obter a data
       const mealRef = doc(db, 'meals', mealToDelete);
+      const mealSnap = await getDoc(mealRef);
+      
+      let deletedMealDate: Date | null = null;
+      if (mealSnap.exists()) {
+        const mealData = mealSnap.data();
+        deletedMealDate = mealData.date?.toDate() || null;
+      }
+      
       await deleteDoc(mealRef);
       
       // Fechar modais
@@ -739,6 +915,14 @@ export function DashboardScreen({ navigation }: any) {
       if (user) {
         const daysWithMealsCacheKey = `daysWithMeals_${user.uid}`;
         await removeCache(daysWithMealsCacheKey);
+        
+        // Atualizar streak (verificar se quebrou no dia da refeição eliminada)
+        if (deletedMealDate) {
+          await updateStreakAfterDelete(user.uid, deletedMealDate);
+        }
+        // Também atualizar streak para hoje (caso tenha eliminado refeição de hoje)
+        await updateStreak(user.uid);
+        await refreshProfile();
       }
       
       // Recarregar dados para atualizar totais e macros (forçar refresh)
@@ -791,6 +975,28 @@ export function DashboardScreen({ navigation }: any) {
     return '🌙';
   };
 
+  // Obter primeiro nome do usuário
+  const getFirstName = () => {
+    if (!profile?.name) return '';
+    const nameParts = profile.name.trim().split(' ');
+    return nameParts[0] || '';
+  };
+
+  // Frases de motivação
+  const getMotivationalMessage = () => {
+    const messages = [
+      t('dashboard.motivation.keepGoing') || 'Keep going, you\'re doing great!',
+      t('dashboard.motivation.oneStep') || 'One step at a time!',
+      t('dashboard.motivation.youGotThis') || 'You\'ve got this!',
+      t('dashboard.motivation.stayStrong') || 'Stay strong and focused!',
+      t('dashboard.motivation.progress') || 'Every day is progress!',
+      t('dashboard.motivation.believe') || 'Believe in yourself!',
+    ];
+    // Usar o dia do mês para variar a mensagem
+    const dayOfMonth = new Date().getDate();
+    return messages[dayOfMonth % messages.length];
+  };
+
   const backgroundStyle = !theme?.isDark 
     ? { flex: 1 } 
     : { flex: 1, backgroundColor: theme?.colors?.background || '#FFFFFF' };
@@ -799,10 +1005,18 @@ export function DashboardScreen({ navigation }: any) {
     <View style={backgroundStyle}>
       {!theme?.isDark && (
         <LinearGradient
-          colors={['#FFFFFF', '#F0FDF4']}
+          colors={['#F0FDF4', '#FFFFFF']}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+      )}
+      {theme?.isDark && (
+        <LinearGradient
+          colors={['#1A2E1F', theme.colors.background || '#000000']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.3 }}
         />
       )}
       <ScrollView
@@ -827,62 +1041,93 @@ export function DashboardScreen({ navigation }: any) {
             <View style={{
               flexDirection: 'row', 
               justifyContent: 'space-between', 
-              alignItems: 'flex-end',
+              alignItems: 'flex-start',
               marginBottom: 24,
             }}>
               <View style={{ flex: 1 }}>
-                {/* Logo - muda conforme o tema */}
-                <View style={{ height: 55, justifyContent: 'center', width: 55 }}>
-                  {!logoError ? (
-                    <Image
-                      source={theme.isDark ? require('../assets/logo-b.png') : require('../assets/logo-n.png')}
+                {/* Saudação personalizada */}
+                <View style={{ justifyContent: 'center' }}>
+                  <Text 
                       style={{
-                        width: 55,
-                        height: 55,
-                        resizeMode: 'contain',
-                      }}
-                      onError={() => setLogoError(true)}
-                    />
-                  ) : (
-                    <View style={{
-                      width: 45,
-                      height: 45,
-                      borderRadius: 22.5,
-                      backgroundColor: theme.colors.primary || '#3BB273',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}>
-                      <Text style={{
                         fontSize: 24,
-                        fontWeight: 'bold',
-                        color: '#FFFFFF',
-                      }}>N</Text>
-                    </View>
-                  )}
+                      fontWeight: '700',
+                      color: theme.colors.text,
+                      marginBottom: 4,
+                    }}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    Hello, {getFirstName() || 'there'}
+                  </Text>
+                  <Text 
+                    style={{
+                      fontSize: 14,
+                      fontWeight: '500',
+                      color: theme.colors.textSecondary || '#9CA3AF',
+                    }}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {getMotivationalMessage()}
+                  </Text>
                 </View>
           </View>
 
-              {/* Badges: Streak e Steps */}
+              {/* Badges: Streak, Water e Badges/Conquistas */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 16 }}>
                 {/* Streak Badge */}
                 {profile && (
-                  <View style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    backgroundColor: profile.streak > 0
-                      ? (theme.isDark ? '#1F2937' : '#FEF3C7')
-                      : (theme.colors.card || '#FFFFFF'),
-                    borderRadius: 20,
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    borderWidth: profile.streak > 0 ? 0 : 1,
-                    borderColor: theme.colors.border || '#E5E7EB',
-                    shadowColor: profile.streak > 0 ? '#F97316' : 'transparent',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: profile.streak > 0 ? (theme.isDark ? 0.2 : 0.1) : 0,
-                    shadowRadius: 4,
-                    elevation: profile.streak > 0 ? 2 : 0,
-                  }}>
+                  <TouchableOpacity
+                    onPress={async () => {
+                      // Buscar refeições dos últimos 6 dias para mostrar no modal
+                      if (user) {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const sixDaysAgo = new Date(today);
+                        sixDaysAgo.setDate(sixDaysAgo.getDate() - 5); // Últimos 6 dias (incluindo hoje)
+                        
+                        const mealsRef = collection(db, 'meals');
+                        const q = query(
+                          mealsRef,
+                          where('userId', '==', user.uid),
+                          where('date', '>=', Timestamp.fromDate(sixDaysAgo)),
+                          where('date', '<', Timestamp.fromDate(new Date(today.getTime() + 24 * 60 * 60 * 1000)))
+                        );
+                        
+                        const snapshot = await getDocs(q);
+                        const daysWithMealsSet = new Set<string>();
+                        
+                        snapshot.forEach((doc) => {
+                          const mealData = doc.data();
+                          const mealDate = mealData.date?.toDate();
+                          if (mealDate) {
+                            const dateStr = mealDate.toDateString();
+                            daysWithMealsSet.add(dateStr);
+                          }
+                        });
+                        
+                        setLast7DaysWithMeals(daysWithMealsSet);
+                        setShowStreakModal(true);
+                      }
+                    }}
+                    activeOpacity={0.7}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: profile.streak > 0
+                        ? (theme.isDark ? '#1F2937' : '#FEF3C7')
+                        : (theme.colors.card || '#FFFFFF'),
+                      borderRadius: 20,
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderWidth: profile.streak > 0 ? 0 : 1,
+                      borderColor: theme.colors.border || '#E5E7EB',
+                      shadowColor: profile.streak > 0 ? '#F97316' : 'transparent',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: profile.streak > 0 ? (theme.isDark ? 0.2 : 0.1) : 0,
+                      shadowRadius: 4,
+                      elevation: profile.streak > 0 ? 2 : 0,
+                    }}>
                     <Ionicons 
                       name="flame" 
                       size={16} 
@@ -897,8 +1142,8 @@ export function DashboardScreen({ navigation }: any) {
                         : (theme.colors.text || '#000000'),
                     }}>
                       {profile.streak || 0}
-              </Text>
-                  </View>
+                    </Text>
+                  </TouchableOpacity>
                 )}
                 
                 {/* Water Badge */}
@@ -942,62 +1187,6 @@ export function DashboardScreen({ navigation }: any) {
                     {waterIntake > 0 ? `${(waterIntake / 1000).toFixed(1)}L` : '0.0L'}
                 </Text>
             </TouchableOpacity>
-                
-                {/* Steps Badge */}
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: steps > 0
-                    ? (theme.isDark ? '#1F2937' : '#374151')
-                    : (theme.colors.card || '#FFFFFF'),
-                  borderRadius: 20,
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderWidth: steps > 0 ? 0 : 1,
-                  borderColor: theme.colors.border || '#E5E7EB',
-                }}>
-                  <Ionicons 
-                    name="walk" 
-                    size={16} 
-                    color={steps > 0 ? "#3BB273" : (theme.colors.textSecondary || '#9CA3AF')} 
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text style={{
-                    fontSize: 14,
-                    fontWeight: '700',
-                    color: steps > 0 ? "#FFFFFF" : (theme.colors.text || '#000000'),
-                  }}>
-                    {steps > 0 ? steps.toLocaleString() : '0'}
-              </Text>
-            </View>
-                
-                {/* Badges/Conquistas Badge */}
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: badges.length > 0
-                    ? (theme.isDark ? '#1F2937' : '#374151')
-                    : (theme.colors.card || '#FFFFFF'),
-                  borderRadius: 20,
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderWidth: badges.length > 0 ? 0 : 1,
-                  borderColor: theme.colors.border || '#E5E7EB',
-                }}>
-                  <Ionicons 
-                    name="trophy" 
-                    size={16} 
-                    color={badges.length > 0 ? "#F59E0B" : (theme.colors.textSecondary || '#9CA3AF')} 
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text style={{
-                    fontSize: 14,
-                    fontWeight: '700',
-                    color: badges.length > 0 ? "#FFFFFF" : (theme.colors.text || '#000000'),
-                  }}>
-                    {badges.length}
-                  </Text>
-                </View>
               </View>
               </View>
             </MotiView>
@@ -1655,6 +1844,7 @@ export function DashboardScreen({ navigation }: any) {
                         calories={meal.calories || 0}
                         mealType={meal.mealType || 'snack'}
                         image={meal.image}
+                        healthScore={meal.healthScore}
                         time={(() => {
                           // Sempre usar a data real da refeição armazenada
                           if (!meal.date) return '';
@@ -1715,6 +1905,7 @@ export function DashboardScreen({ navigation }: any) {
                         })()}
                         onPress={() => {
                           setSelectedMeal(meal);
+                          setShowFoodsDropdown(false);
                           setShowMealModal(true);
                         }}
                         onDelete={() => handleDeleteMeal(meal.id)}
@@ -1730,7 +1921,7 @@ export function DashboardScreen({ navigation }: any) {
             from={{ opacity: 0, translateY: 20 }}
             animate={{ opacity: 1, translateY: 0 }}
             transition={{ type: 'timing', duration: 400, delay: 350 }}
-            style={{ marginBottom: 24 }}
+            style={{ marginTop: 32, marginBottom: 24 }}
           >
             <View style={{ 
               flexDirection: 'row', 
@@ -1823,7 +2014,13 @@ export function DashboardScreen({ navigation }: any) {
                     animate={{ opacity: 1, translateX: 0 }}
                     transition={{ type: 'timing', duration: 300, delay: 0 }}
                   >
-                    <View style={{
+                    <TouchableOpacity
+                      onPress={() => {
+                        setSelectedExercise(exercise);
+                        setShowExerciseModal(true);
+                      }}
+                      activeOpacity={0.7}
+                      style={{
                       backgroundColor: theme.colors.card,
                       borderRadius: 16,
                       padding: 16,
@@ -1831,7 +2028,8 @@ export function DashboardScreen({ navigation }: any) {
                       alignItems: 'center',
                       borderWidth: 1,
                       borderColor: theme.colors.border || '#E5E7EB',
-                    }}>
+                      }}
+                    >
                       <View style={{
                         width: 48,
                         height: 48,
@@ -1861,21 +2059,9 @@ export function DashboardScreen({ navigation }: any) {
                         </Text>
                       </View>
                       <TouchableOpacity
-                        onPress={async () => {
-                          try {
-                            await deleteDoc(doc(db, 'exercises', exercise.id));
-                            await loadExercises(selectedDate);
-                            Toast.show({
-                              type: 'success',
-                              text1: t('dashboard.exerciseDeleted') || 'Exercício eliminado',
-                            });
-                          } catch (error: any) {
-                            Toast.show({
-                              type: 'error',
-                              text1: t('common.error') || 'Erro',
-                              text2: t('dashboard.exerciseDeleteError') || 'Erro ao eliminar exercício',
-                            });
-                          }
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleDeleteExercise(exercise.id, exercise.name);
                         }}
                         activeOpacity={0.7}
                         style={{
@@ -1884,7 +2070,7 @@ export function DashboardScreen({ navigation }: any) {
                       >
                         <Ionicons name="trash-outline" size={20} color={theme.colors.textSecondary || '#9CA3AF'} />
                       </TouchableOpacity>
-                    </View>
+                    </TouchableOpacity>
                   </MotiView>
                 ))}
               </View>
@@ -1898,14 +2084,16 @@ export function DashboardScreen({ navigation }: any) {
         visible={showMealModal}
         transparent={true}
         animationType="slide"
-        onRequestClose={() => setShowMealModal(false)}
+          onRequestClose={() => {
+            setShowMealModal(false);
+            setShowFoodsDropdown(false);
+          }}
       >
         <Pressable
           style={{
             flex: 1,
             backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            justifyContent: 'center',
-            alignItems: 'center',
+            justifyContent: 'flex-end',
           }}
           onPress={() => setShowMealModal(false)}
         >
@@ -1913,14 +2101,14 @@ export function DashboardScreen({ navigation }: any) {
             onPress={(e) => e.stopPropagation()}
             style={{
               backgroundColor: theme.colors.card,
-              borderRadius: 30,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
               paddingTop: 20,
-              paddingBottom: 20,
+              paddingBottom: Math.max(insets.bottom, 20),
               paddingHorizontal: 20,
-              width: '90%',
-              maxHeight: '80%',
+              maxHeight: '85%',
               shadowColor: '#000',
-              shadowOffset: { width: 0, height: 4 },
+              shadowOffset: { width: 0, height: -4 },
               shadowOpacity: 0.3,
               shadowRadius: 12,
               elevation: 8,
@@ -1928,6 +2116,16 @@ export function DashboardScreen({ navigation }: any) {
           >
             {selectedMeal && (
               <>
+                {/* Handle bar */}
+                <View style={{
+                  alignSelf: 'center',
+                  width: 40,
+                  height: 4,
+                  backgroundColor: theme.colors.border || '#E5E7EB',
+                  borderRadius: 2,
+                  marginBottom: 20,
+                }} />
+
                 {/* Header */}
                 <View style={{
                   flexDirection: 'row',
@@ -1936,7 +2134,7 @@ export function DashboardScreen({ navigation }: any) {
                   marginBottom: 16,
                 }}>
                   <Text style={{
-                    fontSize: 20,
+                    fontSize: 22,
                     fontWeight: '700',
                     color: theme.colors.text,
                     flex: 1,
@@ -1944,19 +2142,26 @@ export function DashboardScreen({ navigation }: any) {
                     {selectedMeal.name}
                   </Text>
             <TouchableOpacity
-                    onPress={() => setShowMealModal(false)}
+                    onPress={() => {
+                      setShowMealModal(false);
+                      setShowFoodsDropdown(false);
+                    }}
                     style={{
-                      padding: 8,
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: theme.isDark ? '#1F2937' : '#F9FAFB',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                       marginLeft: 12,
                     }}
+                    activeOpacity={0.7}
                   >
-                    <Ionicons name="close" size={24} color={theme.colors.text} />
+                    <Ionicons name="close" size={20} color={theme.colors.text} />
       </TouchableOpacity>
                 </View>
 
-                {/* Informações */}
-                <View>
-                  {/* Imagem */}
+                {/* Imagem abaixo do título */}
                   {selectedMeal.image && (
                     <View style={{
                       marginBottom: 16,
@@ -1967,175 +2172,417 @@ export function DashboardScreen({ navigation }: any) {
                         source={{ uri: selectedMeal.image }}
                         style={{
                           width: '100%',
-                          height: 150,
+                        height: 180,
                         }}
                         resizeMode="cover"
                       />
                     </View>
                   )}
 
-                  <View style={{ gap: 14 }}>
-                    {/* Tipo de Refeição */}
-                    <View>
+                {/* Informações */}
+                <ScrollView 
+                  showsVerticalScrollIndicator={false}
+                  style={{ maxHeight: '100%' }}
+                  contentContainerStyle={{ paddingBottom: 20 }}
+                >
+
+                  {/* Calorias - Card destacado */}
+                  <View style={{
+                    backgroundColor: theme.isDark ? '#1E2937' : '#F8FAFC',
+                    borderRadius: 16,
+                    padding: 18,
+                    marginBottom: 16,
+                    borderWidth: 1,
+                    borderColor: theme.isDark ? '#2D3A4A' : '#E2E8F0',
+                  }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                      <Ionicons 
+                        name="flame-outline" 
+                        size={20} 
+                        color={theme.isDark ? '#4ADE80' : '#16A34A'} 
+                        style={{ marginRight: 8 }}
+                      />
                       <Text style={{
                         fontSize: 13,
                         color: theme.colors.textSecondary || '#9CA3AF',
-                        marginBottom: 6,
                         fontWeight: '600',
+                        textTransform: 'uppercase',
+                        letterSpacing: 0.5,
                       }}>
-                        {t('dashboard.mealType')}
-                  </Text>
-                      <Text style={{
-                        fontSize: 16,
-                        color: theme.colors.text,
-                        fontWeight: '700',
-                      }}>
-                        {selectedMeal.mealType === 'breakfast' ? '🌅 ' + t('addMeal.breakfast') :
-                         selectedMeal.mealType === 'lunch' ? '🍽️ ' + t('addMeal.lunch') :
-                         selectedMeal.mealType === 'dinner' ? '🌙 ' + t('addMeal.dinner') :
-                         '🍎 ' + t('addMeal.snack')}
-                  </Text>
-                </View>
-
-                    {/* Data e Hora */}
-                    <View>
-                      <Text style={{
-                        fontSize: 13,
-                        color: theme.colors.textSecondary || '#9CA3AF',
-                        marginBottom: 6,
-                        fontWeight: '600',
-                      }}>
-                        {t('dashboard.dateTime')}
-                      </Text>
-                      <Text style={{
-                        fontSize: 16,
-                        color: theme.colors.text,
-                        fontWeight: '700',
-                      }}>
-                        {selectedMeal.date && selectedMeal.date instanceof Date && !isNaN(selectedMeal.date.getTime()) 
-                          ? `${selectedMeal.date.toLocaleDateString('pt-PT', {
-                              day: '2-digit',
-                              month: 'short',
-                              year: 'numeric',
-                            })} às ${selectedMeal.date.toLocaleTimeString('pt-PT', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}`
-                          : ''}
-                      </Text>
-              </View>
-
-                    {/* Calorias */}
-                    <View style={{
-                      backgroundColor: theme.colors.primary + '20',
-                      borderRadius: 14,
-                      padding: 12,
-                    }}>
-                      <Text style={{
-                        fontSize: 28,
-                        color: theme.colors.primary || '#3BB273',
-                        fontWeight: '800',
-                      }}>
-                        {selectedMeal.calories} kcal
+                        {t('dashboard.calories') || 'Calorias'}
                       </Text>
                     </View>
+                    <Text style={{
+                      fontSize: 28,
+                      color: theme.colors.text,
+                      fontWeight: '700',
+                    }}>
+                      {selectedMeal.calories} <Text style={{ fontSize: 18, fontWeight: '500' }}>kcal</Text>
+                    </Text>
+                  </View>
+
+                  {/* Alimentos - Dropdown */}
+                  {selectedMeal.foods && selectedMeal.foods.length > 0 && (
+                    <View style={{
+                      backgroundColor: theme.isDark ? '#1E2937' : '#F8FAFC',
+                      borderRadius: 16,
+                      marginBottom: 16,
+                      overflow: 'hidden',
+                      borderWidth: 1,
+                      borderColor: theme.isDark ? '#2D3A4A' : '#E2E8F0',
+                    }}>
+                      <TouchableOpacity
+                        onPress={() => setShowFoodsDropdown(!showFoodsDropdown)}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: 18,
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                          <Ionicons 
+                            name="restaurant-outline" 
+                            size={20} 
+                            color={theme.isDark ? '#60A5FA' : '#3B82F6'} 
+                            style={{ marginRight: 10 }}
+                          />
+                          <Text style={{
+                            fontSize: 16,
+                            color: theme.colors.text,
+                            fontWeight: '700',
+                          }}>
+                            {t('dashboard.foods') || 'Alimentos'} <Text style={{ fontWeight: '500', color: theme.colors.textSecondary }}>({selectedMeal.foods.length})</Text>
+                          </Text>
+                        </View>
+                        <Ionicons 
+                          name={showFoodsDropdown ? "chevron-up" : "chevron-down"} 
+                          size={20} 
+                          color={theme.colors.textSecondary || '#9CA3AF'} 
+                        />
+                      </TouchableOpacity>
+                      
+                      {showFoodsDropdown && (
+                        <View style={{
+                          paddingHorizontal: 18,
+                          paddingBottom: 18,
+                          gap: 10,
+                          borderTopWidth: 1,
+                          borderTopColor: theme.isDark ? '#2D3A4A' : '#E2E8F0',
+                          paddingTop: 16,
+                        }}>
+                          {selectedMeal.foods.map((food, index) => {
+                            const multiplier = (food.weight / 100) * (food.quantity || 1);
+                            const foodCalories = Math.round(food.caloriesPer100g * multiplier);
+                            return (
+                              <View
+                                key={index}
+                                style={{
+                                  backgroundColor: theme.isDark ? '#0F172A' : '#FFFFFF',
+                                  borderRadius: 12,
+                                  padding: 14,
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  borderWidth: 1,
+                                  borderColor: theme.isDark ? '#1E2937' : '#F1F5F9',
+                                }}
+                              >
+                                <View style={{ flex: 1 }}>
+                                  <Text style={{
+                                    fontSize: 15,
+                                    color: theme.colors.text,
+                                    fontWeight: '600',
+                                    marginBottom: 6,
+                                  }}>
+                                    {food.name}
+                                  </Text>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Ionicons 
+                                      name="scale-outline" 
+                                      size={14} 
+                                      color={theme.colors.textSecondary || '#9CA3AF'} 
+                                      style={{ marginRight: 6 }}
+                                    />
+                                    <Text style={{
+                                      fontSize: 12,
+                                      color: theme.colors.textSecondary || '#9CA3AF',
+                                    }}>
+                                      {food.weight}g {food.quantity && food.quantity > 1 ? `× ${food.quantity}` : ''}
+                                    </Text>
+                                  </View>
+                                </View>
+                                <View style={{
+                                  backgroundColor: theme.isDark ? '#1E3A2A' : '#F0FDF4',
+                                  paddingHorizontal: 10,
+                                  paddingVertical: 6,
+                                  borderRadius: 8,
+                                }}>
+                                  <Text style={{
+                                    fontSize: 13,
+                                    color: theme.isDark ? '#4ADE80' : '#16A34A',
+                                    fontWeight: '700',
+                                  }}>
+                                    {foodCalories} kcal
+                                  </Text>
+                                </View>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Informações Gerais */}
+                  <View style={{ gap: 12, marginBottom: 20 }}>
+                    {/* Tipo de Refeição e Data/Hora lado a lado */}
+                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                      {/* Tipo de Refeição */}
+                      <View style={{
+                        flex: 1,
+                        backgroundColor: theme.isDark ? '#1E2937' : '#F8FAFC',
+                        borderRadius: 16,
+                        padding: 16,
+                        borderWidth: 1,
+                        borderColor: theme.isDark ? '#2D3A4A' : '#E2E8F0',
+                      }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                          <Ionicons 
+                            name="time-outline" 
+                            size={18} 
+                            color={theme.isDark ? '#A78BFA' : '#8B5CF6'} 
+                            style={{ marginRight: 8 }}
+                          />
+                          <Text style={{
+                            fontSize: 12,
+                            color: theme.colors.textSecondary || '#9CA3AF',
+                            fontWeight: '600',
+                            textTransform: 'uppercase',
+                            letterSpacing: 0.5,
+                          }}>
+                            {t('dashboard.mealType') || 'Tipo de Refeição'}
+                          </Text>
+                        </View>
+                        <Text style={{
+                          fontSize: 16,
+                          color: theme.colors.text,
+                          fontWeight: '700',
+                        }}>
+                          {selectedMeal.mealType === 'breakfast' ? '🌅 ' + t('addMeal.breakfast') :
+                           selectedMeal.mealType === 'lunch' ? '🍽️ ' + t('addMeal.lunch') :
+                           selectedMeal.mealType === 'dinner' ? '🌙 ' + t('addMeal.dinner') :
+                           '🍎 ' + t('addMeal.snack')}
+                        </Text>
+                      </View>
+
+                      {/* Data e Hora */}
+                      <View style={{
+                        flex: 1,
+                        backgroundColor: theme.isDark ? '#1E2937' : '#F8FAFC',
+                        borderRadius: 16,
+                        padding: 16,
+                        borderWidth: 1,
+                        borderColor: theme.isDark ? '#2D3A4A' : '#E2E8F0',
+                      }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                          <Ionicons 
+                            name="calendar-outline" 
+                            size={18} 
+                            color={theme.isDark ? '#FBBF24' : '#F59E0B'} 
+                            style={{ marginRight: 8 }}
+                          />
+                          <Text style={{
+                            fontSize: 12,
+                            color: theme.colors.textSecondary || '#9CA3AF',
+                            fontWeight: '600',
+                            textTransform: 'uppercase',
+                            letterSpacing: 0.5,
+                          }}>
+                            {t('dashboard.dateTime') || 'Data e Hora'}
+                          </Text>
+                        </View>
+                        <Text style={{
+                          fontSize: 14,
+                          color: theme.colors.text,
+                          fontWeight: '600',
+                          lineHeight: 20,
+                        }}>
+                          {selectedMeal.date && selectedMeal.date instanceof Date && !isNaN(selectedMeal.date.getTime()) 
+                            ? `${selectedMeal.date.toLocaleDateString('pt-PT', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric',
+                              })}\n${selectedMeal.date.toLocaleTimeString('pt-PT', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}`
+                            : ''}
+                        </Text>
+                      </View>
+                    </View>
+              </View>
+
+                  {/* Health Score */}
+                  {selectedMeal.calories && selectedMeal.calories > 0 && (
+                    <View style={{
+                      backgroundColor: theme.isDark ? '#1E2937' : '#F8FAFC',
+                      borderRadius: 16,
+                      padding: 18,
+                      marginBottom: 16,
+                      borderWidth: 1,
+                      borderColor: theme.isDark ? '#2D3A4A' : '#E2E8F0',
+                    }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+                        <View style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: 12,
+                          backgroundColor: theme.isDark ? '#1F2937' : '#F1F5F9',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginRight: 12,
+                        }}>
+                          <Ionicons name="heart" size={22} color={theme.isDark ? '#EC4899' : '#DB2777'} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{
+                            fontSize: 12,
+                            color: theme.colors.textSecondary || '#9CA3AF',
+                            fontWeight: '600',
+                            textTransform: 'uppercase',
+                            letterSpacing: 0.5,
+                            marginBottom: 4,
+                          }}>
+                            {t('dashboard.healthScore') || 'Health score'}
+                          </Text>
+                          <Text style={{
+                            fontSize: 24,
+                            fontWeight: '700',
+                            color: theme.colors.text,
+                          }}>
+                            {calculateHealthScore(selectedMeal)}<Text style={{ fontSize: 16, fontWeight: '500' }}>/10</Text>
+                          </Text>
+                        </View>
+                    </View>
+                      {/* Progress Bar */}
+                      <View style={{
+                        height: 10,
+                        backgroundColor: theme.isDark ? '#0F172A' : '#E2E8F0',
+                        borderRadius: 5,
+                        overflow: 'hidden',
+                      }}>
+                        <View style={{
+                          height: '100%',
+                          width: `${(calculateHealthScore(selectedMeal) / 10) * 100}%`,
+                          backgroundColor: calculateHealthScore(selectedMeal) >= 7 
+                            ? '#10B981' 
+                            : calculateHealthScore(selectedMeal) >= 5 
+                            ? '#F59E0B' 
+                            : '#EF4444',
+                          borderRadius: 5,
+                        }} />
+                      </View>
+                    </View>
+                  )}
 
                     {/* Macros */}
                     {(selectedMeal.protein !== undefined || selectedMeal.carbs !== undefined || selectedMeal.fat !== undefined) && (
-                      <View>
+                    <View style={{ marginBottom: 20 }}>
                         <Text style={{
-                          fontSize: 14,
+                        fontSize: 16,
                           color: theme.colors.text,
                           marginBottom: 12,
                           fontWeight: '700',
                         }}>
-                          {t('dashboard.macros')}
+                        {t('dashboard.macros') || 'Macronutrientes'}
                         </Text>
-                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                      <View style={{ flexDirection: 'row', gap: 12 }}>
                           {selectedMeal.protein !== undefined && (
                             <View style={{
                               flex: 1,
-                              backgroundColor: '#FEE2E2',
-                              borderRadius: 14,
-                              padding: 12,
+                              backgroundColor: theme.isDark ? '#1E2937' : '#F8FAFC',
+                            borderRadius: 16,
+                            padding: 16,
                               alignItems: 'center',
                               borderWidth: 1,
-                              borderColor: '#FECACA',
+                              borderColor: theme.isDark ? '#2D3A4A' : '#E2E8F0',
                             }}>
-                              <Ionicons name="nutrition" size={20} color="#EF4444" />
+                            <Ionicons name="nutrition" size={22} color="#EF4444" />
                               <Text style={{
-                                fontSize: 20,
+                              fontSize: 24,
                                 fontWeight: '800',
-                                color: '#EF4444',
-                                marginTop: 6,
+                                color: theme.colors.text,
+                              marginTop: 8,
                               }}>
                                 {Math.round(selectedMeal.protein)}g
                               </Text>
                               <Text style={{
                                 fontSize: 12,
-                                color: '#991B1B',
-                                marginTop: 3,
+                                color: theme.colors.textSecondary || '#9CA3AF',
+                              marginTop: 4,
                                 fontWeight: '600',
                               }}>
-                                {t('dashboard.protein')}
+                              {t('dashboard.protein') || 'Proteína'}
                               </Text>
                             </View>
                           )}
                           {selectedMeal.carbs !== undefined && (
                             <View style={{
                               flex: 1,
-                              backgroundColor: '#D1FAE5',
-                              borderRadius: 14,
-                              padding: 12,
+                              backgroundColor: theme.isDark ? '#1E2937' : '#F8FAFC',
+                            borderRadius: 16,
+                            padding: 16,
                               alignItems: 'center',
                               borderWidth: 1,
-                              borderColor: '#A7F3D0',
+                              borderColor: theme.isDark ? '#2D3A4A' : '#E2E8F0',
                             }}>
-                              <Ionicons name="fast-food" size={20} color="#10B981" />
+                            <Ionicons name="fast-food" size={22} color="#10B981" />
                               <Text style={{
-                                fontSize: 20,
+                              fontSize: 24,
                                 fontWeight: '800',
-                                color: '#10B981',
-                                marginTop: 6,
+                                color: theme.colors.text,
+                              marginTop: 8,
                               }}>
                                 {Math.round(selectedMeal.carbs)}g
                               </Text>
                               <Text style={{
                                 fontSize: 12,
-                                color: '#047857',
-                                marginTop: 3,
+                                color: theme.colors.textSecondary || '#9CA3AF',
+                              marginTop: 4,
                                 fontWeight: '600',
                               }}>
-                                {t('dashboard.carbs')}
+                              {t('dashboard.carbs') || 'Carboidratos'}
                               </Text>
                             </View>
                           )}
                           {selectedMeal.fat !== undefined && (
                             <View style={{
                               flex: 1,
-                              backgroundColor: '#FEF9C3',
-                              borderRadius: 14,
-                              padding: 12,
+                              backgroundColor: theme.isDark ? '#1E2937' : '#F8FAFC',
+                            borderRadius: 16,
+                            padding: 16,
                               alignItems: 'center',
                               borderWidth: 1,
-                              borderColor: '#FDE68A',
+                              borderColor: theme.isDark ? '#2D3A4A' : '#E2E8F0',
                             }}>
-                              <Ionicons name="flame" size={20} color="#EAB308" />
+                            <Ionicons name="flame" size={22} color="#F59E0B" />
                               <Text style={{
-                                fontSize: 20,
+                              fontSize: 24,
                                 fontWeight: '800',
-                                color: '#EAB308',
-                                marginTop: 6,
+                                color: theme.colors.text,
+                              marginTop: 8,
                               }}>
                                 {Math.round(selectedMeal.fat)}g
                               </Text>
                               <Text style={{
                                 fontSize: 12,
-                                color: '#A16207',
-                                marginTop: 3,
+                                color: theme.colors.textSecondary || '#9CA3AF',
+                              marginTop: 4,
                                 fontWeight: '600',
                               }}>
-                                {t('dashboard.fat')}
+                              {t('dashboard.fat') || 'Gordura'}
                               </Text>
                             </View>
                           )}
@@ -2152,27 +2599,29 @@ export function DashboardScreen({ navigation }: any) {
                         }, 300);
                       }}
                       style={{
-                        backgroundColor: '#FEE2E2',
+                      backgroundColor: theme.isDark ? '#1F2937' : '#F9FAFB',
                         borderRadius: 14,
-                        padding: 12,
+                      paddingVertical: 14,
+                      paddingHorizontal: 20,
                         flexDirection: 'row',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        marginTop: 4,
+                      marginTop: 8,
+                      borderWidth: 1.5,
+                      borderColor: '#EF4444',
                       }}
+                    activeOpacity={0.7}
                     >
-                      <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                    <Ionicons name="trash-outline" size={18} color="#EF4444" style={{ marginRight: 8 }} />
                       <Text style={{
                         fontSize: 15,
                         fontWeight: '600',
                         color: '#EF4444',
-                        marginLeft: 8,
                       }}>
-                        {t('dashboard.delete')}
+                      {t('common.delete') || 'Eliminar'}
                       </Text>
             </TouchableOpacity>
-                  </View>
-                </View>
+                </ScrollView>
               </>
             )}
           </Pressable>
@@ -2304,6 +2753,388 @@ export function DashboardScreen({ navigation }: any) {
                 </Text>
               </TouchableOpacity>
             </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Modal de Confirmação de Eliminação de Exercício */}
+      <Modal
+        visible={showDeleteExerciseModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowDeleteExerciseModal(false);
+          setExerciseToDelete(null);
+        }}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+          onPress={() => {
+            setShowDeleteExerciseModal(false);
+            setExerciseToDelete(null);
+          }}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: theme.colors.card,
+              borderRadius: 24,
+              padding: 24,
+              width: '85%',
+              maxWidth: 400,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 12,
+              elevation: 8,
+            }}
+          >
+            {/* Ícone de Aviso */}
+            <View style={{
+              width: 64,
+              height: 64,
+              borderRadius: 32,
+              backgroundColor: '#FEE2E2',
+              alignItems: 'center',
+              justifyContent: 'center',
+              alignSelf: 'center',
+              marginBottom: 20,
+            }}>
+              <Ionicons name="trash" size={32} color="#EF4444" />
+            </View>
+
+            {/* Título */}
+            <Text style={{
+              fontSize: 22,
+              fontWeight: '700',
+              color: theme.colors.text,
+              textAlign: 'center',
+              marginBottom: 12,
+            }}>
+              {t('dashboard.deleteExercise') || 'Eliminar Exercício'}
+            </Text>
+
+            {/* Mensagem */}
+            <Text style={{
+              fontSize: 15,
+              color: theme.colors.textSecondary || '#6B7280',
+              textAlign: 'center',
+              marginBottom: 24,
+              lineHeight: 22,
+            }}>
+              {t('dashboard.deleteExerciseConfirm') || 'Tem certeza que deseja eliminar o exercício'} "{exerciseToDelete?.name}"? {t('dashboard.deleteExerciseWarning') || 'Esta ação não pode ser desfeita.'}
+            </Text>
+
+            {/* Botões */}
+            <View style={{
+              flexDirection: 'row',
+              gap: 12,
+            }}>
+              {/* Botão Cancelar */}
+              <TouchableOpacity
+                onPress={() => {
+                  setShowDeleteExerciseModal(false);
+                  setExerciseToDelete(null);
+                }}
+                style={{
+                  flex: 1,
+                  backgroundColor: theme.colors.border || '#E5E7EB',
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={{
+                  fontSize: 16,
+                  fontWeight: '600',
+                  color: theme.colors.text,
+                }}>
+                  {t('common.cancel')}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Botão Eliminar */}
+              <TouchableOpacity
+                onPress={async () => {
+                  if (!exerciseToDelete) return;
+                  
+                  try {
+                    await deleteDoc(doc(db, 'exercises', exerciseToDelete.id));
+                    await loadExercises(selectedDate);
+                    setShowDeleteExerciseModal(false);
+                    setExerciseToDelete(null);
+                    Toast.show({
+                      type: 'success',
+                      text1: t('dashboard.exerciseDeleted') || 'Exercício eliminado',
+                    });
+                  } catch (error: any) {
+                    Toast.show({
+                      type: 'error',
+                      text1: t('common.error') || 'Erro',
+                      text2: t('dashboard.exerciseDeleteError') || 'Erro ao eliminar exercício',
+                    });
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#EF4444',
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{
+                  fontSize: 16,
+                  fontWeight: '600',
+                  color: '#FFFFFF',
+                }}>
+                  {t('common.delete') || 'Eliminar'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Modal de Detalhes do Exercício */}
+      <Modal
+        visible={showExerciseModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowExerciseModal(false)}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            justifyContent: 'flex-end',
+          }}
+          onPress={() => setShowExerciseModal(false)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: theme.colors.card,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              paddingTop: 20,
+              paddingBottom: 20,
+              paddingHorizontal: 20,
+              width: '100%',
+              maxHeight: '85%',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: -4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 12,
+              elevation: 8,
+            }}
+          >
+            {selectedExercise && (
+              <ScrollView 
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 20 }}
+              >
+                {/* Handle bar */}
+                <View style={{
+                  alignSelf: 'center',
+                  width: 40,
+                  height: 4,
+                  backgroundColor: theme.colors.border || '#E5E7EB',
+                  borderRadius: 2,
+                  marginBottom: 20,
+                }} />
+
+                {/* Header */}
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: 20,
+                }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    <View style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 24,
+                      backgroundColor: theme.colors.primary + '20',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 12,
+                    }}>
+                      <Ionicons name="fitness" size={24} color={theme.colors.primary || '#3BB273'} />
+                    </View>
+                    <Text style={{
+                      fontSize: 20,
+                      fontWeight: '700',
+                      color: theme.colors.text,
+                      flex: 1,
+                    }} numberOfLines={2}>
+                      {selectedExercise.name}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setShowExerciseModal(false)}
+                    style={{
+                      padding: 8,
+                      marginLeft: 12,
+                    }}
+                  >
+                    <Ionicons name="close" size={24} color={theme.colors.text} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Informações */}
+                <View style={{ gap: 16 }}>
+                  {/* Duração */}
+                  <View style={{
+                    backgroundColor: theme.colors.primary + '10',
+                    borderRadius: 16,
+                    padding: 16,
+                  }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                      <Ionicons 
+                        name="time-outline" 
+                        size={20} 
+                        color={theme.colors.primary || '#3BB273'} 
+                        style={{ marginRight: 8 }}
+                      />
+                      <Text style={{
+                        fontSize: 14,
+                        fontWeight: '600',
+                        color: theme.colors.textSecondary || '#9CA3AF',
+                      }}>
+                        {t('dashboard.duration') || 'Duração'}
+                      </Text>
+                    </View>
+                    <Text style={{
+                      fontSize: 24,
+                      fontWeight: '700',
+                      color: theme.colors.text,
+                    }}>
+                      {selectedExercise.duration} {t('dashboard.minutes') || 'min'}
+                    </Text>
+                  </View>
+
+                  {/* Calorias Queimadas */}
+                  {selectedExercise.calories && selectedExercise.calories > 0 && (
+                    <View style={{
+                      backgroundColor: theme.colors.primary + '10',
+                      borderRadius: 16,
+                      padding: 16,
+                    }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                        <Ionicons 
+                          name="flame" 
+                          size={20} 
+                          color={theme.colors.primary || '#3BB273'} 
+                          style={{ marginRight: 8 }}
+                        />
+                        <Text style={{
+                          fontSize: 14,
+                          fontWeight: '600',
+                          color: theme.colors.textSecondary || '#9CA3AF',
+                        }}>
+                          {t('dashboard.caloriesBurned') || 'Calorias Queimadas'}
+                        </Text>
+                      </View>
+                      <Text style={{
+                        fontSize: 24,
+                        fontWeight: '700',
+                        color: theme.colors.primary || '#3BB273',
+                      }}>
+                        {selectedExercise.calories} {t('dashboard.kcal') || 'kcal'}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Data */}
+                  <View style={{
+                    backgroundColor: theme.isDark ? '#1F2937' : '#F9FAFB',
+                    borderRadius: 16,
+                    padding: 16,
+                    marginBottom: 0,
+                  }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                      <Ionicons 
+                        name="calendar-outline" 
+                        size={20} 
+                        color={theme.colors.textSecondary || '#9CA3AF'} 
+                        style={{ marginRight: 8 }}
+                      />
+                      <Text style={{
+                        fontSize: 14,
+                        fontWeight: '600',
+                        color: theme.colors.textSecondary || '#9CA3AF',
+                      }}>
+                        {t('dashboard.dateTime') || 'Data e Hora'}
+                      </Text>
+                    </View>
+                    <Text style={{
+                      fontSize: 16,
+                      fontWeight: '600',
+                      color: theme.colors.text,
+                    }}>
+                      {selectedExercise.date.toLocaleDateString(
+                        language === 'pt' ? 'pt-PT' : 
+                        language === 'es' ? 'es-ES' : 
+                        language === 'fr' ? 'fr-FR' : 
+                        language === 'de' ? 'de-DE' : 
+                        language === 'it' ? 'it-IT' : 'en-US',
+                        { 
+                          day: '2-digit', 
+                          month: 'long', 
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        }
+                      )}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Botão Eliminar */}
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowExerciseModal(false);
+                    setTimeout(() => {
+                      handleDeleteExercise(selectedExercise.id, selectedExercise.name);
+                    }, 300);
+                  }}
+                  style={{
+                    marginTop: 8,
+                    marginBottom: 20,
+                    backgroundColor: theme.isDark ? '#1F2937' : '#F9FAFB',
+                    borderRadius: 14,
+                    paddingVertical: 14,
+                    paddingHorizontal: 20,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1.5,
+                    borderColor: '#EF4444',
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="trash-outline" size={18} color="#EF4444" style={{ marginRight: 8 }} />
+                  <Text style={{
+                    fontSize: 15,
+                    fontWeight: '600',
+                    color: '#EF4444',
+                  }}>
+                    {t('common.delete') || 'Eliminar'}
+                  </Text>
+                </TouchableOpacity>
+              </ScrollView>
+            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -3469,6 +4300,364 @@ export function DashboardScreen({ navigation }: any) {
             </View>
           </Pressable>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Streak Modal */}
+      <Modal
+        visible={showStreakModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowStreakModal(false)}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20,
+          }}
+          onPress={async () => {
+            // Marcar que já mostrou o modal hoje
+            if (user) {
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const todayStr = today.toDateString();
+              const lastShownKey = `streakModalShown_${user.uid}`;
+              await setCache(lastShownKey, todayStr);
+            }
+            setShowStreakModal(false);
+          }}
+        >
+          <MotiView
+            from={{ opacity: 0, scale: 0.9, translateY: 20 }}
+            animate={{ opacity: 1, scale: 1, translateY: 0 }}
+            transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+            style={{
+              backgroundColor: theme.colors.background || '#FFFFFF',
+              borderRadius: 32,
+              padding: 0,
+              width: screenWidth - 40,
+              maxWidth: 420,
+              alignItems: 'center',
+              overflow: 'hidden',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.4,
+              shadowRadius: 16,
+              elevation: 12,
+            }}
+          >
+            <Pressable
+              style={{ width: '100%' }}
+              onPress={(e) => e.stopPropagation()}
+            >
+            {/* Background gradient decorativo */}
+            <LinearGradient
+              colors={['#FEF3C7', '#FDE68A', '#FCD34D']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 120,
+                opacity: 0.3,
+              }}
+            />
+
+            {/* Header com ícone de flame e número - posicionado no topo direito */}
+            <MotiView
+              from={{ opacity: 0, translateX: 20 }}
+              animate={{ opacity: 1, translateX: 0 }}
+              transition={{ type: 'timing', duration: 400, delay: 200 }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                width: '100%',
+                paddingTop: 24,
+                paddingRight: 24,
+                paddingBottom: 8,
+              }}
+            >
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                backgroundColor: 'rgba(249, 115, 22, 0.1)',
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 20,
+              }}>
+                <Ionicons name="flame" size={18} color="#F97316" />
+                <Text style={{
+                  fontSize: 16,
+                  fontWeight: '700',
+                  color: '#F97316',
+                }}>
+                  {profile?.streak || 0}
+                </Text>
+              </View>
+            </MotiView>
+
+            {/* Conteúdo principal */}
+            <View style={{
+              paddingHorizontal: 32,
+              paddingBottom: 32,
+              alignItems: 'center',
+              width: '100%',
+            }}>
+              {/* Número grande do streak com gradiente */}
+              <MotiView
+                from={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: 'spring', damping: 15, stiffness: 200, delay: 100 }}
+                style={{
+                  marginBottom: 12,
+                  alignItems: 'center',
+                }}
+              >
+                <LinearGradient
+                  colors={['#16A34A', '#22C55E', '#4ADE80']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{
+                    width: 120,
+                    height: 120,
+                    borderRadius: 60,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    shadowColor: '#16A34A',
+                    shadowOffset: { width: 0, height: 8 },
+                    shadowOpacity: 0.4,
+                    shadowRadius: 16,
+                    elevation: 8,
+                  }}
+                >
+                  <Text style={{
+                    fontSize: 56,
+                    fontWeight: '900',
+                    color: '#FFFFFF',
+                    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+                    textShadowOffset: { width: 0, height: 2 },
+                    textShadowRadius: 4,
+                  }}>
+                    {profile?.streak || 0}
+                  </Text>
+                </LinearGradient>
+              </MotiView>
+
+              {/* "Day Streak!" */}
+              <MotiView
+                from={{ opacity: 0, translateY: -10 }}
+                animate={{ opacity: 1, translateY: 0 }}
+                transition={{ type: 'timing', duration: 500, delay: 300 }}
+              >
+                <Text style={{
+                  fontSize: 24,
+                  fontWeight: '800',
+                  color: '#16A34A',
+                  marginBottom: 32,
+                  letterSpacing: 0.5,
+                }}>
+                  {t('dashboard.streakModal.title') || 'Day Streak!'}
+                </Text>
+              </MotiView>
+
+              {/* Container para centralizar as bolinhas e o card */}
+              <View style={{
+                width: '100%',
+                alignItems: 'center',
+                marginBottom: 28,
+              }}>
+                {/* Últimos 6 dias - melhorado e centralizado */}
+                <View style={{
+                  flexDirection: 'row',
+                  gap: 10,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 24,
+                }}>
+                  {(() => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const dayLabels = [
+                      t('dashboard.streakModal.daySun') || 'S',
+                      t('dashboard.streakModal.dayMon') || 'M',
+                      t('dashboard.streakModal.dayTue') || 'T',
+                      t('dashboard.streakModal.dayWed') || 'W',
+                      t('dashboard.streakModal.dayThu') || 'T',
+                      t('dashboard.streakModal.dayFri') || 'F',
+                      t('dashboard.streakModal.daySat') || 'S',
+                    ];
+                    
+                    return Array.from({ length: 6 }, (_, i) => {
+                      const checkDate = new Date(today);
+                      checkDate.setDate(checkDate.getDate() - (5 - i)); // Do mais antigo (5 dias atrás) até hoje
+                      const dateStr = checkDate.toDateString();
+                      const hasMeal = last7DaysWithMeals.has(dateStr);
+                      const dayOfWeek = checkDate.getDay();
+                      const label = dayLabels[dayOfWeek];
+                      
+                      return (
+                        <MotiView
+                          key={i}
+                          from={{ opacity: 0, scale: 0.3, translateY: 20 }}
+                          animate={{ opacity: 1, scale: 1, translateY: 0 }}
+                          transition={{ type: 'spring', damping: 15, stiffness: 200, delay: 400 + (i * 80) }}
+                          style={{ alignItems: 'center', gap: 6 }}
+                        >
+                          <Text style={{
+                            fontSize: 11,
+                            fontWeight: '700',
+                            color: theme.colors.textSecondary || '#9CA3AF',
+                            marginBottom: 2,
+                            textTransform: 'uppercase',
+                            letterSpacing: 0.5,
+                          }}>
+                            {label}
+                          </Text>
+                          <MotiView
+                            from={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            transition={{ type: 'spring', damping: 12, stiffness: 300, delay: 500 + (i * 80) }}
+                            style={{
+                              width: 44,
+                              height: 44,
+                              borderRadius: 22,
+                              backgroundColor: hasMeal ? '#16A34A' : (theme.isDark ? '#374151' : '#F3F4F6'),
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderWidth: hasMeal ? 2 : 0,
+                              borderColor: hasMeal ? '#22C55E' : 'transparent',
+                              shadowColor: hasMeal ? '#16A34A' : 'transparent',
+                              shadowOffset: { width: 0, height: 2 },
+                              shadowOpacity: hasMeal ? 0.3 : 0,
+                              shadowRadius: 4,
+                              elevation: hasMeal ? 3 : 0,
+                            }}
+                          >
+                            {hasMeal && (
+                              <MotiView
+                                from={{ scale: 0, rotate: '-180deg' }}
+                                animate={{ scale: 1, rotate: '0deg' }}
+                                transition={{ type: 'spring', damping: 10, stiffness: 200, delay: 600 + (i * 80) }}
+                              >
+                                <Ionicons name="checkmark" size={22} color="#FFFFFF" style={{ fontWeight: 'bold' }} />
+                              </MotiView>
+                            )}
+                          </MotiView>
+                        </MotiView>
+                      );
+                    });
+                  })()}
+                </View>
+
+                {/* Dica com ícone - mesma largura das bolinhas */}
+                <MotiView
+                  from={{ opacity: 0, translateY: 20 }}
+                  animate={{ opacity: 1, translateY: 0 }}
+                  transition={{ type: 'timing', duration: 500, delay: 1000 }}
+                  style={{
+                    backgroundColor: theme.isDark ? '#1F2937' : '#F9FAFB',
+                    borderRadius: 16,
+                    padding: 16,
+                    width: '100%',
+                    maxWidth: 320, // Largura aproximada das 6 bolinhas + gaps
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 12,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border || '#E5E7EB',
+                  }}
+                >
+                  <MotiView
+                    from={{ scale: 0, rotate: '-180deg' }}
+                    animate={{ scale: 1, rotate: '0deg' }}
+                    transition={{ type: 'spring', damping: 15, stiffness: 200, delay: 1100 }}
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: '#FEF3C7',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Ionicons name="bulb" size={18} color="#F59E0B" />
+                  </MotiView>
+                  <Text style={{
+                    fontSize: 13,
+                    color: theme.colors.textSecondary || '#6B7280',
+                    textAlign: 'left',
+                    flex: 1,
+                    lineHeight: 18,
+                  }}>
+                    {t('dashboard.streakModal.tip') || 'Tip: Skipping a day resets your streak. Don\'t forget tomorrow!'}
+                  </Text>
+                </MotiView>
+              </View>
+
+              {/* Botão Continue melhorado */}
+              <MotiView
+                from={{ opacity: 0, scale: 0.9, translateY: 10 }}
+                animate={{ opacity: 1, scale: 1, translateY: 0 }}
+                transition={{ type: 'spring', damping: 15, stiffness: 200, delay: 1200 }}
+                style={{
+                  width: '100%',
+                }}
+              >
+                <TouchableOpacity
+                  onPress={async () => {
+                    // Marcar que já mostrou o modal hoje
+                    if (user) {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      const todayStr = today.toDateString();
+                      const lastShownKey = `streakModalShown_${user.uid}`;
+                      await setCache(lastShownKey, todayStr);
+                    }
+                    setShowStreakModal(false);
+                  }}
+                  style={{
+                    width: '100%',
+                    borderRadius: 18,
+                    paddingVertical: 18,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                  }}
+                  activeOpacity={0.9}
+                >
+                  <LinearGradient
+                    colors={['#16A34A', '#22C55E']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      borderRadius: 18,
+                    }}
+                  />
+                  <Text style={{
+                    fontSize: 17,
+                    fontWeight: '700',
+                    color: '#FFFFFF',
+                    letterSpacing: 0.5,
+                  }}>
+                    {t('dashboard.streakModal.continue') || 'Continue'}
+                  </Text>
+                </TouchableOpacity>
+              </MotiView>
+            </View>
+            </Pressable>
+          </MotiView>
+        </Pressable>
       </Modal>
     </View>
   );

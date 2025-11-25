@@ -433,10 +433,18 @@ export function ProfileScreen({ navigation }: any) {
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       {!theme.isDark && (
         <LinearGradient
-          colors={['#FFFFFF', '#F0FDF4']}
+          colors={['#F0FDF4', '#FFFFFF']}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+      )}
+      {theme.isDark && (
+        <LinearGradient
+          colors={['#1A2E1F', theme.colors.background || '#000000']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.3 }}
         />
       )}
       <ScrollView 

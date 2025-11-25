@@ -17,6 +17,7 @@ interface MealCardProps {
   mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
   image?: string;
   time: string;
+  healthScore?: number; // Score de saúde (0-10)
   onPress?: () => void;
   onDelete?: () => void;
 }
@@ -37,7 +38,7 @@ const getMealIcon = (mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack') => {
   }
 };
 
-export function MealCard({ name, calories, mealType, image, time, onPress, onDelete }: MealCardProps) {
+export function MealCard({ name, calories, mealType, image, time, healthScore, onPress, onDelete }: MealCardProps) {
   try {
     const themeContext = useTheme();
     let theme;
@@ -184,6 +185,44 @@ export function MealCard({ name, calories, mealType, image, time, onPress, onDel
           }}>
             kcal
           </Text>
+          {/* Health Score */}
+          {healthScore !== undefined && healthScore !== null && (
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              marginTop: 4,
+              backgroundColor: healthScore >= 7 
+                ? '#D1FAE5' 
+                : healthScore >= 5 
+                ? '#FEF3C7' 
+                : '#FEE2E2',
+              paddingHorizontal: 6,
+              paddingVertical: 2,
+              borderRadius: 8,
+            }}>
+              <Ionicons 
+                name="heart" 
+                size={10} 
+                color={healthScore >= 7 
+                  ? '#10B981' 
+                  : healthScore >= 5 
+                  ? '#F59E0B' 
+                  : '#EF4444'} 
+                style={{ marginRight: 3 }}
+              />
+              <Text style={{
+                color: healthScore >= 7 
+                  ? '#047857' 
+                  : healthScore >= 5 
+                  ? '#92400E' 
+                  : '#991B1B',
+                fontSize: 10,
+                fontWeight: '600',
+              }}>
+                {healthScore}/10
+              </Text>
+            </View>
+          )}
         </View>
 
         {onDelete && (

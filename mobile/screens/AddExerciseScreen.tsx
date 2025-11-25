@@ -29,7 +29,7 @@ import { ExerciseType, getExerciseConfigs, ExerciseFieldConfig } from '../types/
 import { getExerciseTypeFromName, getExerciseNameFromType } from '../utils/exerciseUtils';
 
 export function AddExerciseScreen({ navigation }: any) {
-  const { user } = useUser();
+  const { user, profile } = useUser();
   const { t } = useLanguage();
   const { theme } = useTheme();
   const { selectedDate } = useSelectedDate();
@@ -47,6 +47,12 @@ export function AddExerciseScreen({ navigation }: any) {
   
   // Campos dinâmicos baseados no tipo de exercício
   const [exerciseFields, setExerciseFields] = useState<Record<string, any>>({});
+  
+  // Calorias calculadas e editáveis
+  const [calculatedCalories, setCalculatedCalories] = useState<number | null>(null);
+  const [manualCalories, setManualCalories] = useState<string>('');
+  const [isEditingCalories, setIsEditingCalories] = useState(false);
+  const [isManuallyEdited, setIsManuallyEdited] = useState(false); // Flag para saber se foi editado manualmente
 
   const exerciseDate = selectedDate || new Date();
 
@@ -105,7 +111,277 @@ export function AddExerciseScreen({ navigation }: any) {
   useEffect(() => {
     setExerciseFields({});
     setCustomExerciseName('');
+    setCalculatedCalories(null);
+    setManualCalories('');
+    setIsEditingCalories(false);
+    setIsManuallyEdited(false); // Resetar flag de edição manual
   }, [selectedExerciseType]);
+
+  // Função para calcular calorias baseada no tipo de exercício e informações
+  const calculateExerciseCalories = (): number | null => {
+    if (!selectedExerciseType || !exerciseDuration) return null;
+    
+    const duration = parseFloat(exerciseDuration) || 0;
+    if (duration <= 0) return null;
+
+    // Peso padrão se não tiver no perfil (70kg)
+    const weightKg = profile?.weight || 70;
+    
+    let exerciseType = getExerciseTypeFromName(selectedExerciseType, t);
+    if (!exerciseType) {
+      exerciseType = 'other';
+    }
+
+    // Verificar se é um tipo customizado com calorias por hora definidas
+    const isCustomType = customExerciseTypes.some(ct => ct.name === selectedExerciseType);
+    if (isCustomType) {
+      const customType = customExerciseTypes.find(ct => ct.name === selectedExerciseType);
+      if (customType?.caloriesPerHour) {
+        return Math.round((customType.caloriesPerHour * duration) / 60);
+      }
+    }
+
+    // Cálculo baseado em METs (Metabolic Equivalent of Task)
+    // Fórmula: Calorias = MET × peso (kg) × tempo (horas)
+    let met = 0;
+
+    switch (exerciseType) {
+      case 'running':
+        // Corrida: MET varia com velocidade
+        const distance = exerciseFields.distance || 0;
+        if (distance > 0 && duration > 0) {
+          const speedKmh = (distance / duration) * 60; // km/h
+          if (speedKmh < 6.5) met = 6.0; // Corrida lenta
+          else if (speedKmh < 8) met = 9.8; // Corrida moderada
+          else if (speedKmh < 9.5) met = 11.5; // Corrida rápida
+          else if (speedKmh < 11) met = 12.5; // Corrida muito rápida
+          else met = 14.5; // Sprint
+        } else {
+          met = 9.8; // Default: corrida moderada
+        }
+        break;
+
+      case 'walking':
+        // Caminhada: MET varia com velocidade
+        const walkDistance = exerciseFields.distance || 0;
+        if (walkDistance > 0 && duration > 0) {
+          const walkSpeedKmh = (walkDistance / duration) * 60;
+          if (walkSpeedKmh < 3.2) met = 2.0; // Caminhada muito lenta
+          else if (walkSpeedKmh < 4) met = 2.5; // Caminhada lenta
+          else if (walkSpeedKmh < 5) met = 3.5; // Caminhada moderada
+          else if (walkSpeedKmh < 6.5) met = 5.0; // Caminhada rápida
+          else met = 6.0; // Caminhada muito rápida
+        } else {
+          met = 3.5; // Default: caminhada moderada
+        }
+        break;
+
+      case 'cycling':
+        // Ciclismo: MET varia com velocidade
+        const cycleDistance = exerciseFields.distance || 0;
+        const cycleSpeed = exerciseFields.averageSpeed || 0;
+        if (cycleSpeed > 0) {
+          if (cycleSpeed < 16) met = 4.0; // Ciclismo recreativo
+          else if (cycleSpeed < 19) met = 6.0; // Ciclismo moderado
+          else if (cycleSpeed < 22) met = 8.0; // Ciclismo vigoroso
+          else if (cycleSpeed < 25) met = 10.0; // Ciclismo muito vigoroso
+          else met = 12.0; // Ciclismo de competição
+        } else if (cycleDistance > 0 && duration > 0) {
+          const calculatedSpeed = (cycleDistance / duration) * 60;
+          if (calculatedSpeed < 16) met = 4.0;
+          else if (calculatedSpeed < 19) met = 6.0;
+          else if (calculatedSpeed < 22) met = 8.0;
+          else if (calculatedSpeed < 25) met = 10.0;
+          else met = 12.0;
+        } else {
+          met = 6.0; // Default: ciclismo moderado
+        }
+        break;
+
+      case 'swimming':
+        // Natação: MET varia com estilo e intensidade
+        const intensity = exerciseFields.perceivedIntensity || 5;
+        const style = exerciseFields.style;
+        let baseMet = 6.0;
+        
+        if (style === 'butterfly') baseMet = 13.8;
+        else if (style === 'freestyle') {
+          if (intensity <= 3) baseMet = 5.8;
+          else if (intensity <= 6) baseMet = 9.8;
+          else baseMet = 11.0;
+        } else if (style === 'backstroke') baseMet = 9.5;
+        else if (style === 'breaststroke') baseMet = 10.3;
+        else {
+          // Sem estilo definido, usar intensidade
+          if (intensity <= 3) baseMet = 5.8;
+          else if (intensity <= 6) baseMet = 8.3;
+          else baseMet = 11.0;
+        }
+        met = baseMet;
+        break;
+
+      case 'gym':
+        // Ginásio: MET varia com tipo de treino e intensidade
+        const gymIntensity = exerciseFields.perceivedIntensity || 5;
+        const trainingType = exerciseFields.trainingType;
+        
+        if (trainingType === 'cardio') {
+          if (gymIntensity <= 4) met = 5.0;
+          else if (gymIntensity <= 7) met = 7.0;
+          else met = 9.0;
+        } else if (trainingType === 'strength') {
+          if (gymIntensity <= 4) met = 3.5;
+          else if (gymIntensity <= 7) met = 5.0;
+          else met = 6.0;
+        } else if (trainingType === 'hypertrophy') {
+          if (gymIntensity <= 4) met = 4.0;
+          else if (gymIntensity <= 7) met = 5.5;
+          else met = 6.5;
+        } else {
+          // Sem tipo definido, usar intensidade
+          if (gymIntensity <= 4) met = 4.0;
+          else if (gymIntensity <= 7) met = 6.0;
+          else met = 8.0;
+        }
+        break;
+
+      case 'yoga':
+        // Yoga: MET varia com nível e estilo
+        const yogaLevel = exerciseFields.level;
+        const yogaStyle = exerciseFields.style;
+        const yogaIntensity = exerciseFields.perceivedIntensity || 3;
+        
+        if (yogaStyle === 'power' || yogaStyle === 'ashtanga' || yogaStyle === 'bikram') {
+          met = yogaIntensity <= 5 ? 3.0 : 4.0;
+        } else if (yogaStyle === 'vinyasa') {
+          met = yogaIntensity <= 5 ? 2.5 : 3.5;
+        } else {
+          met = yogaIntensity <= 5 ? 2.0 : 3.0;
+        }
+        break;
+
+      case 'pilates':
+        // Pilates: MET varia com tipo e intensidade
+        const pilatesType = exerciseFields.pilatesType;
+        const pilatesIntensity = exerciseFields.perceivedIntensity || 4;
+        
+        if (pilatesType === 'machine') {
+          met = pilatesIntensity <= 5 ? 3.5 : 4.5;
+        } else {
+          met = pilatesIntensity <= 5 ? 3.0 : 4.0;
+        }
+        break;
+
+      case 'dance':
+        // Dança: MET varia com estilo e intensidade
+        const danceStyle = exerciseFields.style;
+        const danceIntensity = exerciseFields.perceivedIntensity || 5;
+        
+        if (danceStyle === 'zumba') {
+          met = danceIntensity <= 5 ? 7.0 : 9.0;
+        } else if (danceStyle === 'hip-hop') {
+          met = danceIntensity <= 5 ? 6.0 : 8.0;
+        } else if (danceStyle === 'salsa') {
+          met = danceIntensity <= 5 ? 5.0 : 7.0;
+        } else if (danceStyle === 'ballet') {
+          met = danceIntensity <= 5 ? 4.5 : 6.0;
+        } else {
+          met = danceIntensity <= 5 ? 5.0 : 7.0;
+        }
+        break;
+
+      case 'hiking':
+        // Caminhada: MET varia com distância, elevação e peso da mochila
+        const hikeDistance = exerciseFields.distance || 0;
+        const elevationGain = exerciseFields.elevationGain || 0;
+        const backpackWeight = exerciseFields.backpackWeight || 0;
+        
+        let baseHikeMet = 6.0;
+        if (hikeDistance > 0 && duration > 0) {
+          const hikeSpeed = (hikeDistance / duration) * 60;
+          if (hikeSpeed < 3) baseHikeMet = 4.0;
+          else if (hikeSpeed < 4) baseHikeMet = 5.0;
+          else if (hikeSpeed < 5) baseHikeMet = 6.0;
+          else baseHikeMet = 7.0;
+        }
+        
+        // Ajustar para elevação (cada 100m de elevação adiciona ~0.5 MET)
+        const elevationBonus = (elevationGain / 100) * 0.5;
+        
+        // Ajustar para peso da mochila (cada 5kg adiciona ~0.3 MET)
+        const backpackBonus = (backpackWeight / 5) * 0.3;
+        
+        met = baseHikeMet + elevationBonus + backpackBonus;
+        break;
+
+      case 'tennis':
+        // Ténis: MET varia com tipo de jogo
+        const gameType = exerciseFields.gameType;
+        const effectiveDuration = exerciseFields.effectiveGameDuration || duration;
+        
+        if (gameType === 'doubles') {
+          met = 5.0;
+        } else {
+          met = 7.3; // Individual
+        }
+        // Ajustar para duração efetiva
+        const actualDuration = effectiveDuration > 0 ? effectiveDuration : duration;
+        return Math.round(met * weightKg * (actualDuration / 60));
+        
+      case 'football':
+        // Futebol: MET varia com posição e intensidade
+        const footballIntensity = exerciseFields.perceivedIntensity || 6;
+        const position = exerciseFields.position;
+        
+        if (position === 'goalkeeper') {
+          met = footballIntensity <= 5 ? 4.0 : 6.0;
+        } else if (position === 'defender') {
+          met = footballIntensity <= 5 ? 6.0 : 8.0;
+        } else if (position === 'midfielder') {
+          met = footballIntensity <= 5 ? 7.0 : 9.0;
+        } else {
+          met = footballIntensity <= 5 ? 7.5 : 9.5; // Forward
+        }
+        break;
+
+      case 'basketball':
+        // Basquetebol: MET varia com tipo de jogo e intensidade
+        const basketballIntensity = exerciseFields.perceivedIntensity || 6;
+        const basketballGameType = exerciseFields.gameType;
+        
+        if (basketballGameType === 'training') {
+          met = basketballIntensity <= 5 ? 6.0 : 8.0;
+        } else {
+          met = basketballIntensity <= 5 ? 7.0 : 9.0; // Game
+        }
+        break;
+
+      case 'other':
+        // Outro: usar intensidade percebida
+        const otherIntensity = exerciseFields.perceivedIntensity || 5;
+        // Converter intensidade 1-10 para MET aproximado (2-10)
+        met = 2 + (otherIntensity - 1) * (8 / 9);
+        break;
+
+      default:
+        met = 5.0; // Default
+    }
+
+    // Calcular calorias: MET × peso (kg) × tempo (horas)
+    const calories = met * weightKg * (duration / 60);
+    return Math.round(calories);
+  };
+
+  // Calcular calorias sempre que os campos mudarem (apenas se não foi editado manualmente)
+  useEffect(() => {
+    if (selectedExerciseType && exerciseDuration && !isEditingCalories && !isManuallyEdited) {
+      const calories = calculateExerciseCalories();
+      if (calories !== null) {
+        setCalculatedCalories(calories);
+        setManualCalories(calories.toString());
+      }
+    }
+  }, [selectedExerciseType, exerciseDuration, exerciseFields, profile?.weight, customExerciseTypes, isEditingCalories, isManuallyEdited]);
 
   const addExercise = async () => {
     if (!user || !selectedExerciseType || addingExercise) return;
@@ -216,6 +492,7 @@ export function AddExerciseScreen({ navigation }: any) {
         duration: duration,
         date: Timestamp.fromDate(date),
         addedAt: Timestamp.fromDate(addedAt),
+        calories: calculatedCalories || 0, // Adicionar calorias calculadas ou editadas
       };
       
       // Se for tipo "other", adicionar customName (mas não se for um tipo customizado criado)
@@ -472,56 +749,58 @@ export function AddExerciseScreen({ navigation }: any) {
             </>
           ) : (
             <>
-              {/* Exercício Selecionado */}
-              <View style={{ marginBottom: 24 }}>
-                <TouchableOpacity
-                  onPress={() => {
-                    setSelectedExerciseType('');
-                    setCustomExerciseName('');
-                  }}
-                  activeOpacity={0.7}
-                  style={{
-                    flexDirection: 'row',
+              {/* Header do Exercício Selecionado - Compacto */}
+              <View style={{ 
+                marginBottom: 24,
+                backgroundColor: theme.colors.primary + '15',
+                borderRadius: 16,
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                borderWidth: 2,
+                borderColor: theme.colors.primary || '#3BB273',
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: theme.colors.primary || '#3BB273',
                     alignItems: 'center',
-                    paddingVertical: 18,
-                    paddingHorizontal: 20,
-                    backgroundColor: theme.colors.primary + '20',
-                    borderRadius: 16,
-                    borderWidth: 2,
-                    borderColor: theme.colors.primary || '#3BB273',
-                  }}
-                >
-                  <Ionicons
-                    name={(() => {
-                      const exercise = [
-                        { name: t('dashboard.exercise.running') || 'Corrida', icon: 'walk' },
-                        { name: t('dashboard.exercise.walking') || 'Caminhada', icon: 'walk-outline' },
-                        { name: t('dashboard.exercise.cycling') || 'Ciclismo', icon: 'bicycle' },
-                        { name: t('dashboard.exercise.swimming') || 'Natação', icon: 'water' },
-                        { name: t('dashboard.exercise.gym') || 'Ginásio', icon: 'barbell' },
-                        { name: t('dashboard.exercise.yoga') || 'Yoga', icon: 'leaf' },
-                        { name: t('dashboard.exercise.pilates') || 'Pilates', icon: 'body' },
-                        { name: t('dashboard.exercise.dance') || 'Dança', icon: 'musical-notes' },
-                        { name: t('dashboard.exercise.hiking') || 'Caminhada', icon: 'trail-sign' },
-                        { name: t('dashboard.exercise.tennis') || 'Ténis', icon: 'tennisball' },
-                        { name: t('dashboard.exercise.football') || 'Futebol', icon: 'football' },
-                        { name: t('dashboard.exercise.basketball') || 'Basquetebol', icon: 'basketball' },
-                        { name: t('dashboard.exercise.other') || 'Outro', icon: 'ellipse' },
-                      ].find(e => e.name === selectedExerciseType);
-                      return exercise?.icon || 'ellipse';
-                    })() as any}
-                    size={28}
-                    color={theme.colors.primary || '#3BB273'}
-                    style={{ marginRight: 16 }}
-                  />
-                  <Text style={{
-                    fontSize: 18,
-                    fontWeight: '700',
-                    color: theme.colors.primary || '#3BB273',
-                    flex: 1,
+                    justifyContent: 'center',
+                    marginRight: 12,
                   }}>
-                    {selectedExerciseType}
-                  </Text>
+                    <Ionicons
+                      name={(() => {
+                        const exercise = [
+                          { name: t('dashboard.exercise.running') || 'Corrida', icon: 'walk' },
+                          { name: t('dashboard.exercise.walking') || 'Caminhada', icon: 'walk-outline' },
+                          { name: t('dashboard.exercise.cycling') || 'Ciclismo', icon: 'bicycle' },
+                          { name: t('dashboard.exercise.swimming') || 'Natação', icon: 'water' },
+                          { name: t('dashboard.exercise.gym') || 'Ginásio', icon: 'barbell' },
+                          { name: t('dashboard.exercise.yoga') || 'Yoga', icon: 'leaf' },
+                          { name: t('dashboard.exercise.pilates') || 'Pilates', icon: 'body' },
+                          { name: t('dashboard.exercise.dance') || 'Dança', icon: 'musical-notes' },
+                          { name: t('dashboard.exercise.hiking') || 'Caminhada', icon: 'trail-sign' },
+                          { name: t('dashboard.exercise.tennis') || 'Ténis', icon: 'tennisball' },
+                          { name: t('dashboard.exercise.football') || 'Futebol', icon: 'football' },
+                          { name: t('dashboard.exercise.basketball') || 'Basquetebol', icon: 'basketball' },
+                          { name: t('dashboard.exercise.other') || 'Outro', icon: 'ellipse' },
+                        ].find(e => e.name === selectedExerciseType);
+                        return exercise?.icon || 'ellipse';
+                      })() as any}
+                      size={22}
+                      color="#FFFFFF"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{
+                      fontSize: 18,
+                      fontWeight: '700',
+                      color: theme.colors.text,
+                    }}>
+                      {selectedExerciseType}
+                    </Text>
+                  </View>
                   <TouchableOpacity
                     onPress={() => {
                       setSelectedExerciseType('');
@@ -539,90 +818,131 @@ export function AddExerciseScreen({ navigation }: any) {
                   >
                     <Ionicons name="close" size={18} color="#FFFFFF" />
                   </TouchableOpacity>
-                </TouchableOpacity>
+                </View>
               </View>
 
-              {/* Input de Nome do Exercício (apenas para "Outro", não para tipos customizados criados) */}
-              {(() => {
-                const exerciseType = getExerciseTypeFromName(selectedExerciseType, t);
-                // Verificar se é um tipo customizado criado pelo usuário
-                const isCustomType = customExerciseTypes.some(ct => ct.name === selectedExerciseType);
-                // Mostrar input de nome apenas se for "other" e não for um tipo customizado criado
-                return (exerciseType === 'other' || !exerciseType) && !isCustomType;
-              })() && (
-                <View style={{ marginBottom: 24 }}>
-                  <Text style={{
-                    fontSize: 16,
-                    color: theme.colors.text,
-                    marginBottom: 12,
-                    fontWeight: '700',
-                  }}>
-                    {t('dashboard.exerciseName') || 'Nome do exercício'}
-                  </Text>
-                  <TextInput
-                    style={{
-                      paddingVertical: 18,
-                      paddingHorizontal: 20,
-                      fontSize: 18,
-                      fontWeight: '600',
-                      color: theme.colors.text,
-                      backgroundColor: theme.isDark ? '#1F2937' : '#F9FAFB',
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: theme.colors.border || '#E5E7EB',
-                    }}
-                    value={customExerciseName}
-                    onChangeText={setCustomExerciseName}
-                    placeholder={t('dashboard.enterExerciseName') || 'Ex: Crossfit, Natação, etc.'}
-                    placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
-                    autoFocus={true}
-                  />
-                </View>
-              )}
-
-              {/* Input de Duração */}
-              <View style={{ marginBottom: 24 }}>
-                <Text style={{
-                  fontSize: 16,
-                  color: theme.colors.text,
-                  marginBottom: 12,
-                  fontWeight: '700',
+              {/* Seção: Informações Básicas */}
+              <View style={{ marginBottom: 32 }}>
+                <View style={{ 
+                  flexDirection: 'row', 
+                  alignItems: 'center', 
+                  marginBottom: 16 
                 }}>
-                  {t('dashboard.duration') || 'Duração (minutos)'}
-                </Text>
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: theme.isDark ? '#1F2937' : '#F9FAFB',
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: theme.colors.border || '#E5E7EB',
-                  paddingHorizontal: 20,
-                }}>
-                  <TextInput
-                    style={{
-                      flex: 1,
-                      paddingVertical: 18,
-                      fontSize: 24,
-                      fontWeight: '700',
-                      color: theme.colors.text,
-                      textAlign: 'center',
-                    }}
-                    value={exerciseDuration}
-                    onChangeText={setExerciseDuration}
-                    keyboardType="numeric"
-                    placeholder="30"
-                    placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
-                    autoFocus={true}
+                  <Ionicons 
+                    name="information-circle" 
+                    size={20} 
+                    color={theme.colors.primary || '#3BB273'} 
+                    style={{ marginRight: 8 }}
                   />
                   <Text style={{
                     fontSize: 18,
-                    fontWeight: '600',
-                    color: theme.colors.textSecondary || '#9CA3AF',
-                    marginLeft: 8,
+                    fontWeight: '700',
+                    color: theme.colors.text,
                   }}>
-                    {t('dashboard.minutes') || 'min'}
+                    {t('dashboard.basicInfo') || 'Informações Básicas'}
                   </Text>
+                </View>
+
+                {/* Input de Nome do Exercício (apenas para "Outro", não para tipos customizados criados) */}
+                {(() => {
+                  const exerciseType = getExerciseTypeFromName(selectedExerciseType, t);
+                  // Verificar se é um tipo customizado criado pelo usuário
+                  const isCustomType = customExerciseTypes.some(ct => ct.name === selectedExerciseType);
+                  // Mostrar input de nome apenas se for "other" e não for um tipo customizado criado
+                  return (exerciseType === 'other' || !exerciseType) && !isCustomType;
+                })() && (
+                  <View style={{ marginBottom: 20 }}>
+                    <Text style={{
+                      fontSize: 14,
+                      color: theme.colors.textSecondary || '#9CA3AF',
+                      marginBottom: 8,
+                      fontWeight: '600',
+                    }}>
+                      {t('dashboard.exerciseName') || 'Nome do exercício'}
+                    </Text>
+                    <View style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: theme.isDark ? '#1F2937' : '#F9FAFB',
+                      borderRadius: 16,
+                      borderWidth: 2,
+                      borderColor: theme.colors.primary + '30' || '#3BB27330',
+                      paddingHorizontal: 16,
+                    }}>
+                      <Ionicons 
+                        name="fitness" 
+                        size={20} 
+                        color={theme.colors.primary || '#3BB273'} 
+                        style={{ marginRight: 12 }}
+                      />
+                      <TextInput
+                        style={{
+                          flex: 1,
+                          paddingVertical: 16,
+                          fontSize: 16,
+                          fontWeight: '600',
+                          color: theme.colors.text,
+                        }}
+                        value={customExerciseName}
+                        onChangeText={setCustomExerciseName}
+                        placeholder={t('dashboard.enterExerciseName') || 'Ex: Crossfit, Natação, etc.'}
+                        placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
+                        autoFocus={true}
+                      />
+                    </View>
+                  </View>
+                )}
+
+                {/* Input de Duração - Melhorado */}
+                <View style={{ marginBottom: 20 }}>
+                  <Text style={{
+                    fontSize: 14,
+                    color: theme.colors.textSecondary || '#9CA3AF',
+                    marginBottom: 8,
+                    fontWeight: '600',
+                  }}>
+                    {t('dashboard.duration') || 'Duração'}
+                  </Text>
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: theme.isDark ? '#1F2937' : '#F9FAFB',
+                    borderRadius: 16,
+                    borderWidth: 2,
+                    borderColor: theme.colors.primary + '30' || '#3BB27330',
+                    paddingHorizontal: 16,
+                  }}>
+                    <Ionicons 
+                      name="time-outline" 
+                      size={24} 
+                      color={theme.colors.primary || '#3BB273'} 
+                      style={{ marginRight: 12 }}
+                    />
+                    <TextInput
+                      style={{
+                        flex: 1,
+                        paddingVertical: 16,
+                        fontSize: 28,
+                        fontWeight: '700',
+                        color: theme.colors.text,
+                        textAlign: 'center',
+                      }}
+                      value={exerciseDuration}
+                      onChangeText={setExerciseDuration}
+                      keyboardType="numeric"
+                      placeholder="30"
+                      placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
+                      autoFocus={true}
+                    />
+                    <Text style={{
+                      fontSize: 16,
+                      fontWeight: '600',
+                      color: theme.colors.primary || '#3BB273',
+                      marginLeft: 8,
+                    }}>
+                      {t('dashboard.minutes') || 'min'}
+                    </Text>
+                  </View>
                 </View>
               </View>
 
@@ -681,7 +1001,26 @@ export function AddExerciseScreen({ navigation }: any) {
                 if (allFields.length === 0) return null;
 
                 return (
-                  <>
+                  <View style={{ marginBottom: 24 }}>
+                    <View style={{ 
+                      flexDirection: 'row', 
+                      alignItems: 'center', 
+                      marginBottom: 16 
+                    }}>
+                      <Ionicons 
+                        name="stats-chart" 
+                        size={20} 
+                        color={theme.colors.primary || '#3BB273'} 
+                        style={{ marginRight: 8 }}
+                      />
+                      <Text style={{
+                        fontSize: 18,
+                        fontWeight: '700',
+                        color: theme.colors.text,
+                      }}>
+                        {t('dashboard.additionalDetails') || 'Detalhes Adicionais'}
+                      </Text>
+                    </View>
                     {allFields.map((field) => {
                       if (field.type === 'number') {
                         // Verificar se é campo obrigatório
@@ -690,31 +1029,38 @@ export function AddExerciseScreen({ navigation }: any) {
                         // Interface especial para Intensidade Percebida (1-10)
                         if (field.key === 'perceivedIntensity' && field.min === 1 && field.max === 10) {
                           return (
-                            <View key={field.key} style={{ marginBottom: 24 }}>
-                              <Text style={{
-                                fontSize: 16,
-                                color: theme.colors.text,
-                                marginBottom: 12,
-                                fontWeight: '700',
-                              }}>
-                                {field.label}
-                                {field.required && <Text style={{ color: '#EF4444' }}> *</Text>}
-                              </Text>
+                            <View key={field.key} style={{ marginBottom: 20 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                <Ionicons 
+                                  name="flame" 
+                                  size={18} 
+                                  color={theme.colors.primary || '#3BB273'} 
+                                  style={{ marginRight: 6 }}
+                                />
+                                <Text style={{
+                                  fontSize: 14,
+                                  color: theme.colors.textSecondary || '#9CA3AF',
+                                  fontWeight: '600',
+                                }}>
+                                  {field.label}
+                                  {field.required && <Text style={{ color: '#EF4444' }}> *</Text>}
+                                </Text>
+                              </View>
                               <View style={{
                                 flexDirection: 'row',
                                 alignItems: 'center',
                                 backgroundColor: theme.isDark ? '#1F2937' : '#F9FAFB',
-                                borderRadius: 12,
-                                borderWidth: 1,
-                                borderColor: theme.colors.border || '#E5E7EB',
-                                paddingHorizontal: 20,
+                                borderRadius: 16,
+                                borderWidth: 2,
+                                borderColor: theme.colors.primary + '30' || '#3BB27330',
+                                paddingHorizontal: 16,
                               }}>
                                 <TextInput
                                   style={{
                                     flex: 1,
-                                    paddingVertical: 18,
-                                    fontSize: 18,
-                                    fontWeight: '600',
+                                    paddingVertical: 16,
+                                    fontSize: 24,
+                                    fontWeight: '700',
                                     color: theme.colors.text,
                                     textAlign: 'center',
                                   }}
@@ -738,38 +1084,61 @@ export function AddExerciseScreen({ navigation }: any) {
                                   placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
                                   maxLength={2}
                                 />
+                                <Text style={{
+                                  fontSize: 14,
+                                  fontWeight: '600',
+                                  color: theme.colors.textSecondary || '#9CA3AF',
+                                  marginLeft: 8,
+                                }}>
+                                  / 10
+                                </Text>
                               </View>
                             </View>
                           );
                         }
                         
                         // Outros campos numéricos normais
+                        const getIconForField = (key: string) => {
+                          if (key === 'distance') return 'map-outline';
+                          if (key === 'elevationGain') return 'trending-up-outline';
+                          if (key === 'speed') return 'speedometer-outline';
+                          if (key === 'heartRate') return 'heart-outline';
+                          return 'calculator-outline';
+                        };
+                        
                         return (
-                          <View key={field.key} style={{ marginBottom: 24 }}>
-                            <Text style={{
-                              fontSize: 16,
-                              color: theme.colors.text,
-                              marginBottom: 12,
-                              fontWeight: '700',
-                            }}>
-                              {field.label}
-                              {(field.required || isRequired) && <Text style={{ color: '#EF4444' }}> *</Text>}
-                            </Text>
+                          <View key={field.key} style={{ marginBottom: 20 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                              <Ionicons 
+                                name={getIconForField(field.key) as any} 
+                                size={18} 
+                                color={theme.colors.primary || '#3BB273'} 
+                                style={{ marginRight: 6 }}
+                              />
+                              <Text style={{
+                                fontSize: 14,
+                                color: theme.colors.textSecondary || '#9CA3AF',
+                                fontWeight: '600',
+                              }}>
+                                {field.label}
+                                {(field.required || isRequired) && <Text style={{ color: '#EF4444' }}> *</Text>}
+                              </Text>
+                            </View>
                             <View style={{
                               flexDirection: 'row',
                               alignItems: 'center',
                               backgroundColor: theme.isDark ? '#1F2937' : '#F9FAFB',
-                              borderRadius: 12,
-                              borderWidth: 1,
-                              borderColor: theme.colors.border || '#E5E7EB',
-                              paddingHorizontal: 20,
+                              borderRadius: 16,
+                              borderWidth: 2,
+                              borderColor: theme.colors.primary + '30' || '#3BB27330',
+                              paddingHorizontal: 16,
                             }}>
                               <TextInput
                                 style={{
                                   flex: 1,
-                                  paddingVertical: 18,
-                                  fontSize: 18,
-                                  fontWeight: '600',
+                                  paddingVertical: 16,
+                                  fontSize: 20,
+                                  fontWeight: '700',
                                   color: theme.colors.text,
                                   textAlign: 'center',
                                 }}
@@ -789,7 +1158,7 @@ export function AddExerciseScreen({ navigation }: any) {
                                 <Text style={{
                                   fontSize: 16,
                                   fontWeight: '600',
-                                  color: theme.colors.textSecondary || '#9CA3AF',
+                                  color: theme.colors.primary || '#3BB273',
                                   marginLeft: 8,
                                 }}>
                                   {field.unit}
@@ -800,20 +1169,27 @@ export function AddExerciseScreen({ navigation }: any) {
                         );
                       } else if (field.type === 'select') {
                         return (
-                          <View key={field.key} style={{ marginBottom: 24 }}>
-                            <Text style={{
-                              fontSize: 16,
-                              color: theme.colors.text,
-                              marginBottom: 12,
-                              fontWeight: '700',
-                            }}>
-                              {field.label}
-                              {field.required && <Text style={{ color: '#EF4444' }}> *</Text>}
-                            </Text>
+                          <View key={field.key} style={{ marginBottom: 20 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                              <Ionicons 
+                                name="list-outline" 
+                                size={18} 
+                                color={theme.colors.primary || '#3BB273'} 
+                                style={{ marginRight: 6 }}
+                              />
+                              <Text style={{
+                                fontSize: 14,
+                                color: theme.colors.textSecondary || '#9CA3AF',
+                                fontWeight: '600',
+                              }}>
+                                {field.label}
+                                {field.required && <Text style={{ color: '#EF4444' }}> *</Text>}
+                              </Text>
+                            </View>
                             <View style={{
                               flexDirection: 'row',
                               flexWrap: 'wrap',
-                              gap: 8,
+                              gap: 10,
                             }}>
                               {field.options?.map((option) => (
                                 <TouchableOpacity
@@ -826,21 +1202,23 @@ export function AddExerciseScreen({ navigation }: any) {
                                   }}
                                   activeOpacity={0.7}
                                   style={{
-                                    paddingVertical: 12,
-                                    paddingHorizontal: 16,
-                                    borderRadius: 12,
+                                    paddingVertical: 14,
+                                    paddingHorizontal: 18,
+                                    borderRadius: 14,
                                     backgroundColor: exerciseFields[field.key] === option.value
                                       ? theme.colors.primary || '#3BB273'
                                       : theme.isDark ? '#1F2937' : '#F9FAFB',
-                                    borderWidth: 1,
+                                    borderWidth: 2,
                                     borderColor: exerciseFields[field.key] === option.value
                                       ? theme.colors.primary || '#3BB273'
                                       : theme.colors.border || '#E5E7EB',
+                                    minWidth: 80,
+                                    alignItems: 'center',
                                   }}
                                 >
                                   <Text style={{
-                                    fontSize: 14,
-                                    fontWeight: '600',
+                                    fontSize: 15,
+                                    fontWeight: '700',
                                     color: exerciseFields[field.key] === option.value
                                       ? '#FFFFFF'
                                       : theme.colors.text,
@@ -854,38 +1232,51 @@ export function AddExerciseScreen({ navigation }: any) {
                         );
                       } else if (field.type === 'text') {
                         return (
-                          <View key={field.key} style={{ marginBottom: 24 }}>
-                            <Text style={{
-                              fontSize: 16,
-                              color: theme.colors.text,
-                              marginBottom: 12,
-                              fontWeight: '700',
-                            }}>
-                              {field.label}
-                              {field.required && <Text style={{ color: '#EF4444' }}> *</Text>}
-                            </Text>
-                            <TextInput
-                              style={{
-                                paddingVertical: 18,
-                                paddingHorizontal: 20,
-                                fontSize: 18,
+                          <View key={field.key} style={{ marginBottom: 20 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                              <Ionicons 
+                                name="text-outline" 
+                                size={18} 
+                                color={theme.colors.primary || '#3BB273'} 
+                                style={{ marginRight: 6 }}
+                              />
+                              <Text style={{
+                                fontSize: 14,
+                                color: theme.colors.textSecondary || '#9CA3AF',
                                 fontWeight: '600',
-                                color: theme.colors.text,
-                                backgroundColor: theme.isDark ? '#1F2937' : '#F9FAFB',
-                                borderRadius: 12,
-                                borderWidth: 1,
-                                borderColor: theme.colors.border || '#E5E7EB',
-                              }}
-                              value={exerciseFields[field.key]?.toString() || ''}
-                              onChangeText={(text) => {
-                                setExerciseFields(prev => ({
-                                  ...prev,
-                                  [field.key]: text || undefined,
-                                }));
-                              }}
-                              placeholder={field.placeholder}
-                              placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
-                            />
+                              }}>
+                                {field.label}
+                                {field.required && <Text style={{ color: '#EF4444' }}> *</Text>}
+                              </Text>
+                            </View>
+                            <View style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              backgroundColor: theme.isDark ? '#1F2937' : '#F9FAFB',
+                              borderRadius: 16,
+                              borderWidth: 2,
+                              borderColor: theme.colors.primary + '30' || '#3BB27330',
+                              paddingHorizontal: 16,
+                            }}>
+                              <TextInput
+                                style={{
+                                  flex: 1,
+                                  paddingVertical: 16,
+                                  fontSize: 16,
+                                  fontWeight: '600',
+                                  color: theme.colors.text,
+                                }}
+                                value={exerciseFields[field.key]?.toString() || ''}
+                                onChangeText={(text) => {
+                                  setExerciseFields(prev => ({
+                                    ...prev,
+                                    [field.key]: text || undefined,
+                                  }));
+                                }}
+                                placeholder={field.placeholder}
+                                placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
+                              />
+                            </View>
                           </View>
                         );
                       }
@@ -895,25 +1286,221 @@ export function AddExerciseScreen({ navigation }: any) {
                     {/* Notas importantes */}
                     {config.notes && (
                       <View style={{
-                        marginBottom: 24,
+                        marginTop: 8,
+                        marginBottom: 8,
                         padding: 16,
                         backgroundColor: theme.colors.primary + '10',
-                        borderRadius: 12,
-                        borderLeftWidth: 4,
-                        borderLeftColor: theme.colors.primary || '#3BB273',
+                        borderRadius: 16,
+                        borderWidth: 1,
+                        borderColor: theme.colors.primary + '30' || '#3BB27330',
+                        flexDirection: 'row',
+                        alignItems: 'flex-start',
                       }}>
+                        <Ionicons 
+                          name="bulb-outline" 
+                          size={20} 
+                          color={theme.colors.primary || '#3BB273'} 
+                          style={{ marginRight: 12, marginTop: 2 }}
+                        />
                         <Text style={{
+                          flex: 1,
                           fontSize: 13,
                           color: theme.colors.textSecondary || '#9CA3AF',
                           lineHeight: 18,
                         }}>
-                          💡 {config.notes}
+                          {config.notes}
                         </Text>
                       </View>
                     )}
-                  </>
+                  </View>
                 );
               })()}
+
+              {/* Card de Calorias */}
+              {calculatedCalories !== null && (
+                <TouchableOpacity
+                  activeOpacity={isEditingCalories ? 1 : 0.7}
+                  onPress={() => {
+                    if (!isEditingCalories) {
+                      // Ativar modo de edição ao clicar no card
+                      setIsEditingCalories(true);
+                    }
+                  }}
+                  style={{
+                    marginTop: 24,
+                    marginBottom: 20,
+                    backgroundColor: theme.colors.primary + '10',
+                    borderRadius: 16,
+                    padding: 16,
+                    borderWidth: 2,
+                    borderColor: theme.colors.primary + '30' || '#3BB27330',
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                      <Ionicons 
+                        name="flame" 
+                        size={24} 
+                        color={theme.colors.primary || '#3BB273'} 
+                        style={{ marginRight: 10 }}
+                      />
+                      <Text style={{
+                        fontSize: 16,
+                        fontWeight: '700',
+                        color: theme.colors.text,
+                      }}>
+                        {t('dashboard.caloriesBurned') || 'Calorias Queimadas'}
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      {isManuallyEdited && !isEditingCalories && (
+                        <TouchableOpacity
+                          onPress={(e) => {
+                            e.stopPropagation(); // Evitar que o card seja clicado
+                            // Voltar ao cálculo automático
+                            const calories = calculateExerciseCalories();
+                            if (calories !== null) {
+                              setCalculatedCalories(calories);
+                              setManualCalories(calories.toString());
+                              setIsManuallyEdited(false);
+                            }
+                          }}
+                          activeOpacity={0.7}
+                          style={{
+                            paddingHorizontal: 10,
+                            paddingVertical: 6,
+                            borderRadius: 8,
+                            backgroundColor: theme.colors.primary + '15' || '#3BB27315',
+                          }}
+                        >
+                          <Ionicons 
+                            name="refresh-outline" 
+                            size={16} 
+                            color={theme.colors.primary || '#3BB273'} 
+                          />
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation(); // Evitar que o card seja clicado
+                          if (isEditingCalories) {
+                            // Salvar o valor editado
+                            const numValue = parseInt(manualCalories) || 0;
+                            if (numValue > 0) {
+                              setCalculatedCalories(numValue);
+                              setManualCalories(numValue.toString());
+                              setIsManuallyEdited(true); // Marcar como editado manualmente
+                              setIsEditingCalories(false); // Fechar modo de edição
+                            } else {
+                              // Se o valor for 0 ou inválido, recalcular e resetar flag
+                              const calories = calculateExerciseCalories();
+                              if (calories !== null) {
+                                setCalculatedCalories(calories);
+                                setManualCalories(calories.toString());
+                                setIsManuallyEdited(false); // Resetar flag
+                                setIsEditingCalories(false); // Fechar modo de edição
+                              }
+                            }
+                          } else {
+                            setIsEditingCalories(true);
+                          }
+                        }}
+                        activeOpacity={0.7}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 8,
+                          backgroundColor: theme.colors.primary + '20' || '#3BB27320',
+                        }}
+                      >
+                        <Ionicons 
+                          name={isEditingCalories ? "checkmark" : "create-outline"} 
+                          size={18} 
+                          color={theme.colors.primary || '#3BB273'} 
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  
+                  {isEditingCalories ? (
+                    <View style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: theme.isDark ? '#1F2937' : '#FFFFFF',
+                      borderRadius: 12,
+                      borderWidth: 2,
+                      borderColor: theme.colors.primary || '#3BB273',
+                      paddingHorizontal: 16,
+                    }}>
+                      <TextInput
+                        style={{
+                          flex: 1,
+                          paddingVertical: 14,
+                          fontSize: 24,
+                          fontWeight: '700',
+                          color: theme.colors.text,
+                          textAlign: 'center',
+                        }}
+                        value={manualCalories}
+                        onChangeText={(text) => {
+                          const numValue = parseInt(text.replace(/[^0-9]/g, '')) || 0;
+                          setManualCalories(numValue.toString());
+                          // Atualizar calculatedCalories em tempo real durante edição
+                          if (numValue > 0) {
+                            setCalculatedCalories(numValue);
+                          }
+                        }}
+                        keyboardType="numeric"
+                        placeholder="0"
+                        placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
+                        autoFocus={true}
+                      />
+                      <Text style={{
+                        fontSize: 18,
+                        fontWeight: '600',
+                        color: theme.colors.primary || '#3BB273',
+                        marginLeft: 8,
+                      }}>
+                        {t('dashboard.kcal') || 'kcal'}
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      paddingVertical: 8,
+                    }}>
+                      <Text style={{
+                        fontSize: 36,
+                        fontWeight: '700',
+                        color: theme.colors.primary || '#3BB273',
+                      }}>
+                        {calculatedCalories}
+                      </Text>
+                      <Text style={{
+                        fontSize: 20,
+                        fontWeight: '600',
+                        color: theme.colors.textSecondary || '#9CA3AF',
+                        marginLeft: 8,
+                      }}>
+                        {t('dashboard.kcal') || 'kcal'}
+                      </Text>
+                    </View>
+                  )}
+                  
+                  {!isEditingCalories && (
+                    <Text style={{
+                      fontSize: 12,
+                      color: theme.colors.textSecondary || '#9CA3AF',
+                      textAlign: 'center',
+                      marginTop: 8,
+                    }}>
+                      {t('dashboard.tapToEdit') || 'Toque para editar'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              )}
             </>
           )}
           </ScrollView>

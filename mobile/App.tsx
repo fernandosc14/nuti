@@ -122,7 +122,7 @@ function AddButton() {
         style={styles.addButton}
         activeOpacity={0.8}
       >
-        <View style={styles.addButtonInner}>
+        <View style={[styles.addButtonInner, { borderColor: theme.isDark ? '#1E293B' : '#FFFFFF' }]}>
           <Ionicons name={showMenu ? "close" : "add"} size={38} color="#FFFFFF" />
         </View>
       </TouchableOpacity>
@@ -168,7 +168,6 @@ function AddButton() {
                   paddingVertical: 12,
                   paddingHorizontal: 16,
                   borderRadius: 16,
-                  minWidth: 90,
                 }}
               >
                 <View style={{
@@ -178,18 +177,9 @@ function AddButton() {
                   backgroundColor: '#3B82F6',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  marginBottom: 8,
                 }}>
                   <Ionicons name="camera" size={24} color="#FFFFFF" />
                 </View>
-                <Text style={{
-                  fontSize: 12,
-                  fontWeight: '600',
-                  color: theme.colors.text,
-                  textAlign: 'center',
-                }}>
-                  {t('addMeal.camera')}
-                </Text>
               </TouchableOpacity>
 
               {/* Código de Barras */}
@@ -202,7 +192,6 @@ function AddButton() {
                   paddingVertical: 12,
                   paddingHorizontal: 16,
                   borderRadius: 16,
-                  minWidth: 90,
                 }}
               >
                 <View style={{
@@ -212,18 +201,9 @@ function AddButton() {
                   backgroundColor: '#10B981',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  marginBottom: 8,
                 }}>
                   <Ionicons name="barcode" size={24} color="#FFFFFF" />
                 </View>
-                <Text style={{
-                  fontSize: 12,
-                  fontWeight: '600',
-                  color: theme.colors.text,
-                  textAlign: 'center',
-                }}>
-                  {t('addMeal.barcode')}
-                </Text>
               </TouchableOpacity>
 
               {/* Pesquisar Alimento */}
@@ -236,7 +216,6 @@ function AddButton() {
                   paddingVertical: 12,
                   paddingHorizontal: 16,
                   borderRadius: 16,
-                  minWidth: 90,
                 }}
               >
                 <View style={{
@@ -246,18 +225,9 @@ function AddButton() {
                   backgroundColor: theme.colors.primary || '#3BB273',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  marginBottom: 8,
                 }}>
                   <Ionicons name="search" size={24} color="#FFFFFF" />
                 </View>
-                <Text style={{
-                  fontSize: 12,
-                  fontWeight: '600',
-                  color: theme.colors.text,
-                  textAlign: 'center',
-                }}>
-                  {t('addMeal.search')}
-                </Text>
               </TouchableOpacity>
             </View>
           </Pressable>
@@ -270,6 +240,7 @@ function AddButton() {
 function MainTabs() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const { t } = useLanguage();
   
   return (
     <Tab.Navigator
@@ -281,8 +252,8 @@ function MainTabs() {
           backgroundColor: theme.colors.card,
           borderTopWidth: 0,
           borderTopColor: 'transparent',
-          height: 60,
-          paddingBottom: 0,
+          height: 70,
+          paddingBottom: 8,
           paddingTop: 6,
           paddingVertical: 0,
           marginBottom: 0,
@@ -294,12 +265,17 @@ function MainTabs() {
           shadowOpacity: 0.08,
           shadowRadius: 16,
           elevation: 25,
-          borderTopLeftRadius: 0,
-          borderTopRightRadius: 0,
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
           marginTop: 0,
           borderWidth: 0,
         },
-        tabBarShowLabel: false,
+        tabBarShowLabel: true,
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+          marginTop: 2,
+        },
         tabBarItemStyle: {
           paddingVertical: 6,
           paddingTop: 6,
@@ -319,6 +295,7 @@ function MainTabs() {
         name="Home"
         component={DashboardScreen}
         options={{
+          tabBarLabel: t('nav.home') || 'Home',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons 
               name={focused ? "home" : "home-outline"} 
@@ -332,7 +309,7 @@ function MainTabs() {
         name="ProgressTab"
         component={ProgressScreen}
         options={{
-          tabBarLabel: '',
+          tabBarLabel: t('nav.progress') || 'Progress',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons 
               name={focused ? "stats-chart" : "stats-chart-outline"} 
@@ -359,6 +336,7 @@ function MainTabs() {
         name="ChatTab"
         component={ChatScreen}
         options={{
+          tabBarLabel: t('nav.chat') || 'Chat',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons 
               name={focused ? "chatbubble-ellipses" : "chatbubble-ellipses-outline"} 
@@ -372,6 +350,7 @@ function MainTabs() {
         name="ProfileTab"
         component={ProfileScreen}
         options={{
+          tabBarLabel: t('nav.profile') || 'Profile',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons 
               name={focused ? "person" : "person-outline"} 
@@ -393,7 +372,7 @@ function AppStack() {
     <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
       {!theme.isDark && (
         <LinearGradient
-          colors={['#FFFFFF', '#F0FDF4']}
+          colors={['#FFFFFF', '#FFFFFF']}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}

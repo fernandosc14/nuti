@@ -89,8 +89,9 @@ export function ChatScreen({ navigation }: any) {
     }, 100);
   };
 
-  const handleSend = async () => {
-    if (!inputText.trim() || !user || loading) return;
+  const handleSendMessage = async (messageText?: string) => {
+    const textToSend = messageText || inputText.trim();
+    if (!textToSend || !user || loading) return;
 
     // Verificar se é premium ou tem limite
     if (profile?.plan === 'free') {
@@ -124,12 +125,14 @@ export function ChatScreen({ navigation }: any) {
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: inputText.trim(),
+      content: textToSend,
       timestamp: new Date(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    setInputText('');
+    if (!messageText) {
+      setInputText('');
+    }
     setLoading(true);
 
     try {
@@ -148,7 +151,7 @@ export function ChatScreen({ navigation }: any) {
           role: msg.role,
           content: msg.content,
         }))
-        .concat([{ role: 'user', content: userMessage.content }]);
+        .concat([{ role: 'user', content: textToSend }]);
 
       // Enviar para Groq API
       const assistantContent = await sendChatMessage(chatHistory, user.uid);
@@ -190,55 +193,71 @@ export function ChatScreen({ navigation }: any) {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      style={{ flex: 1 }}
-    >
-      <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
-        {!theme.isDark && (
-          <LinearGradient
-            colors={['#FFFFFF', '#F0FDF4']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-          />
-        )}
-        {/* Header */}
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: 24,
-          paddingVertical: 16,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.colors.border || '#E5E7EB',
-        }}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 16 }}>
-            <Ionicons name="arrow-back" size={24} color={theme.colors.primary || '#3BB273'} />
-          </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={{
-              fontSize: 24,
-              fontWeight: '700',
-              color: theme.colors.text,
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top']}>
+      {!theme.isDark && (
+        <LinearGradient
+          colors={['#FFFFFF', '#F0FDF4']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+      )}
+      {theme.isDark && (
+        <LinearGradient
+          colors={['#1A2E1F', theme.colors.background || '#000000']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.3 }}
+        />
+      )}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        style={{ flex: 1 }}
+      >
+        <View style={{ flex: 1, backgroundColor: 'transparent' }}>
+          {/* Header */}
+          <View style={{ paddingHorizontal: 24 }}>
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: 0,
+              paddingTop: 0,
+              paddingBottom: 12,
+              borderBottomWidth: 1,
+              borderBottomColor: theme.colors.border || '#E5E7EB',
             }}>
-              {t('chat.title')}
-            </Text>
-            <Text style={{
-              fontSize: 14,
-              color: theme.colors.textSecondary || '#6B7280',
-            }}>
-              {t('chat.subtitle')}
-            </Text>
+              <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 16 }}>
+                <Ionicons name="arrow-back" size={24} color={theme.colors.primary || '#3BB273'} />
+              </TouchableOpacity>
+              <View style={{ flex: 1 }}>
+                <Text style={{
+                  fontSize: 24,
+                  fontWeight: '700',
+                  color: theme.colors.text,
+                }}>
+                  {t('chat.title')}
+                </Text>
+                <Text style={{
+                  fontSize: 14,
+                  color: theme.colors.textSecondary || '#6B7280',
+                }}>
+                  {t('chat.subtitle')}
+                </Text>
+              </View>
+            </View>
           </View>
-        </View>
 
         {/* Mensagens */}
         <ScrollView
           ref={scrollViewRef}
-          style={{ flex: 1, paddingHorizontal: 24, paddingVertical: 16 }}
-          contentContainerStyle={{ paddingBottom: 100 }}
+          style={{ flex: 1, paddingHorizontal: 24, paddingVertical: 30 }}
+          contentContainerStyle={{ 
+            paddingBottom: 100,
+            flexGrow: messages.length === 0 ? 1 : 0,
+          }}
           keyboardShouldPersistTaps="handled"
+          scrollEnabled={messages.length > 0}
         >
         {messages.length === 0 && (
           <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 48 }}>
@@ -342,12 +361,47 @@ export function ChatScreen({ navigation }: any) {
         {/* Input */}
         <View style={{
           paddingHorizontal: 24,
-          borderTopWidth: 1,
-          borderTopColor: theme.colors.border || '#E5E7EB',
-          backgroundColor: theme.colors.background,
+          backgroundColor: 'transparent',
           paddingTop: 12,
-          paddingBottom: 60,
+          paddingBottom: 45,
         }}>
+          {/* Sugestões de Mensagens */}
+          {messages.length === 0 && !loading && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20, justifyContent: 'flex-end' }}>
+              {[
+                t('chat.suggestion1') || 'Como posso perder peso?',
+                t('chat.suggestion2') || 'Dá-me uma receita saudável',
+                t('chat.suggestion3') || 'Quais são os melhores alimentos?',
+                t('chat.suggestion4') || 'Ajuda-me com os meus objetivos',
+              ].map((suggestion, index) => (
+                <TouchableOpacity
+                  key={index}
+                  onPress={() => {
+                    handleSendMessage(suggestion);
+                  }}
+                  style={{
+                    backgroundColor: (theme.colors.card || (theme.isDark ? '#1F2937' : '#F3F4F6')) + '80',
+                    borderRadius: 24,
+                    paddingHorizontal: 20,
+                    paddingVertical: 12,
+                    borderWidth: 1.5,
+                    borderColor: (theme.colors.border || '#E5E7EB') + 'CC',
+                    opacity: 0.75,
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{
+                    fontSize: 14,
+                    color: theme.colors.text,
+                    fontWeight: '500',
+                  }}>
+                    {suggestion}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <TextInput
               style={{
@@ -370,7 +424,7 @@ export function ChatScreen({ navigation }: any) {
               editable={!loading}
             />
             <TouchableOpacity
-              onPress={handleSend}
+              onPress={() => handleSendMessage()}
               disabled={!inputText.trim() || loading}
               style={{
                 borderRadius: 16,
@@ -390,7 +444,8 @@ export function ChatScreen({ navigation }: any) {
           </View>
         </View>
       </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
