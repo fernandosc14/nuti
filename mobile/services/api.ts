@@ -8,6 +8,7 @@
 
 import { getCache, setCache } from '../utils/cacheUtils';
 import { FOOD_DATABASE, enhanceNutritionalValues } from './foodDatabase';
+import type { Language } from '../context/LanguageContext';
 
 /**
  * Interface para itens de comida
@@ -1118,9 +1119,20 @@ export interface ChatMessage {
 /**
  * Envia mensagem para Groq API e retorna resposta
  */
+// Prompts do sistema em diferentes idiomas
+const systemPrompts: Record<Language, string> = {
+  pt: 'És um assistente nutricional simpático e útil do Nuti. Responde sempre em português de forma curta e amigável. Ajuda utilizadores com questões sobre nutrição, dietas e alimentação saudável. O teu objetivo é ser uma ajuda, não um bot.',
+  en: 'You are a friendly and helpful nutritional assistant from Nuti. Always respond in English in a short and friendly way. Help users with questions about nutrition, diets, and healthy eating. Your goal is to be helpful, not a bot.',
+  es: 'Eres un asistente nutricional amigable y útil de Nuti. Responde siempre en español de forma corta y amigable. Ayuda a los usuarios con preguntas sobre nutrición, dietas y alimentación saludable. Tu objetivo es ser útil, no un bot.',
+  fr: 'Tu es un assistant nutritionnel amical et utile de Nuti. Réponds toujours en français de manière courte et amicale. Aide les utilisateurs avec des questions sur la nutrition, les régimes et l\'alimentation saine. Ton objectif est d\'être utile, pas un bot.',
+  de: 'Du bist ein freundlicher und hilfreicher Ernährungsassistent von Nuti. Antworte immer auf Deutsch in kurzer und freundlicher Weise. Hilf Benutzern bei Fragen zu Ernährung, Diäten und gesunder Ernährung. Dein Ziel ist es, hilfreich zu sein, kein Bot.',
+  it: 'Sei un assistente nutrizionale amichevole e utile di Nuti. Rispondi sempre in italiano in modo breve e amichevole. Aiuta gli utenti con domande su nutrizione, diete e alimentazione sana. Il tuo obiettivo è essere utile, non un bot.',
+};
+
 export async function sendChatMessage(
   messages: ChatMessage[],
-  userId: string
+  userId: string,
+  language: Language = 'en'
 ): Promise<string> {
   try {
     const groqApiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY || '';
@@ -1129,6 +1141,8 @@ export async function sendChatMessage(
       throw new Error('Groq API key não configurada');
     }
 
+    const systemPrompt = systemPrompts[language] || systemPrompts.en;
+
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -1136,11 +1150,11 @@ export async function sendChatMessage(
         'Authorization': `Bearer ${groqApiKey}`,
       },
       body: JSON.stringify({
-        model: 'mixtral-8x7b-32768',
+        model: 'llama-3.3-70b-versatile',
         messages: [
           {
             role: 'system',
-            content: 'És um assistente nutricional simpático e útil do Nuti. Responde sempre em português de forma curta e amigável. Ajuda utilizadores com questões sobre nutrição, dietas e alimentação saudável. O teu objetivo é ser uma ajuda, não um bot.'
+            content: systemPrompt
           },
           ...messages
         ],
@@ -1159,6 +1173,52 @@ export async function sendChatMessage(
   } catch (error: any) {
     console.error('Error sending chat message:', error);
     throw new Error(error.message || 'Erro ao comunicar com a IA');
+  }
+}
+
+/**
+ * Transcreve áudio para texto usando Groq API (Whisper)
+ */
+export async function transcribeAudio(audioUri: string): Promise<string> {
+  try {
+    const groqApiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY || '';
+    
+    if (!groqApiKey) {
+      throw new Error('Groq API key não configurada');
+    }
+
+    // Converter URI para FormData (React Native)
+    const formData = new FormData();
+    
+    // Formato correto para React Native
+    formData.append('file', {
+      uri: audioUri,
+      type: 'audio/m4a',
+      name: 'audio.m4a',
+    } as any);
+    
+    formData.append('model', 'whisper-large-v3');
+    // Não especificar language para transcrever no idioma original (não traduzir)
+
+    const transcriptionResponse = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${groqApiKey}`,
+        // Não definir Content-Type - o fetch vai definir automaticamente com boundary
+      },
+      body: formData,
+    });
+
+    if (!transcriptionResponse.ok) {
+      const errorData = await transcriptionResponse.json().catch(() => ({ error: { message: 'Erro desconhecido' } }));
+      throw new Error(errorData.error?.message || 'Erro ao transcrever áudio');
+    }
+
+    const data = await transcriptionResponse.json();
+    return data.text || '';
+  } catch (error: any) {
+    console.error('Error transcribing audio:', error);
+    throw new Error(error.message || 'Erro ao transcrever áudio');
   }
 }
 

@@ -18,6 +18,13 @@ service cloud.firestore {
     match /messages/{messageId} {
       allow read: if request.auth != null && request.auth.uid == resource.data.userId;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      // Permitir update apenas para marcar como deletada (campo deleted)
+      // Verificar que o utilizador é o dono, que deleted está a ser definido como true,
+      // e que o userId não está a ser alterado
+      allow update: if request.auth != null && 
+                    request.auth.uid == resource.data.userId &&
+                    request.resource.data.deleted == true &&
+                    request.resource.data.userId == resource.data.userId;
     }
     
     // Regras para badges (apenas leitura para utilizadores autenticados)

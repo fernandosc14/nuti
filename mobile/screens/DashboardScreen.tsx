@@ -1402,7 +1402,7 @@ export function DashboardScreen({ navigation }: any) {
               from={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
             transition={{ type: 'timing', duration: 500, delay: 200 }}
-            style={{ marginBottom: 24 }}
+            style={{ marginTop: -24, marginBottom: 24 }}
           >
             <TouchableOpacity
               activeOpacity={0.7}
@@ -4352,9 +4352,13 @@ export function DashboardScreen({ navigation }: any) {
               style={{ width: '100%' }}
               onPress={(e) => e.stopPropagation()}
             >
-            {/* Background gradient decorativo */}
+            {/* Background gradient decorativo - mais sutil e elegante */}
             <LinearGradient
-              colors={['#FEF3C7', '#FDE68A', '#FCD34D']}
+              colors={[
+                theme.isDark ? 'rgba(59, 130, 246, 0.08)' : 'rgba(59, 130, 246, 0.05)',
+                theme.isDark ? 'rgba(16, 185, 129, 0.06)' : 'rgba(16, 185, 129, 0.04)',
+                'transparent'
+              ]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={{
@@ -4362,8 +4366,7 @@ export function DashboardScreen({ navigation }: any) {
                 top: 0,
                 left: 0,
                 right: 0,
-                height: 120,
-                opacity: 0.3,
+                height: 140,
               }}
             />
 
@@ -4382,24 +4385,33 @@ export function DashboardScreen({ navigation }: any) {
                 paddingBottom: 8,
               }}
             >
-              <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-                backgroundColor: 'rgba(249, 115, 22, 0.1)',
-                paddingHorizontal: 12,
-                paddingVertical: 6,
-                borderRadius: 20,
-              }}>
-                <Ionicons name="flame" size={18} color="#F97316" />
+              <LinearGradient
+                colors={['#F97316', '#FB923C']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  borderRadius: 24,
+                  shadowColor: '#F97316',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 4,
+                }}
+              >
+                <Ionicons name="flame" size={18} color="#FFFFFF" />
                 <Text style={{
                   fontSize: 16,
                   fontWeight: '700',
-                  color: '#F97316',
+                  color: '#FFFFFF',
                 }}>
                   {profile?.streak || 0}
                 </Text>
-              </View>
+              </LinearGradient>
             </MotiView>
 
             {/* Conteúdo principal */}

@@ -53,6 +53,12 @@
       ],
       "expo-font",
       [
+        "expo-audio",
+        {
+          "microphonePermission": "Permitir acesso ao microfone para gravar mensagens de áudio."
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {
