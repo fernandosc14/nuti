@@ -58,7 +58,7 @@ const TOTAL_STEPS = 17;
 
 export function OnboardingScreen({ navigation: _navigation, onClose }: { navigation?: any; onClose?: () => void }) {
   // Não usar navigation diretamente, apenas receber como prop para evitar erros
-  const { signInWithGoogleNative, updateProfile, user, profile, refreshProfile } = useUser();
+  const { signInWithGoogleNative, updateProfile, user, profile, refreshProfile, signOut } = useUser();
   const { t, language } = useLanguage();
   const { theme } = useTheme();
   
@@ -450,52 +450,69 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
     }
   };
 
-  const handleBack = () => {
-      const steps: OnboardingStep[] = [
-        'gender',
-        'age',
-        'height',
-        'weight',
-        'goal',
-        'desiredWeight',
-        'goalSpeed',
-        'workouts', // Precisa vir antes de calorieGoal
-        'diet',
-        'calorieGoal', // Precisa de workoutsPerWeek
-        'notifications',
-        'referralCode',
-        'heardFrom',
-        'triedOtherApps',
-        'premium',
-        'rateApp',
-        'createAccount',
-      ];
-
-      const currentIndex = steps.indexOf(currentStep);
-      
-      // Se estiver no primeiro slide, fechar o onboarding e voltar para Welcome/Login
-      if (currentIndex <= 0) {
-        if (onClose && typeof onClose === 'function') {
-          onClose();
+  const handleBack = async () => {
+    // Se estiver no primeiro slide (gender), fechar o onboarding e voltar para Welcome/Login
+    if (currentStep === 'gender') {
+      // Se o utilizador já tem conta, fazer logout para permitir login com outra conta
+      if (user) {
+        try {
+          await signOut();
+        } catch (error) {
+          console.error('Error signing out:', error);
         }
-        return;
       }
+      
+      if (onClose && typeof onClose === 'function') {
+        onClose();
+      }
+      return;
+    }
+
+    const steps: OnboardingStep[] = [
+      'gender',
+      'age',
+      'height',
+      'weight',
+      'goal',
+      'desiredWeight',
+      'goalSpeed',
+      'workouts', // Precisa vir antes de calorieGoal
+      'diet',
+      'calorieGoal', // Precisa de workoutsPerWeek
+      'notifications',
+      'referralCode',
+      'heardFrom',
+      'triedOtherApps',
+      'premium',
+      'rateApp',
+      'createAccount',
+    ];
+
+    const currentIndex = steps.indexOf(currentStep);
     
+    if (currentIndex <= 0) {
+      // Se estiver no primeiro slide, fechar o onboarding
+      if (onClose && typeof onClose === 'function') {
+        onClose();
+      }
+      return;
+    }
+  
     let prevStep = steps[currentIndex - 1];
     
-      // Se o goal é 'maintain', ajustar navegação para trás
-      if (goal === 'maintain') {
-        if (currentStep === 'workouts') {
-          prevStep = 'goal'; // Pular desiredWeight e goalSpeed
-        } else if (currentStep === 'diet') {
-          prevStep = 'workouts'; // Voltar normalmente
-        } else if (currentStep === 'calorieGoal') {
-          prevStep = 'diet'; // Voltar normalmente
-        } else if (currentStep === 'referralCode') {
-          prevStep = 'calorieGoal'; // Voltar normalmente
-        }
+    // Se o goal é 'maintain', ajustar navegação para trás
+    if (goal === 'maintain') {
+      if (currentStep === 'workouts') {
+        prevStep = 'goal'; // Pular desiredWeight e goalSpeed
+      } else if (currentStep === 'diet') {
+        prevStep = 'workouts'; // Voltar normalmente
+      } else if (currentStep === 'calorieGoal') {
+        prevStep = 'diet'; // Voltar normalmente
+      } else if (currentStep === 'referralCode') {
+        prevStep = 'calorieGoal'; // Voltar normalmente
       }
-    
+    }
+  
     setCurrentStep(prevStep);
   };
 
@@ -818,7 +835,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
               alignItems: 'center',
               borderWidth: 1,
               borderColor: theme.colors.border || (theme.isDark ? '#374151' : '#E5E7EB'),
-              opacity: (currentStepIndex === 0 || calculating || loading || creatingAccount) ? 0.5 : 1,
+              opacity: (calculating || loading || creatingAccount) ? 0.5 : 1,
             }}
           >
             <Ionicons
@@ -3441,9 +3458,11 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
               onPress={handleBack}
               disabled={calculating || loading || creatingAccount}
               className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-xl py-4 items-center"
-              style={{ opacity: (currentStepIndex === 0 || calculating || loading || creatingAccount) ? 0.5 : 1 }}
+              style={{ opacity: (calculating || loading || creatingAccount) ? 0.5 : 1 }}
             >
-              <Text className="text-gray-900 dark:text-white font-semibold">{t('onboarding.back')}</Text>
+              <Text className="text-gray-900 dark:text-white font-semibold">
+                {t('onboarding.back')}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleNext}

@@ -31,7 +31,8 @@ import { db } from '../services/firebase';
 import * as ImagePicker from 'expo-image-picker';
 import * as Clipboard from 'expo-clipboard';
 import Constants from 'expo-constants';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
+import * as Device from 'expo-device';
 
 interface Badge {
   id: string;
@@ -419,12 +420,83 @@ export function ProfileScreen({ navigation }: any) {
     }
   };
 
+  const getDeviceInfo = () => {
+    const appVersion = Constants.expoConfig?.version || '1.0.0';
+    const osName = Platform.OS === 'ios' ? 'iOS' : Platform.OS === 'android' ? 'Android' : Platform.OS;
+    
+    // Formatar versão do OS corretamente
+    let osVersion = '';
+    if (Platform.OS === 'ios') {
+      // iOS retorna string como "15.0"
+      osVersion = String(Platform.Version);
+    } else if (Platform.OS === 'android') {
+      // Android retorna número do API level (ex: 33, 34)
+      // Converter API level para versão do Android
+      const apiLevel = Number(Platform.Version);
+      const androidVersions: Record<number, string> = {
+        21: '5.0 (Lollipop)',
+        22: '5.1 (Lollipop)',
+        23: '6.0 (Marshmallow)',
+        24: '7.0 (Nougat)',
+        25: '7.1 (Nougat)',
+        26: '8.0 (Oreo)',
+        27: '8.1 (Oreo)',
+        28: '9.0 (Pie)',
+        29: '10',
+        30: '11',
+        31: '12',
+        32: '12L',
+        33: '13',
+        34: '14',
+        35: '15',
+        36: '16', // Futuro
+      };
+      
+      if (androidVersions[apiLevel]) {
+        osVersion = androidVersions[apiLevel];
+      } else {
+        // Se não conhecer, mostrar API level
+        osVersion = `API ${apiLevel}`;
+      }
+    } else {
+      osVersion = String(Platform.Version);
+    }
+    
+    // Tentar obter informações do dispositivo com expo-device
+    let deviceModel = 'Unknown Device';
+    try {
+      const brand = Device.brand || '';
+      const model = Device.modelName || Device.deviceName || '';
+      deviceModel = `${brand} ${model}`.trim() || 'Unknown Device';
+    } catch (error) {
+      // Fallback se expo-device não estiver disponível (Expo Go)
+      deviceModel = Platform.OS === 'ios' ? 'iOS Device' : 'Android Device';
+    }
+    
+    return {
+      appVersion,
+      osName,
+      osVersion,
+      deviceModel,
+    };
+  };
+
   const handleSupportEmail = () => {
-    Linking.openURL('mailto:support@nuti.app?subject=Suporte Nuti');
+    const subject = encodeURIComponent('Nuti Support');
+    const deviceInfo = getDeviceInfo();
+    const body = encodeURIComponent(
+      `\n\n---\nPlease write your message above this line.\n\nDevice Information:\n- Device: ${deviceInfo.deviceModel}\n- OS: ${deviceInfo.osName} ${deviceInfo.osVersion}\n- App Version: ${deviceInfo.appVersion}`
+    );
+    Linking.openURL(`mailto:support@nuti.app?subject=${subject}&body=${body}`);
   };
 
   const handleFeatureRequest = () => {
-    Linking.openURL('mailto:feedback@nuti.app?subject=Solicitação de Recurso');
+    const subject = encodeURIComponent('Feature Request');
+    const deviceInfo = getDeviceInfo();
+    const body = encodeURIComponent(
+      `\n\n---\nPlease write your message above this line.\n\nDevice Information:\n- Device: ${deviceInfo.deviceModel}\n- OS: ${deviceInfo.osName} ${deviceInfo.osVersion}\n- App Version: ${deviceInfo.appVersion}`
+    );
+    Linking.openURL(`mailto:feedback@nuti.app?subject=${subject}&body=${body}`);
   };
 
   const appVersion = Constants.expoConfig?.version || '1.0.0';

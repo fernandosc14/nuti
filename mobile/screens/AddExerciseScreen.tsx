@@ -28,7 +28,7 @@ import Toast from 'react-native-toast-message';
 import { ExerciseType, getExerciseConfigs, ExerciseFieldConfig } from '../types/exercise';
 import { getExerciseTypeFromName, getExerciseNameFromType } from '../utils/exerciseUtils';
 
-export function AddExerciseScreen({ navigation }: any) {
+export function AddExerciseScreen({ navigation, route }: any) {
   const { user, profile } = useUser();
   const { t } = useLanguage();
   const { theme } = useTheme();
@@ -62,6 +62,34 @@ export function AddExerciseScreen({ navigation }: any) {
       loadCustomExerciseTypes();
     }
   }, [user]);
+
+  // Pré-preencher dados se vier de uma sugestão do chat
+  useEffect(() => {
+    const exerciseSuggestion = route?.params?.exerciseSuggestion;
+    if (exerciseSuggestion) {
+      // Obter o nome traduzido do tipo de exercício
+      const exerciseTypeName = getExerciseNameFromType(exerciseSuggestion.type, t);
+      
+      // Definir tipo de exercício
+      setSelectedExerciseType(exerciseTypeName || exerciseSuggestion.type);
+      
+      // Definir duração
+      setExerciseDuration(String(exerciseSuggestion.duration));
+      
+      // Definir calorias (se fornecidas)
+      if (exerciseSuggestion.calories > 0) {
+        setCalculatedCalories(exerciseSuggestion.calories);
+        setManualCalories(String(exerciseSuggestion.calories));
+        setIsEditingCalories(true);
+        setIsManuallyEdited(true);
+      }
+      
+      // Se for tipo "other", definir nome customizado
+      if (exerciseSuggestion.type === 'other') {
+        setCustomExerciseName(exerciseSuggestion.name);
+      }
+    }
+  }, [route?.params?.exerciseSuggestion, t]);
 
   const loadCustomExerciseTypes = async () => {
     if (!user) return;
@@ -600,22 +628,22 @@ export function AddExerciseScreen({ navigation }: any) {
             <>
               <View style={{ marginBottom: 24 }}>
                 {[
-                  { name: t('dashboard.exercise.running') || 'Corrida', icon: 'walk', isCustom: false },
-                  { name: t('dashboard.exercise.walking') || 'Caminhada', icon: 'walk-outline', isCustom: false },
-                  { name: t('dashboard.exercise.cycling') || 'Ciclismo', icon: 'bicycle', isCustom: false },
-                  { name: t('dashboard.exercise.swimming') || 'Natação', icon: 'water', isCustom: false },
-                  { name: t('dashboard.exercise.gym') || 'Ginásio', icon: 'barbell', isCustom: false },
-                  { name: t('dashboard.exercise.yoga') || 'Yoga', icon: 'leaf', isCustom: false },
-                  { name: t('dashboard.exercise.pilates') || 'Pilates', icon: 'body', isCustom: false },
-                  { name: t('dashboard.exercise.dance') || 'Dança', icon: 'musical-notes', isCustom: false },
-                  { name: t('dashboard.exercise.hiking') || 'Caminhada', icon: 'trail-sign', isCustom: false },
-                  { name: t('dashboard.exercise.tennis') || 'Ténis', icon: 'tennisball', isCustom: false },
-                  { name: t('dashboard.exercise.football') || 'Futebol', icon: 'football', isCustom: false },
-                  { name: t('dashboard.exercise.basketball') || 'Basquetebol', icon: 'basketball', isCustom: false },
-                  { name: t('dashboard.exercise.other') || 'Outro', icon: 'ellipse', isCustom: false },
+                  { type: 'running', name: t('dashboard.exercise.running') || 'Corrida', icon: 'walk', isCustom: false },
+                  { type: 'walking', name: t('dashboard.exercise.walking') || 'Caminhada', icon: 'walk-outline', isCustom: false },
+                  { type: 'cycling', name: t('dashboard.exercise.cycling') || 'Ciclismo', icon: 'bicycle', isCustom: false },
+                  { type: 'swimming', name: t('dashboard.exercise.swimming') || 'Natação', icon: 'water', isCustom: false },
+                  { type: 'gym', name: t('dashboard.exercise.gym') || 'Ginásio', icon: 'barbell', isCustom: false },
+                  { type: 'yoga', name: t('dashboard.exercise.yoga') || 'Yoga', icon: 'leaf', isCustom: false },
+                  { type: 'pilates', name: t('dashboard.exercise.pilates') || 'Pilates', icon: 'body', isCustom: false },
+                  { type: 'dance', name: t('dashboard.exercise.dance') || 'Dança', icon: 'musical-notes', isCustom: false },
+                  { type: 'hiking', name: t('dashboard.exercise.hiking') || 'Caminhada', icon: 'trail-sign', isCustom: false },
+                  { type: 'tennis', name: t('dashboard.exercise.tennis') || 'Ténis', icon: 'tennisball', isCustom: false },
+                  { type: 'football', name: t('dashboard.exercise.football') || 'Futebol', icon: 'football', isCustom: false },
+                  { type: 'basketball', name: t('dashboard.exercise.basketball') || 'Basquetebol', icon: 'basketball', isCustom: false },
+                  { type: 'other', name: t('dashboard.exercise.other') || 'Outro', icon: 'ellipse', isCustom: false },
                 ].map((exercise) => (
                   <TouchableOpacity
-                    key={exercise.name}
+                    key={exercise.type}
                     onPress={() => setSelectedExerciseType(exercise.name)}
                     activeOpacity={0.7}
                     style={{

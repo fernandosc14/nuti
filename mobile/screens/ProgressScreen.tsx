@@ -284,30 +284,43 @@ export function ProgressScreen({ navigation }: any) {
       scrollEnabled={isPremium}
     >
       {/* Header */}
-      <View style={[
-        styles.header,
-        {
-          backgroundColor: 'transparent',
-          borderBottomColor: theme.colors.border || '#E5E7EB',
-        },
-      ]}>
-        <TouchableOpacity 
-          onPress={() => navigation.goBack()} 
-          style={styles.backButton}
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 20,
+        paddingTop: 8,
+        paddingBottom: 12,
+        position: 'relative',
+        zIndex: 100,
+        minHeight: 56,
+      }}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
           activeOpacity={0.7}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: theme.colors.card,
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1001,
+            position: 'absolute',
+            left: 0,
+          }}
         >
-          <Ionicons 
-            name="arrow-back" 
-            size={24} 
-            color={theme.colors.primary || '#3BB273'} 
-          />
+          <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
         </TouchableOpacity>
-        <View style={styles.headerTextContainer}>
-          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', zIndex: 0 }}>
+          <Text style={{
+            fontSize: 28,
+            fontWeight: '700',
+            color: theme.colors.text,
+            textAlign: 'center',
+            lineHeight: 40,
+          }}>
             {t('progress.title')}
-          </Text>
-          <Text style={[styles.headerSubtitle, { color: theme.colors.textSecondary || '#6B7280' }]}>
-            {t('progress.subtitle')}
           </Text>
         </View>
       </View>

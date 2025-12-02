@@ -19,6 +19,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
+import { calculateCalorieGoalFromProfile } from '../utils/nutritionUtils';
 
 type WorkoutFrequency = 'none' | '1x' | '1-2x' | '2-3x' | '3-4x' | '5-6x' | 'daily';
 
@@ -102,9 +103,37 @@ export function EditWorkoutsPerWeekScreen({ navigation }: any) {
 
     setLoading(true);
     try {
-      await updateProfile({
+      // Recalcular calorias e macros baseado nos novos treinos por semana
+      // Criar um perfil temporário com os novos valores para calcular
+      const tempProfile = {
+        ...profile,
         workoutsPerWeek: selectedWorkout,
-      });
+      } as any;
+      
+      const calculatedPlan = calculateCalorieGoalFromProfile(tempProfile);
+      
+      // Preparar dados para atualizar
+      const updateData: any = {
+        workoutsPerWeek: selectedWorkout,
+      };
+
+      // Se conseguiu calcular, adicionar também as calorias e macros recalculadas
+      if (calculatedPlan) {
+        const calculatedCalories = calculatedPlan.calories;
+        const calculatedProtein = Math.round((calculatedCalories * 0.30) / 4);
+        const calculatedCarbs = Math.round((calculatedCalories * 0.40) / 4);
+        const calculatedFat = Math.round((calculatedCalories * 0.30) / 9);
+
+        updateData.dailyCalorieGoal = calculatedCalories;
+        updateData.dailyProteinGoal = calculatedProtein;
+        updateData.dailyCarbsGoal = calculatedCarbs;
+        updateData.dailyFatGoal = calculatedFat;
+      }
+
+      // Atualizar tudo de uma vez
+      await updateProfile(updateData);
+
+      // Forçar refresh do profile para garantir que tudo está atualizado
       await refreshProfile();
 
       setLoading(false);

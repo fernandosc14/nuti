@@ -9,6 +9,10 @@
 import { getCache, setCache } from '../utils/cacheUtils';
 import { FOOD_DATABASE, enhanceNutritionalValues } from './foodDatabase';
 import type { Language } from '../context/LanguageContext';
+import { db } from './firebase';
+import { collection, query, where, getDocs, Timestamp, addDoc, orderBy } from 'firebase/firestore';
+import type { UserProfile } from '../context/UserContext';
+import { getAgeFromDate } from '../utils/nutritionUtils';
 
 /**
  * Interface para itens de comida
@@ -1117,6 +1121,267 @@ export interface ChatMessage {
 }
 
 /**
+ * Interface para sugestão de refeição extraída da resposta da IA
+ */
+export interface ParsedMealSuggestion {
+  name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  foods?: Array<{
+    name: string;
+    weight: number;
+    caloriesPer100g: number;
+    proteinPer100g: number;
+    carbsPer100g: number;
+    fatPer100g: number;
+  }>;
+}
+
+/**
+ * Interface para sugestão de treino extraída da resposta da IA
+ */
+export interface ParsedExerciseSuggestion {
+  name: string;
+  type: 'running' | 'walking' | 'cycling' | 'swimming' | 'gym' | 'yoga' | 'pilates' | 'dance' | 'hiking' | 'tennis' | 'football' | 'basketball' | 'other';
+  duration: number;
+  calories: number;
+}
+
+/**
+ * Interface para contexto do utilizador no chat
+ */
+export interface UserChatContext {
+  profile: UserProfile;
+  recentMeals: Array<{
+    name: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    mealType: string;
+    date: Date;
+    foods?: Array<{
+      name: string;
+      weight: number;
+      caloriesPer100g: number;
+      proteinPer100g: number;
+      carbsPer100g: number;
+      fatPer100g: number;
+    }>;
+  }>;
+  recentExercises: Array<{
+    name: string;
+    type: string;
+    duration: number;
+    calories: number;
+    date: Date;
+  }>;
+  savedMeals: Array<{
+    name: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  }>;
+  customExerciseTypes: Array<{
+    name: string;
+    caloriesPerHour?: number;
+  }>;
+  waterIntake: number; // ml
+  todayCalories: number;
+  todayProtein: number;
+  todayCarbs: number;
+  todayFat: number;
+}
+
+/**
+ * Busca dados do utilizador para contexto do chat
+ */
+export async function getUserChatContext(userId: string): Promise<UserChatContext | null> {
+  try {
+    // Buscar perfil do utilizador
+    const { doc, getDoc } = await import('firebase/firestore');
+    const userRef = doc(db, 'users', userId);
+    const userSnap = await getDoc(userRef);
+    
+    if (!userSnap.exists()) {
+      return null;
+    }
+    
+    const profileData = userSnap.data();
+    const profile: UserProfile = {
+      id: userId,
+      name: profileData.name || '',
+      email: profileData.email || '',
+      weight: profileData.weight,
+      height: profileData.height,
+      goal: profileData.goal,
+      restrictions: profileData.restrictions || [],
+      plan: profileData.plan || 'free',
+      streak: profileData.streak || 0,
+      badges: profileData.badges || [],
+      createdAt: profileData.createdAt?.toDate() || new Date(),
+      gender: profileData.gender,
+      workoutsPerWeek: profileData.workoutsPerWeek,
+      dateOfBirth: profileData.dateOfBirth?.toDate(),
+      desiredWeight: profileData.desiredWeight,
+      diet: profileData.diet,
+      goalSpeed: profileData.goalSpeed,
+      dailyCalorieGoal: profileData.dailyCalorieGoal,
+      dailyProteinGoal: profileData.dailyProteinGoal,
+      dailyCarbsGoal: profileData.dailyCarbsGoal,
+      dailyFatGoal: profileData.dailyFatGoal,
+      weightHistory: profileData.weightHistory?.map((entry: any) => ({
+        weight: entry.weight,
+        date: entry.date?.toDate() || new Date(),
+      })) || [],
+    };
+
+    // Buscar refeições dos últimos 7 dias
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+    
+    const mealsRef = collection(db, 'meals');
+    const mealsQuery = query(
+      mealsRef,
+      where('userId', '==', userId),
+      where('date', '>=', Timestamp.fromDate(sevenDaysAgo)),
+      orderBy('date', 'desc')
+    );
+    const mealsSnapshot = await getDocs(mealsQuery);
+    
+    const recentMeals: UserChatContext['recentMeals'] = [];
+    mealsSnapshot.forEach((doc) => {
+      const data = doc.data();
+      recentMeals.push({
+        name: data.name || '',
+        calories: data.calories || 0,
+        protein: data.protein || 0,
+        carbs: data.carbs || 0,
+        fat: data.fat || 0,
+        mealType: data.mealType || 'snack',
+        date: data.date?.toDate() || new Date(),
+        foods: data.foods || undefined,
+      });
+    });
+
+    // Buscar treinos dos últimos 7 dias
+    const exercisesRef = collection(db, 'exercises');
+    const exercisesQuery = query(
+      exercisesRef,
+      where('userId', '==', userId),
+      where('date', '>=', Timestamp.fromDate(sevenDaysAgo)),
+      orderBy('date', 'desc')
+    );
+    const exercisesSnapshot = await getDocs(exercisesQuery);
+    
+    const recentExercises: UserChatContext['recentExercises'] = [];
+    exercisesSnapshot.forEach((doc) => {
+      const data = doc.data();
+      recentExercises.push({
+        name: data.name || '',
+        type: data.type || 'other',
+        duration: data.duration || 0,
+        calories: data.calories || 0,
+        date: data.date?.toDate() || new Date(),
+      });
+    });
+
+    // Buscar refeições salvas
+    const savedMealsRef = collection(db, 'savedMeals');
+    const savedMealsQuery = query(
+      savedMealsRef,
+      where('userId', '==', userId)
+    );
+    const savedMealsSnapshot = await getDocs(savedMealsQuery);
+    
+    const savedMeals: UserChatContext['savedMeals'] = [];
+    savedMealsSnapshot.forEach((doc) => {
+      const data = doc.data();
+      savedMeals.push({
+        name: data.name || '',
+        calories: data.calories || 0,
+        protein: data.protein || 0,
+        carbs: data.carbs || 0,
+        fat: data.fat || 0,
+      });
+    });
+
+    // Buscar tipos de exercício customizados
+    const customExerciseTypesRef = collection(db, 'customExerciseTypes');
+    const customExerciseTypesQuery = query(
+      customExerciseTypesRef,
+      where('userId', '==', userId)
+    );
+    const customExerciseTypesSnapshot = await getDocs(customExerciseTypesQuery);
+    
+    const customExerciseTypes: UserChatContext['customExerciseTypes'] = [];
+    customExerciseTypesSnapshot.forEach((doc) => {
+      const data = doc.data();
+      customExerciseTypes.push({
+        name: data.name || '',
+        caloriesPerHour: data.caloriesPerHour,
+      });
+    });
+
+    // Buscar água consumida hoje
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dateStr = today.toISOString().split('T')[0];
+    const waterDocRef = doc(db, 'water', `${userId}_${dateStr}`);
+    const waterDoc = await getDoc(waterDocRef);
+    const waterIntake = waterDoc.exists() ? (waterDoc.data().amount || 0) : 0;
+
+    // Calcular totais de hoje
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(todayStart);
+    todayEnd.setDate(todayEnd.getDate() + 1);
+    
+    const todayMealsQuery = query(
+      mealsRef,
+      where('userId', '==', userId),
+      where('date', '>=', Timestamp.fromDate(todayStart)),
+      where('date', '<', Timestamp.fromDate(todayEnd))
+    );
+    const todayMealsSnapshot = await getDocs(todayMealsQuery);
+    
+    let todayCalories = 0;
+    let todayProtein = 0;
+    let todayCarbs = 0;
+    let todayFat = 0;
+    
+    todayMealsSnapshot.forEach((doc) => {
+      const data = doc.data();
+      todayCalories += data.calories || 0;
+      todayProtein += data.protein || 0;
+      todayCarbs += data.carbs || 0;
+      todayFat += data.fat || 0;
+    });
+
+    return {
+      profile,
+      recentMeals,
+      recentExercises,
+      savedMeals,
+      customExerciseTypes,
+      waterIntake,
+      todayCalories,
+      todayProtein,
+      todayCarbs,
+      todayFat,
+    };
+  } catch (error) {
+    console.error('Error fetching user chat context:', error);
+    return null;
+  }
+}
+
+/**
  * Envia mensagem para Groq API e retorna resposta
  */
 // Prompts do sistema em diferentes idiomas
@@ -1129,10 +1394,128 @@ const systemPrompts: Record<Language, string> = {
   it: 'Sei un assistente nutrizionale amichevole e utile di Nuti. Rispondi sempre in italiano in modo breve e amichevole. Aiuta gli utenti con domande su nutrizione, diete e alimentazione sana. Il tuo obiettivo è essere utile, non un bot.',
 };
 
+/**
+ * Gera contexto do utilizador em formato de texto para o prompt do sistema
+ */
+function formatUserContext(context: UserChatContext, language: Language): string {
+  const { profile, recentMeals, recentExercises, savedMeals, customExerciseTypes, waterIntake, todayCalories, todayProtein, todayCarbs, todayFat } = context;
+  
+  const age = profile.dateOfBirth ? getAgeFromDate(profile.dateOfBirth) : null;
+  
+  const translations: Record<Language, Record<string, string>> = {
+    pt: {
+      profile: 'Perfil do Utilizador',
+      recentMeals: 'Refeições Recentes (últimos 7 dias)',
+      recentExercises: 'Treinos Recentes (últimos 7 dias)',
+      savedMeals: 'Refeições Salvas',
+      customExercises: 'Tipos de Exercício Personalizados',
+      today: 'Hoje',
+      water: 'Água consumida hoje',
+    },
+    en: {
+      profile: 'User Profile',
+      recentMeals: 'Recent Meals (last 7 days)',
+      recentExercises: 'Recent Workouts (last 7 days)',
+      savedMeals: 'Saved Meals',
+      customExercises: 'Custom Exercise Types',
+      today: 'Today',
+      water: 'Water consumed today',
+    },
+    es: {
+      profile: 'Perfil del Usuario',
+      recentMeals: 'Comidas Recientes (últimos 7 días)',
+      recentExercises: 'Entrenamientos Recientes (últimos 7 días)',
+      savedMeals: 'Comidas Guardadas',
+      customExercises: 'Tipos de Ejercicio Personalizados',
+      today: 'Hoy',
+      water: 'Agua consumida hoy',
+    },
+    fr: {
+      profile: 'Profil Utilisateur',
+      recentMeals: 'Repas Récents (7 derniers jours)',
+      recentExercises: 'Entraînements Récents (7 derniers jours)',
+      savedMeals: 'Repas Enregistrés',
+      customExercises: 'Types d\'Exercice Personnalisés',
+      today: 'Aujourd\'hui',
+      water: 'Eau consommée aujourd\'hui',
+    },
+    de: {
+      profile: 'Benutzerprofil',
+      recentMeals: 'Kürzliche Mahlzeiten (letzte 7 Tage)',
+      recentExercises: 'Kürzliche Workouts (letzte 7 Tage)',
+      savedMeals: 'Gespeicherte Mahlzeiten',
+      customExercises: 'Benutzerdefinierte Übungstypen',
+      today: 'Heute',
+      water: 'Heute konsumiertes Wasser',
+    },
+    it: {
+      profile: 'Profilo Utente',
+      recentMeals: 'Pasti Recenti (ultimi 7 giorni)',
+      recentExercises: 'Allenamenti Recenti (ultimi 7 giorni)',
+      savedMeals: 'Pasti Salvati',
+      customExercises: 'Tipi di Esercizio Personalizzati',
+      today: 'Oggi',
+      water: 'Acqua consumata oggi',
+    },
+  };
+  
+  const t = translations[language] || translations.en;
+  
+  let contextText = `\n\n${t.profile}:\n`;
+  contextText += `- Nome: ${profile.name}\n`;
+  if (age) contextText += `- Idade: ${age} anos\n`;
+  if (profile.weight) contextText += `- Peso: ${profile.weight} kg\n`;
+  if (profile.height) contextText += `- Altura: ${profile.height} cm\n`;
+  if (profile.goal) contextText += `- Objetivo: ${profile.goal}\n`;
+  if (profile.desiredWeight) contextText += `- Peso desejado: ${profile.desiredWeight} kg\n`;
+  if (profile.goalSpeed) contextText += `- Rapidez: ${profile.goalSpeed} kg/semana\n`;
+  if (profile.diet) contextText += `- Dieta: ${profile.diet}\n`;
+  if (profile.workoutsPerWeek) contextText += `- Treinos por semana: ${profile.workoutsPerWeek}\n`;
+  if (profile.dailyCalorieGoal) contextText += `- Meta de calorias diárias: ${profile.dailyCalorieGoal} kcal\n`;
+  
+  contextText += `\n${t.today}:\n`;
+  contextText += `- Calorias: ${Math.round(todayCalories)}/${profile.dailyCalorieGoal || 'N/A'} kcal\n`;
+  contextText += `- Proteína: ${Math.round(todayProtein)}g\n`;
+  contextText += `- Carboidratos: ${Math.round(todayCarbs)}g\n`;
+  contextText += `- Gordura: ${Math.round(todayFat)}g\n`;
+  contextText += `- ${t.water}: ${waterIntake} ml\n`;
+  
+  if (recentMeals.length > 0) {
+    contextText += `\n${t.recentMeals}:\n`;
+    recentMeals.slice(0, 10).forEach((meal, idx) => {
+      contextText += `${idx + 1}. ${meal.name} (${meal.mealType}): ${Math.round(meal.calories)} kcal, ${Math.round(meal.protein)}g P, ${Math.round(meal.carbs)}g C, ${Math.round(meal.fat)}g F\n`;
+    });
+  }
+  
+  if (recentExercises.length > 0) {
+    contextText += `\n${t.recentExercises}:\n`;
+    recentExercises.slice(0, 10).forEach((exercise, idx) => {
+      contextText += `${idx + 1}. ${exercise.name} (${exercise.type}): ${exercise.duration} min, ${Math.round(exercise.calories)} kcal\n`;
+    });
+  }
+  
+  if (savedMeals.length > 0) {
+    contextText += `\n${t.savedMeals}:\n`;
+    savedMeals.slice(0, 10).forEach((meal, idx) => {
+      contextText += `${idx + 1}. ${meal.name}: ${Math.round(meal.calories)} kcal, ${Math.round(meal.protein)}g P, ${Math.round(meal.carbs)}g C, ${Math.round(meal.fat)}g F\n`;
+    });
+  }
+  
+  if (customExerciseTypes.length > 0) {
+    contextText += `\n${t.customExercises}:\n`;
+    customExerciseTypes.forEach((type, idx) => {
+      contextText += `${idx + 1}. ${type.name}${type.caloriesPerHour ? ` (${type.caloriesPerHour} kcal/h)` : ''}\n`;
+    });
+  }
+  
+  return contextText;
+}
+
 export async function sendChatMessage(
   messages: ChatMessage[],
   userId: string,
-  language: Language = 'en'
+  language: Language = 'en',
+  userContext?: UserChatContext | null
 ): Promise<string> {
   try {
     const groqApiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY || '';
@@ -1141,7 +1524,670 @@ export async function sendChatMessage(
       throw new Error('Groq API key não configurada');
     }
 
-    const systemPrompt = systemPrompts[language] || systemPrompts.en;
+    let systemPrompt = systemPrompts[language] || systemPrompts.en;
+    
+    // Adicionar contexto do utilizador ao system prompt se disponível
+    if (userContext) {
+      const contextText = formatUserContext(userContext, language);
+      
+      const contextInstructions: Record<Language, string> = {
+        pt: `\n\nIMPORTANTE: Usa as informações do utilizador para dar conselhos personalizados. 
+
+⚠️ REGRA CRÍTICA SOBRE A DIETA DO UTILIZADOR:
+- SEMPRE respeita a dieta do utilizador (vegetariana, vegana, sem glúten, etc.)
+- NUNCA sugiras ou menciones alimentos que não sejam compatíveis com a dieta do utilizador
+- Se o utilizador for vegetariano, NÃO menciones carne, peixe ou outros produtos de origem animal
+- Se o utilizador for vegano, NÃO menciones qualquer produto de origem animal (carne, peixe, ovos, laticínios, mel, etc.)
+- Se o utilizador tiver restrições (sem glúten, sem lactose, etc.), NÃO menciones alimentos que contenham esses ingredientes
+- Quando listares alimentos ou deres dicas, VERIFICA SEMPRE se cada alimento é compatível com a dieta antes de mencionar
+- Se não tiveres a certeza se um alimento é compatível, NÃO o menciones
+- A dieta do utilizador está indicada no contexto - USA-A SEMPRE como referência
+
+IMPORTANTE: Só inclui blocos JSON (<NUTI_MEAL> ou <NUTI_EXERCISE>) quando estiveres a SUGERIR uma refeição ou treino específico que o utilizador possa adicionar diretamente. Para perguntas gerais, conselhos ou listas de alimentos, NÃO incluas JSON.
+
+FORMATAÇÃO DE TEXTO:
+- Quando listares alimentos, coloca cada alimento em **negrito** e organiza em lista
+- Quando mencionares calorias, valores numéricos importantes ou dados do utilizador (peso, altura, objetivo, etc.), coloca em **negrito**
+- Quando mencionares a dieta do utilizador (ex: "vegetariana", "vegana", "sem glúten"), coloca em **negrito** para destacar que não te esqueceste desse fator
+- Usa listas organizadas quando apropriado (ex: "• **Alimento 1**\n• **Alimento 2**")
+
+QUANDO SUGERIRES UMA REFEIÇÃO:
+1. Menciona as calorias já ingeridas hoje de forma natural:
+   - Se tiver 0 calorias: NÃO menciones "0 kcal" ou números. Diz algo natural como "Ainda não registaste nenhuma refeição hoje" ou "Começaste o dia sem registar refeições"
+   - Se tiver calorias: menciona de forma natural (ex: "Já consumiste 1200/2000 kcal hoje" ou "Estás em 1200 das 2000 kcal diárias")
+2. Se não tiver ingerido suficiente, destaca isso em **negrito** (ex: "**Ainda faltam 800 kcal para atingires o teu objetivo**")
+3. Inclui o nome da refeição em **negrito** logo no início
+4. Organiza a mensagem em 2-3 parágrafos bem estruturados, com uma linha em branco entre cada parágrafo
+5. IMPORTANTE: Quando incluires alimentos no JSON, usa sempre os valores nutricionais do alimento COZINHADO/PREPARADO, não cru. Por exemplo:
+   - Arroz cozinhado: ~130 kcal/100g (não arroz cru: ~350 kcal/100g)
+   - Frango grelhado: ~165 kcal/100g (não frango cru: ~165 kcal/100g, mas o peso muda ao cozinhar)
+   - Massa cozinhada: ~130 kcal/100g (não massa crua: ~350 kcal/100g)
+   - O peso no JSON deve ser o peso do alimento já cozinhado/preparado
+6. Inclui um bloco JSON no final com os dados
+
+QUANDO SUGERIRES UM TREINO:
+1. Se o utilizador tiver 0 calorias consumidas: NÃO menciones "0 kcal" ou números. Diz algo natural como "Ainda não registaste nenhuma refeição hoje" ou simplesmente não menciones as calorias
+2. Se tiver calorias: menciona de forma natural se for relevante
+3. Inclui o nome do treino em **negrito** logo no início
+4. Organiza a mensagem em 2-3 parágrafos bem estruturados, com uma linha em branco entre cada parágrafo
+5. Inclui um bloco JSON no final com os dados
+
+Formato da resposta:
+
+Para REFEIÇÕES:
+<NUTI_MEAL>
+{
+  "name": "Nome da refeição",
+  "calories": número_de_calorias,
+  "protein": proteína_em_gramas,
+  "carbs": carboidratos_em_gramas,
+  "fat": gordura_em_gramas,
+  "mealType": "breakfast" | "lunch" | "dinner" | "snack",
+  "foods": [
+    {
+      "name": "Nome do alimento (cozinhado/preparado)",
+      "weight": peso_em_gramas_do_alimento_cozinhado,
+      "caloriesPer100g": calorias_por_100g_do_alimento_cozinhado,
+      "proteinPer100g": proteína_por_100g_do_alimento_cozinhado,
+      "carbsPer100g": carboidratos_por_100g_do_alimento_cozinhado,
+      "fatPer100g": gordura_por_100g_do_alimento_cozinhado
+    }
+  ]
+}
+IMPORTANTE: Todos os valores nutricionais e pesos devem ser do alimento COZINHADO/PREPARADO, não cru.
+</NUTI_MEAL>
+
+Para TREINOS:
+<NUTI_EXERCISE>
+{
+  "name": "Nome do treino",
+  "type": "running" | "walking" | "cycling" | "swimming" | "gym" | "yoga" | "pilates" | "dance" | "hiking" | "tennis" | "football" | "basketball" | "other",
+  "duration": duração_em_minutos,
+  "calories": calorias_queimadas_estimadas
+}
+</NUTI_EXERCISE>
+
+Exemplo de resposta para refeição:
+
+**Nome da Refeição**
+
+[Mensagem sobre calorias: se 0 kcal, diz algo natural como "Ainda não registaste nenhuma refeição hoje" SEM mencionar "0 kcal". Se tiver calorias, menciona de forma natural. Se insuficiente: **Ainda faltam ZZZ kcal para atingires o teu objetivo diário.**]
+
+Primeiro parágrafo: Descrição da refeição e benefícios nutricionais.
+
+Segundo parágrafo: Informações sobre como esta refeição se encaixa no teu plano diário.
+
+<NUTI_MEAL>...</NUTI_MEAL>
+
+Exemplo de resposta para treino:
+
+**Nome do Treino**
+
+[Mensagem sobre calorias: se 0 kcal, NÃO menciones "0 kcal". Diz algo natural como "Ainda não registaste nenhuma refeição hoje" ou simplesmente não menciones as calorias. Se tiver calorias, menciona apenas se for relevante.]
+
+Primeiro parágrafo: Descrição do treino e benefícios.
+
+Segundo parágrafo: Informações sobre como este treino se encaixa no teu plano.
+
+<NUTI_EXERCISE>...</NUTI_EXERCISE>
+
+Exemplo de resposta para lista de alimentos:
+
+**Alimentos Ricos em Calorias**
+
+Considerando a tua dieta **vegetariana** e o teu objetivo de **ganhar peso**, aqui estão alguns alimentos ricos em calorias:
+
+• **Abacate** - **250 kcal/100g**, rico em gorduras saudáveis
+• **Frutos secos** - **600-700 kcal/100g**, excelente fonte de proteína e gordura
+• **Azeite** - **900 kcal/100g**, perfeito para adicionar calorias saudáveis
+• **Quinoa cozinhada** - **120 kcal/100g**, rico em proteína e carboidratos (nota: valores para quinoa cozinhada, não crua)
+
+IMPORTANTE: Quando mencionares valores nutricionais, indica sempre se são para o alimento cru ou cozinhado. Prefere sempre valores do alimento cozinhado/preparado quando aplicável.
+
+Estes alimentos são ideais para a tua dieta **vegetariana** e vão ajudar-te a atingir o teu objetivo de **ganhar peso**.`,
+        en: `\n\nIMPORTANT: Use user information for personalized advice.
+
+⚠️ CRITICAL RULE ABOUT USER'S DIET:
+- ALWAYS respect the user's diet (vegetarian, vegan, gluten-free, etc.)
+- NEVER suggest or mention foods that are not compatible with the user's diet
+- If the user is vegetarian, do NOT mention meat, fish, or other animal products
+- If the user is vegan, do NOT mention any animal products (meat, fish, eggs, dairy, honey, etc.)
+- If the user has restrictions (gluten-free, lactose-free, etc.), do NOT mention foods containing those ingredients
+- When listing foods or giving tips, ALWAYS check if each food is compatible with the diet before mentioning
+- If you're not sure if a food is compatible, do NOT mention it
+- The user's diet is indicated in the context - ALWAYS use it as a reference
+
+IMPORTANT: Only include JSON blocks (<NUTI_MEAL> or <NUTI_EXERCISE>) when SUGGESTING a specific meal or workout that the user can add directly. For general questions, advice, or food lists, do NOT include JSON.
+
+TEXT FORMATTING:
+- When listing foods, put each food in **bold** and organize in a list
+- When mentioning calories, important numeric values, or user data (weight, height, goal, etc.), put in **bold**
+- When mentioning the user's diet (e.g., "vegetarian", "vegan", "gluten-free"), put in **bold** to highlight that you haven't forgotten this factor
+- Use organized lists when appropriate (e.g., "• **Food 1**\n• **Food 2**")
+
+WHEN SUGGESTING A MEAL:
+1. Mention calories already consumed today in a natural way:
+   - If 0 calories: say something like "You haven't logged any meals today yet" or "You started the day without logging any meals"
+   - If has calories: mention naturally (e.g., "You've consumed 1200/2000 kcal today" or "You're at 1200 out of 2000 daily kcal")
+2. If insufficient, highlight this in **bold** (e.g., "**You still need 800 kcal to reach your daily goal**")
+3. Include the meal name in **bold** at the beginning
+4. Organize the message in 2-3 well-structured paragraphs, with a blank line between each paragraph
+5. IMPORTANT: When including foods in JSON, always use nutritional values for COOKED/PREPARED foods, not raw. For example:
+   - Cooked rice: ~130 kcal/100g (not raw rice: ~350 kcal/100g)
+   - Grilled chicken: ~165 kcal/100g (weight changes when cooked)
+   - Cooked pasta: ~130 kcal/100g (not raw pasta: ~350 kcal/100g)
+   - The weight in JSON should be the weight of the food already cooked/prepared
+6. Include a JSON block at the end with the data
+
+Response format:
+
+For MEALS:
+<NUTI_MEAL>
+{
+  "name": "Meal name",
+  "calories": number_of_calories,
+  "protein": protein_in_grams,
+  "carbs": carbs_in_grams,
+  "fat": fat_in_grams,
+  "mealType": "breakfast" | "lunch" | "dinner" | "snack",
+  "foods": [
+    {
+      "name": "Food name",
+      "weight": weight_in_grams,
+      "caloriesPer100g": calories_per_100g,
+      "proteinPer100g": protein_per_100g,
+      "carbsPer100g": carbs_per_100g,
+      "fatPer100g": fat_per_100g
+    }
+  ]
+}
+</NUTI_MEAL>
+
+For WORKOUTS:
+<NUTI_EXERCISE>
+{
+  "name": "Workout name",
+  "type": "running" | "walking" | "cycling" | "swimming" | "gym" | "yoga" | "pilates" | "dance" | "hiking" | "tennis" | "football" | "basketball" | "other",
+  "duration": duration_in_minutes,
+  "calories": estimated_calories_burned
+}
+</NUTI_EXERCISE>
+
+Example response for meal:
+
+**Meal Name**
+
+[Calories message: if 0 kcal, say something natural like "You haven't logged any meals today yet". If has calories, mention naturally. If insufficient: **You still need ZZZ kcal to reach your daily goal.**]
+
+First paragraph: Description of the meal and nutritional benefits.
+
+Second paragraph: Information on how this meal fits into your daily plan.
+
+<NUTI_MEAL>...</NUTI_MEAL>
+
+Example response for food list:
+
+**High-Calorie Foods**
+
+Considering your **vegetarian** diet and your goal to **gain weight**, here are some high-calorie foods:
+
+• **Avocado** - **250 kcal/100g**, rich in healthy fats
+• **Nuts** - **600-700 kcal/100g**, excellent source of protein and fat
+• **Olive oil** - **900 kcal/100g**, perfect for adding healthy calories
+• **Quinoa** - **368 kcal/100g**, rich in protein and carbohydrates
+
+These foods are ideal for your **vegetarian** diet and will help you achieve your goal to **gain weight**.
+
+Example response for workout:
+
+**Workout Name**
+
+[Calories message: if 0 kcal, do NOT mention "0 kcal". Say something natural like "You haven't logged any meals today yet" or simply don't mention calories. If has calories, mention only if relevant.]
+
+First paragraph: Description of the workout and benefits.
+
+Second paragraph: Information on how this workout fits into your plan.
+
+<NUTI_EXERCISE>...</NUTI_EXERCISE>`,
+        es: `\n\nIMPORTANTE: Usa la información del usuario para consejos personalizados.
+
+⚠️ REGLA CRÍTICA SOBRE LA DIETA DEL USUARIO:
+- SIEMPRE respeta la dieta del usuario (vegetariana, vegana, sin gluten, etc.)
+- NUNCA sugieras o menciones alimentos que no sean compatibles con la dieta del usuario
+- Si el usuario es vegetariano, NO menciones carne, pescado u otros productos de origen animal
+- Si el usuario es vegano, NO menciones ningún producto de origen animal (carne, pescado, huevos, lácteos, miel, etc.)
+- Si el usuario tiene restricciones (sin gluten, sin lactosa, etc.), NO menciones alimentos que contengan esos ingredientes
+- Al listar alimentos o dar consejos, SIEMPRE verifica si cada alimento es compatible con la dieta antes de mencionarlo
+- Si no estás seguro de si un alimento es compatible, NO lo menciones
+- La dieta del usuario está indicada en el contexto - ÚSALA SIEMPRE como referencia
+
+IMPORTANTE: Solo incluye bloques JSON (<NUTI_MEAL> o <NUTI_EXERCISE>) cuando estés SUGIRIENDO una comida o entrenamiento específico que el usuario pueda agregar directamente. Para preguntas generales, consejos o listas de alimentos, NO incluyas JSON.
+
+FORMATO DE TEXTO:
+- Al listar alimentos, pon cada alimento en **negrita** y organízalos en lista
+- Al mencionar calorías, valores numéricos importantes o datos del usuario (peso, altura, objetivo, etc.), pon en **negrita**
+- Al mencionar la dieta del usuario (ej: "vegetariana", "vegana", "sin gluten"), pon en **negrita** para destacar que no te has olvidado de ese factor
+- Usa listas organizadas cuando sea apropiado (ej: "• **Alimento 1**\n• **Alimento 2**")
+
+CUANDO SUGIERAS UNA COMIDA:
+1. Menciona las calorías ya consumidas hoy de forma natural:
+   - Si tiene 0 calorías: di algo como "Aún no has registrado ninguna comida hoy" o "Empezaste el día sin registrar comidas"
+   - Si tiene calorías: menciona de forma natural (ej: "Ya has consumido 1200/2000 kcal hoy" o "Estás en 1200 de las 2000 kcal diarias")
+2. Si no has consumido suficiente, destaca esto en **negrita** (ej: "**Aún te faltan 800 kcal para alcanzar tu objetivo**")
+3. Incluye el nombre de la comida en **negrita** al inicio
+4. Organiza el mensaje en 2-3 párrafos bien estructurados, con una línea en blanco entre cada párrafo
+5. IMPORTANTE: Cuando incluyas alimentos en el JSON, usa siempre los valores nutricionales del alimento COCINADO/PREPARADO, no crudo. Por ejemplo:
+   - Arroz cocido: ~130 kcal/100g (no arroz crudo: ~350 kcal/100g)
+   - Pollo a la parrilla: ~165 kcal/100g (el peso cambia al cocinar)
+   - Pasta cocida: ~130 kcal/100g (no pasta cruda: ~350 kcal/100g)
+   - El peso en el JSON debe ser el peso del alimento ya cocinado/preparado
+6. Incluye un bloque JSON al final con los datos
+
+CUANDO SUGIERAS UN ENTRENAMIENTO:
+1. Si el usuario tiene 0 calorías consumidas: NO menciones "0 kcal". Di algo natural como "Aún no has registrado ninguna comida hoy" o simplemente no menciones las calorías
+2. Si tiene calorías: menciona de forma natural si es relevante
+3. Incluye el nombre del entrenamiento en **negrita** al inicio
+4. Organiza el mensaje en 2-3 párrafos bien estructurados, con una línea en blanco entre cada párrafo
+5. Incluye un bloque JSON al final con los datos
+
+Formato de la respuesta:
+
+Para COMIDAS:
+<NUTI_MEAL>
+{
+  "name": "Nombre de la comida",
+  "calories": número_de_calorías,
+  "protein": proteína_en_gramos,
+  "carbs": carbohidratos_en_gramos,
+  "fat": grasa_en_gramos,
+  "mealType": "breakfast" | "lunch" | "dinner" | "snack",
+  "foods": [
+    {
+      "name": "Nombre del alimento",
+      "weight": peso_en_gramos,
+      "caloriesPer100g": calorías_por_100g,
+      "proteinPer100g": proteína_por_100g,
+      "carbsPer100g": carbohidratos_por_100g,
+      "fatPer100g": grasa_por_100g
+    }
+  ]
+}
+</NUTI_MEAL>
+
+Para ENTRENAMIENTOS:
+<NUTI_EXERCISE>
+{
+  "name": "Nombre del entrenamiento",
+  "type": "running" | "walking" | "cycling" | "swimming" | "gym" | "yoga" | "pilates" | "dance" | "hiking" | "tennis" | "football" | "basketball" | "other",
+  "duration": duración_en_minutos,
+  "calories": calorías_quemadas_estimadas
+}
+</NUTI_EXERCISE>
+
+Ejemplo de respuesta para comida:
+
+**Nombre de la Comida**
+
+[Mensaje sobre calorías: si 0 kcal, di algo natural como "Aún no has registrado ninguna comida hoy". Si tiene calorías, menciona de forma natural. Si insuficiente: **Aún te faltan ZZZ kcal para alcanzar tu objetivo diario.**]
+
+Primer párrafo: Descripción de la comida y beneficios nutricionales.
+
+Segundo párrafo: Información sobre cómo esta comida encaja en tu plan diario.
+
+<NUTI_MEAL>...</NUTI_MEAL>
+
+Ejemplo de respuesta para entrenamiento:
+
+**Nombre del Entrenamiento**
+
+[Mensaje sobre calorías: si 0 kcal, NO menciones "0 kcal". Di algo natural como "Aún no has registrado ninguna comida hoy" o simplemente no menciones las calorías. Si tiene calorías, menciona solo si es relevante.]
+
+Primer párrafo: Descripción del entrenamiento y beneficios.
+
+Segundo párrafo: Información sobre cómo este entrenamiento encaja en tu plan.
+
+<NUTI_EXERCISE>...</NUTI_EXERCISE>
+
+Ejemplo de respuesta para lista de alimentos:
+
+**Alimentos Ricos en Calorías**
+
+Considerando tu dieta **vegetariana** y tu objetivo de **ganar peso**, aquí tienes algunos alimentos ricos en calorías:
+
+• **Aguacate** - **250 kcal/100g**, rico en grasas saludables
+• **Frutos secos** - **600-700 kcal/100g**, excelente fuente de proteína y grasa
+• **Aceite de oliva** - **900 kcal/100g**, perfecto para añadir calorías saludables
+• **Quinoa cocida** - **120 kcal/100g**, rica en proteína y carbohidratos (nota: valores para quinoa cocida, no cruda)
+
+IMPORTANTE: Cuando menciones valores nutricionales, indica siempre si son para el alimento crudo o cocido. Prefiere siempre valores del alimento cocido/preparado cuando sea aplicable.
+
+Estos alimentos son ideales para tu dieta **vegetariana** y te ayudarán a alcanzar tu objetivo de **ganar peso**.`,
+        fr: `\n\nIMPORTANT: Utilisez les informations de l'utilisateur pour des conseils personnalisés.
+
+⚠️ RÈGLE CRITIQUE SUR LE RÉGIME ALIMENTAIRE DE L'UTILISATEUR:
+- TOUJOURS respecter le régime alimentaire de l'utilisateur (végétarien, végan, sans gluten, etc.)
+- NE JAMAIS suggérer ou mentionner des aliments qui ne sont pas compatibles avec le régime de l'utilisateur
+- Si l'utilisateur est végétarien, NE PAS mentionner la viande, le poisson ou d'autres produits d'origine animale
+- Si l'utilisateur est végan, NE PAS mentionner aucun produit d'origine animale (viande, poisson, œufs, produits laitiers, miel, etc.)
+- Si l'utilisateur a des restrictions (sans gluten, sans lactose, etc.), NE PAS mentionner des aliments contenant ces ingrédients
+- Lors de la liste des aliments ou des conseils, TOUJOURS vérifier si chaque aliment est compatible avec le régime avant de le mentionner
+- Si vous n'êtes pas sûr qu'un aliment soit compatible, NE PAS le mentionner
+- Le régime de l'utilisateur est indiqué dans le contexte - UTILISEZ-LE TOUJOURS comme référence
+
+⚠️ RÈGLE CRITIQUE SUR LE RÉGIME ALIMENTAIRE DE L'UTILISATEUR:
+- TOUJOURS respecter le régime alimentaire de l'utilisateur (végétarien, végan, sans gluten, etc.)
+- NE JAMAIS suggérer ou mentionner des aliments qui ne sont pas compatibles avec le régime de l'utilisateur
+- Si l'utilisateur est végétarien, NE PAS mentionner la viande, le poisson ou d'autres produits d'origine animale
+- Si l'utilisateur est végan, NE PAS mentionner aucun produit d'origine animale (viande, poisson, œufs, produits laitiers, miel, etc.)
+- Si l'utilisateur a des restrictions (sans gluten, sans lactose, etc.), NE PAS mentionner des aliments contenant ces ingrédients
+- Lors de la liste des aliments ou des conseils, TOUJOURS vérifier si chaque aliment est compatible avec le régime avant de le mentionner
+- Si vous n'êtes pas sûr qu'un aliment soit compatible, NE PAS le mentionner
+- Le régime de l'utilisateur est indiqué dans le contexte - UTILISEZ-LE TOUJOURS comme référence
+
+IMPORTANT: N'incluez des blocs JSON (<NUTI_MEAL> ou <NUTI_EXERCISE>) que lorsque vous SUGGÉREZ un repas ou un entraînement spécifique que l'utilisateur peut ajouter directement. Pour les questions générales, conseils ou listes d'aliments, N'incluez PAS de JSON.
+
+FORMATAGE DE TEXTE:
+- Lors de la liste des aliments, mettez chaque aliment en **gras** et organisez en liste
+- Lors de la mention des calories, valeurs numériques importantes ou données de l'utilisateur (poids, taille, objectif, etc.), mettez en **gras**
+- Lors de la mention du régime de l'utilisateur (ex: "végétarien", "végan", "sans gluten"), mettez en **gras** pour souligner que vous n'avez pas oublié ce facteur
+- Utilisez des listes organisées lorsque approprié (ex: "• **Aliment 1**\n• **Aliment 2**")
+
+LORSQUE VOUS SUGGÉREZ UN REPAS:
+1. Mentionnez les calories déjà consommées aujourd'hui de manière naturelle:
+   - Si 0 calories: dites quelque chose comme "Vous n'avez pas encore enregistré de repas aujourd'hui" ou "Vous avez commencé la journée sans enregistrer de repas"
+   - Si a des calories: mentionnez naturellement (ex: "Vous avez déjà consommé 1200/2000 kcal aujourd'hui" ou "Vous êtes à 1200 sur 2000 kcal quotidiennes")
+2. Si insuffisant, mettez cela en **gras** (ex: "**Il vous manque encore 800 kcal pour atteindre votre objectif**")
+3. Incluez le nom du repas en **gras** au début
+4. Organisez le message en 2-3 paragraphes bien structurés, avec une ligne vide entre chaque paragraphe
+5. IMPORTANT: Lors de l'inclusion d'aliments dans le JSON, utilisez toujours les valeurs nutritionnelles des aliments CUITS/PRÉPARÉS, pas crus. Par exemple:
+   - Riz cuit: ~130 kcal/100g (pas riz cru: ~350 kcal/100g)
+   - Poulet grillé: ~165 kcal/100g (le poids change à la cuisson)
+   - Pâtes cuites: ~130 kcal/100g (pas pâtes crues: ~350 kcal/100g)
+   - Le poids dans le JSON doit être le poids de l'aliment déjà cuit/préparé
+6. Incluez un bloc JSON à la fin avec les données
+
+LORSQUE VOUS SUGGÉREZ UN ENTRAÎNEMENT:
+1. Si l'utilisateur a 0 calories consommées: NE mentionnez PAS "0 kcal". Dites quelque chose de naturel comme "Vous n'avez pas encore enregistré de repas aujourd'hui" ou ne mentionnez simplement pas les calories
+2. Si a des calories: mentionnez de manière naturelle si pertinent
+3. Incluez le nom de l'entraînement en **gras** au début
+4. Organisez le message en 2-3 paragraphes bien structurés, avec une ligne vide entre chaque paragraphe
+5. Incluez un bloc JSON à la fin avec les données
+
+Format de la réponse:
+
+Pour les REPAS:
+<NUTI_MEAL>
+{
+  "name": "Nom du repas",
+  "calories": nombre_de_calories,
+  "protein": protéines_en_grammes,
+  "carbs": glucides_en_grammes,
+  "fat": graisses_en_grammes,
+  "mealType": "breakfast" | "lunch" | "dinner" | "snack",
+  "foods": [
+    {
+      "name": "Nom de l'aliment",
+      "weight": poids_en_grammes,
+      "caloriesPer100g": calories_par_100g,
+      "proteinPer100g": protéines_par_100g,
+      "carbsPer100g": glucides_par_100g,
+      "fatPer100g": graisses_par_100g
+    }
+  ]
+}
+</NUTI_MEAL>
+
+Pour les ENTRENAMENTS:
+<NUTI_EXERCISE>
+{
+  "name": "Nom de l'entraînement",
+  "type": "running" | "walking" | "cycling" | "swimming" | "gym" | "yoga" | "pilates" | "dance" | "hiking" | "tennis" | "football" | "basketball" | "other",
+  "duration": durée_en_minutes,
+  "calories": calories_brûlées_estimées
+}
+</NUTI_EXERCISE>
+
+Exemple de réponse pour repas:
+
+**Nom du Repas**
+
+[Message sur les calories: si 0 kcal, dites quelque chose de naturel comme "Vous n'avez pas encore enregistré de repas aujourd'hui". Si a des calories, mentionnez naturellement. Si insuffisant: **Il vous manque encore ZZZ kcal pour atteindre votre objectif quotidien.**]
+
+Premier paragraphe: Description du repas et avantages nutritionnels.
+
+Deuxième paragraphe: Informations sur la façon dont ce repas s'intègre dans votre plan quotidien.
+
+<NUTI_MEAL>...</NUTI_MEAL>
+
+Exemple de réponse pour entraînement:
+
+**Nom de l'Entraînement**
+
+[Message sur les calories: si 0 kcal, NE mentionnez PAS "0 kcal". Dites quelque chose de naturel comme "Vous n'avez pas encore enregistré de repas aujourd'hui" ou ne mentionnez simplement pas les calories. Si a des calories, mentionnez uniquement si pertinent.]
+
+Premier paragraphe: Description de l'entraînement et avantages.
+
+Deuxième paragraphe: Informations sur la façon dont cet entraînement s'intègre dans votre plan.
+
+<NUTI_EXERCISE>...</NUTI_EXERCISE>
+
+Exemple de réponse pour liste d'aliments:
+
+**Aliments Riches en Calories**
+
+En tenant compte de votre régime **végétarien** et de votre objectif de **prendre du poids**, voici quelques aliments riches en calories:
+
+• **Avocat** - **250 kcal/100g**, riche en graisses saines
+• **Fruits secs** - **600-700 kcal/100g**, excellente source de protéines et de graisses
+• **Huile d'olive** - **900 kcal/100g**, parfait pour ajouter des calories saines
+• **Quinoa cuite** - **120 kcal/100g**, riche en protéines et glucides (note: valeurs pour quinoa cuite, pas crue)
+
+IMPORTANT: Lors de la mention des valeurs nutritionnelles, indiquez toujours si elles sont pour l'aliment cru ou cuit. Préférez toujours les valeurs de l'aliment cuit/préparé lorsque applicable.
+
+Ces aliments sont idéaux pour votre régime **végétarien** et vous aideront à atteindre votre objectif de **prendre du poids**.`,
+        de: `\n\nWICHTIG: Verwenden Sie Benutzerinformationen für personalisierte Ratschläge.
+
+⚠️ KRITISCHE REGEL ÜBER DIE ERNÄHRUNG DES BENUTZERS:
+- IMMER die Ernährung des Benutzers respektieren (vegetarisch, vegan, glutenfrei, etc.)
+- NIEMALS Lebensmittel vorschlagen oder erwähnen, die nicht mit der Ernährung des Benutzers kompatibel sind
+- Wenn der Benutzer Vegetarier ist, KEIN Fleisch, Fisch oder andere tierische Produkte erwähnen
+- Wenn der Benutzer Veganer ist, KEINE tierischen Produkte erwähnen (Fleisch, Fisch, Eier, Milchprodukte, Honig, etc.)
+- Wenn der Benutzer Einschränkungen hat (glutenfrei, laktosefrei, etc.), KEINE Lebensmittel erwähnen, die diese Zutaten enthalten
+- Beim Auflisten von Lebensmitteln oder beim Geben von Tipps IMMER prüfen, ob jedes Lebensmittel mit der Ernährung kompatibel ist, bevor es erwähnt wird
+- Wenn Sie sich nicht sicher sind, ob ein Lebensmittel kompatibel ist, es NICHT erwähnen
+- Die Ernährung des Benutzers ist im Kontext angegeben - VERWENDEN SIE SIE IMMER als Referenz
+
+WICHTIG: Fügen Sie JSON-Blöcke (<NUTI_MEAL> oder <NUTI_EXERCISE>) nur ein, wenn Sie eine spezifische Mahlzeit oder ein Workout VORSCHLAGEN, das der Benutzer direkt hinzufügen kann. Für allgemeine Fragen, Ratschläge oder Lebensmittellisten fügen Sie KEIN JSON ein.
+
+TEXTFORMATIERUNG:
+- Beim Auflisten von Lebensmitteln setzen Sie jedes Lebensmittel in **Fettdruck** und organisieren Sie es in einer Liste
+- Beim Erwähnen von Kalorien, wichtigen numerischen Werten oder Benutzerdaten (Gewicht, Größe, Ziel, etc.) setzen Sie in **Fettdruck**
+- Beim Erwähnen der Ernährung des Benutzers (z.B. "vegetarisch", "vegan", "glutenfrei") setzen Sie in **Fettdruck**, um hervorzuheben, dass Sie diesen Faktor nicht vergessen haben
+- Verwenden Sie organisierte Listen, wenn angemessen (z.B. "• **Lebensmittel 1**\n• **Lebensmittel 2**")
+
+WENN SIE EINE MAHLZEIT VORSCHLAGEN:
+1. Erwähnen Sie die heute bereits verbrauchten Kalorien auf natürliche Weise:
+   - Wenn 0 Kalorien: sagen Sie etwas wie "Sie haben heute noch keine Mahlzeiten protokolliert" oder "Sie haben den Tag ohne Protokollierung von Mahlzeiten begonnen"
+   - Wenn Kalorien vorhanden: erwähnen Sie natürlich (z.B. "Sie haben heute bereits 1200/2000 kcal verbraucht" oder "Sie sind bei 1200 von 2000 täglichen kcal")
+2. Wenn unzureichend, heben Sie dies in **Fettdruck** hervor (z.B. "**Sie benötigen noch 800 kcal, um Ihr Tagesziel zu erreichen**")
+3. Fügen Sie den Namen der Mahlzeit in **Fettdruck** am Anfang hinzu
+4. Organisieren Sie die Nachricht in 2-3 gut strukturierten Absätzen, mit einer leeren Zeile zwischen jedem Absatz
+5. WICHTIG: Beim Einbeziehen von Lebensmitteln in JSON verwenden Sie immer die Nährwerte von GEKOCHTEN/ZUBEREITETEN Lebensmitteln, nicht roh. Zum Beispiel:
+   - Gekochter Reis: ~130 kcal/100g (nicht roher Reis: ~350 kcal/100g)
+   - Gegrilltes Huhn: ~165 kcal/100g (Gewicht ändert sich beim Kochen)
+   - Gekochte Nudeln: ~130 kcal/100g (nicht rohe Nudeln: ~350 kcal/100g)
+   - Das Gewicht im JSON sollte das Gewicht des bereits gekochten/zubreiteten Lebensmittels sein
+6. Fügen Sie am Ende einen JSON-Block mit den Daten hinzu
+
+WENN SIE EIN WORKOUT VORSCHLAGEN:
+1. Wenn der Benutzer 0 verbrauchte Kalorien hat: erwähnen Sie NICHT "0 kcal". Sagen Sie etwas Natürliches wie "Sie haben heute noch keine Mahlzeiten protokolliert" oder erwähnen Sie einfach nicht die Kalorien
+2. Wenn Kalorien vorhanden: erwähnen Sie natürlich, wenn relevant
+3. Fügen Sie den Namen des Workouts in **Fettdruck** am Anfang hinzu
+4. Organisieren Sie die Nachricht in 2-3 gut strukturierten Absätzen, mit einer leeren Zeile zwischen jedem Absatz
+5. Fügen Sie am Ende einen JSON-Block mit den Daten hinzu
+
+Antwortformat:
+
+Für MAHLZEITEN:
+<NUTI_MEAL>
+{
+  "name": "Name der Mahlzeit",
+  "calories": anzahl_der_kalorien,
+  "protein": protein_in_gramm,
+  "carbs": kohlenhydrate_in_gramm,
+  "fat": fett_in_gramm,
+  "mealType": "breakfast" | "lunch" | "dinner" | "snack",
+  "foods": [
+    {
+      "name": "Name des Lebensmittels",
+      "weight": gewicht_in_gramm,
+      "caloriesPer100g": kalorien_pro_100g,
+      "proteinPer100g": protein_pro_100g,
+      "carbsPer100g": kohlenhydrate_pro_100g,
+      "fatPer100g": fett_pro_100g
+    }
+  ]
+}
+</NUTI_MEAL>
+
+Für WORKOUTS:
+<NUTI_EXERCISE>
+{
+  "name": "Name des Workouts",
+  "type": "running" | "walking" | "cycling" | "swimming" | "gym" | "yoga" | "pilates" | "dance" | "hiking" | "tennis" | "football" | "basketball" | "other",
+  "duration": dauer_in_minuten,
+  "calories": geschätzte_verbrannte_kalorien
+}
+</NUTI_EXERCISE>
+
+Beispielantwort für Mahlzeit:
+
+**Name der Mahlzeit**
+
+Sie haben heute bereits X/YYYY kcal verbraucht. [Wenn unzureichend: **Sie benötigen noch ZZZ kcal, um Ihr Tagesziel zu erreichen.**]
+
+Erster Absatz: Beschreibung der Mahlzeit und Nährwertvorteile.
+
+Zweiter Absatz: Informationen darüber, wie diese Mahlzeit in Ihren Tagesplan passt.
+
+<NUTI_MEAL>...</NUTI_MEAL>
+
+Beispielantwort für Workout:
+
+**Name des Workouts**
+
+[Kaloriennachricht: wenn 0 kcal, erwähnen Sie NICHT "0 kcal". Sagen Sie etwas Natürliches wie "Sie haben heute noch keine Mahlzeiten protokolliert" oder erwähnen Sie einfach nicht die Kalorien. Wenn Kalorien vorhanden, erwähnen Sie nur, wenn relevant.]
+
+Erster Absatz: Beschreibung des Workouts und Vorteile.
+
+Zweiter Absatz: Informationen darüber, wie dieses Workout in Ihren Plan passt.
+
+<NUTI_EXERCISE>...</NUTI_EXERCISE>
+
+Beispielantwort für Lebensmittelliste:
+
+**Kalorienreiche Lebensmittel**
+
+Unter Berücksichtigung Ihrer **vegetarischen** Ernährung und Ihres Ziels, **Gewicht zuzunehmen**, hier sind einige kalorienreiche Lebensmittel:
+
+• **Avocado** - **250 kcal/100g**, reich an gesunden Fetten
+• **Nüsse** - **600-700 kcal/100g**, ausgezeichnete Quelle für Protein und Fett
+• **Olivenöl** - **900 kcal/100g**, perfekt zum Hinzufügen gesunder Kalorien
+• **Gekochte Quinoa** - **120 kcal/100g**, reich an Protein und Kohlenhydraten (Hinweis: Werte für gekochte Quinoa, nicht roh)
+
+WICHTIG: Beim Erwähnen von Nährwerten geben Sie immer an, ob sie für das rohe oder gekochte Lebensmittel sind. Bevorzugen Sie immer Werte des gekochten/zubreiteten Lebensmittels, wenn anwendbar.
+
+Diese Lebensmittel sind ideal für Ihre **vegetarische** Ernährung und helfen Ihnen, Ihr Ziel zu erreichen, **Gewicht zuzunehmen**.`,
+        it: `\n\nIMPORTANTE: Hai accesso alle seguenti informazioni dell'utente. Usale per dare consigli personalizzati e precisi. Quando suggerisci ricette, considera la dieta dell'utente e le calorie già consumate oggi. Quando suggerisci allenamenti, considera i tipi di esercizio che l'utente ha già salvato.
+
+⚠️ REGOLA CRITICA SULLA DIETA DELL'UTENTE:
+- RISPETTA SEMPRE la dieta dell'utente (vegetariana, vegana, senza glutine, etc.)
+- NON suggerire o menzionare MAI alimenti che non sono compatibili con la dieta dell'utente
+- Se l'utente è vegetariano, NON menzionare carne, pesce o altri prodotti di origine animale
+- Se l'utente è vegano, NON menzionare alcun prodotto di origine animale (carne, pesce, uova, latticini, miele, etc.)
+- Se l'utente ha restrizioni (senza glutine, senza lattosio, etc.), NON menzionare alimenti che contengono questi ingredienti
+- Quando elenchi alimenti o dai consigli, VERIFICA SEMPRE se ogni alimento è compatibile con la dieta prima di menzionarlo
+- Se non sei sicuro che un alimento sia compatibile, NON menzionarlo
+- La dieta dell'utente è indicata nel contesto - USALA SEMPRE come riferimento
+
+QUANDO SUGGERISCI UN PASTO O UN ALLENAMENTO, includi un blocco JSON strutturato alla fine della tua risposta con i dati. Formato:
+
+Per i PASTI:
+<NUTI_MEAL>
+{
+  "name": "Nome del pasto",
+  "calories": numero_di_calorie,
+  "protein": proteine_in_grammi,
+  "carbs": carboidrati_in_grammi,
+  "fat": grassi_in_grammi,
+  "mealType": "breakfast" | "lunch" | "dinner" | "snack",
+  "foods": [
+    {
+      "name": "Nome dell'alimento (cotto/preparato)",
+      "weight": peso_in_grammi_dell_alimento_cotto,
+      "caloriesPer100g": calorie_per_100g_dell_alimento_cotto,
+      "proteinPer100g": proteine_per_100g_dell_alimento_cotto,
+      "carbsPer100g": carboidrati_per_100g_dell_alimento_cotto,
+      "fatPer100g": grassi_per_100g_dell_alimento_cotto
+    }
+  ]
+}
+IMPORTANTE: Tutti i valori nutrizionali e i pesi devono essere dell'alimento COTTO/PREPARATO, non crudo.
+</NUTI_MEAL>
+
+Per gli ALLENAMENTI:
+<NUTI_EXERCISE>
+{
+  "name": "Nome dell'allenamento",
+  "type": "running" | "walking" | "cycling" | "swimming" | "gym" | "yoga" | "pilates" | "dance" | "hiking" | "tennis" | "football" | "basketball" | "other",
+  "duration": durata_in_minuti,
+  "calories": calorie_bruciate_stimate
+}
+</NUTI_EXERCISE>
+
+Esempio di risposta per pasto:
+
+**Nome del Pasto**
+
+[Messaggio sulle calorie: se 0 kcal, di qualcosa di naturale come "Non hai ancora registrato nessun pasto oggi" SENZA menzionare "0 kcal". Se ha calorie, menziona in modo naturale. Se insufficiente: **Ti mancano ancora ZZZ kcal per raggiungere il tuo obiettivo giornaliero.**]
+
+Primo paragrafo: Descrizione del pasto e benefici nutrizionali.
+
+Secondo paragrafo: Informazioni su come questo pasto si adatta al tuo piano giornaliero.
+
+<NUTI_MEAL>...</NUTI_MEAL>
+
+Esempio di risposta per allenamento:
+
+**Nome dell'Allenamento**
+
+[Messaggio sulle calorie: se 0 kcal, NON menzionare "0 kcal". Di qualcosa di naturale come "Non hai ancora registrato nessun pasto oggi" o semplicemente non menzionare le calorie. Se ha calorie, menziona solo se rilevante.]
+
+Primo paragrafo: Descrizione dell'allenamento e benefici.
+
+Secondo paragrafo: Informazioni su come questo allenamento si adatta al tuo piano.
+
+<NUTI_EXERCISE>...</NUTI_EXERCISE>
+
+Esempio di risposta per lista di alimenti:
+
+**Alimenti Ricchi di Calorie**
+
+Considerando la tua dieta **vegetariana** e il tuo obiettivo di **aumentare di peso**, ecco alcuni alimenti ricchi di calorie:
+
+• **Avocado** - **250 kcal/100g**, ricco di grassi sani
+• **Frutta secca** - **600-700 kcal/100g**, eccellente fonte di proteine e grassi
+• **Olio d'oliva** - **900 kcal/100g**, perfetto per aggiungere calorie sane
+• **Quinoa cotta** - **120 kcal/100g**, ricca di proteine e carboidrati (nota: valori per quinoa cotta, non cruda)
+
+IMPORTANTE: Quando menzioni valori nutrizionali, indica sempre se sono per l'alimento crudo o cotto. Preferisci sempre valori dell'alimento cotto/preparato quando applicabile.
+
+Questi alimenti sono ideali per la tua dieta **vegetariana** e ti aiuteranno a raggiungere il tuo obiettivo di **aumentare di peso**.`,
+      };
+      
+      systemPrompt += contextInstructions[language] || contextInstructions.en;
+      systemPrompt += contextText;
+    }
 
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -1159,7 +2205,7 @@ export async function sendChatMessage(
           ...messages
         ],
         temperature: 0.7,
-        max_tokens: 500,
+        max_tokens: 1000, // Aumentado para permitir respostas mais detalhadas
       }),
     });
 
@@ -2001,5 +3047,315 @@ CRITICAL: Use PRECISE nutritional values from food databases. Be CONSERVATIVE wi
   }
   
   throw new Error('Unable to process description. Please try again.');
+}
+
+/**
+ * Adiciona uma refeição através do chat
+ * Esta função é chamada quando a IA sugere uma refeição e o utilizador quer adicioná-la
+ */
+export async function addMealFromChat(
+  userId: string,
+  mealName: string,
+  calories: number,
+  protein: number,
+  carbs: number,
+  fat: number,
+  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack' = 'snack',
+  foods?: Array<{
+    name: string;
+    weight: number;
+    caloriesPer100g: number;
+    proteinPer100g: number;
+    carbsPer100g: number;
+    fatPer100g: number;
+  }>
+): Promise<string> {
+  try {
+    const mealDate = new Date();
+    const addedAt = new Date();
+
+    const mealData: any = {
+      userId,
+      name: mealName,
+      calories: Math.round(calories),
+      protein: parseFloat(protein.toFixed(1)),
+      carbs: parseFloat(carbs.toFixed(1)),
+      fat: parseFloat(fat.toFixed(1)),
+      mealType,
+      date: Timestamp.fromDate(mealDate),
+      addedAt: Timestamp.fromDate(addedAt),
+    };
+
+    if (foods && foods.length > 0) {
+      mealData.foods = foods;
+    }
+
+    const docRef = await addDoc(collection(db, 'meals'), mealData);
+    return docRef.id;
+  } catch (error: any) {
+    console.error('Error adding meal from chat:', error);
+    throw new Error(error.message || 'Erro ao adicionar refeição');
+  }
+}
+
+/**
+ * Adiciona um treino através do chat
+ * Esta função é chamada quando a IA sugere um treino e o utilizador quer adicioná-lo
+ */
+export async function addExerciseFromChat(
+  userId: string,
+  exerciseName: string,
+  exerciseType: string,
+  duration: number,
+  calories: number = 0,
+  date?: Date,
+  additionalFields?: Record<string, any>
+): Promise<string> {
+  try {
+    const exerciseDate = date || new Date();
+    exerciseDate.setHours(0, 0, 0, 0);
+    const addedAt = new Date();
+
+    const exerciseData: any = {
+      userId,
+      type: exerciseType,
+      name: exerciseName,
+      duration: Math.round(duration),
+      calories: Math.round(calories),
+      date: Timestamp.fromDate(exerciseDate),
+      addedAt: Timestamp.fromDate(addedAt),
+    };
+
+    // Adicionar campos adicionais se fornecidos
+    if (additionalFields) {
+      Object.keys(additionalFields).forEach(key => {
+        const value = additionalFields[key];
+        if (value !== undefined && value !== null && value !== '') {
+          exerciseData[key] = value;
+        }
+      });
+    }
+
+    const docRef = await addDoc(collection(db, 'exercises'), exerciseData);
+    return docRef.id;
+  } catch (error: any) {
+    console.error('Error adding exercise from chat:', error);
+    throw new Error(error.message || 'Erro ao adicionar treino');
+  }
+}
+
+/**
+ * Extrai sugestão de refeição da resposta da IA
+ */
+export function parseMealSuggestion(response: string): ParsedMealSuggestion | null {
+  try {
+    // Procurar por <NUTI_MEAL>...</NUTI_MEAL> (case-insensitive, multiline)
+    const mealMatch = response.match(/<NUTI_MEAL>([\s\S]*?)<\/NUTI_MEAL>/i);
+    if (!mealMatch) {
+      return null;
+    }
+
+    let jsonStr = mealMatch[1].trim();
+    
+    // Remover markdown code blocks se existirem
+    jsonStr = jsonStr.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
+    
+    // Limpar texto antes e depois do JSON (caso a IA tenha adicionado explicações)
+    // Procurar pelo primeiro { e último }
+    const firstBrace = jsonStr.indexOf('{');
+    const lastBrace = jsonStr.lastIndexOf('}');
+    
+    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+      // Se não encontrar chaves, tentar procurar por JSON em qualquer lugar
+      const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        jsonStr = jsonMatch[0];
+      } else {
+        return null;
+      }
+    } else {
+      jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+    }
+    
+    // Limpar caracteres problemáticos comuns
+    // Remover BOM e outros caracteres invisíveis no início
+    jsonStr = jsonStr.replace(/^\uFEFF/, '').replace(/^[\u200B-\u200D\uFEFF]/, '');
+    
+    // Remover comentários de linha se existirem (não são válidos em JSON)
+    jsonStr = jsonStr.replace(/\/\/.*$/gm, '');
+    
+    // CORREÇÃO CRÍTICA: Remover unidades (g, kg, ml, l, kcal, cal) dos valores numéricos
+    // A IA pode retornar "40g" em vez de 40, o que invalida o JSON
+    // Padrão 1: ": 40g," ou ": 40g}" -> ": 40," ou ": 40}"
+    jsonStr = jsonStr.replace(/:\s*(\d+(?:\.\d+)?)\s*(g|kg|ml|l|kcal|cal)\s*([,}])/gi, ':$1$3');
+    // Padrão 2: Valores em arrays ou no meio de objetos: "100g," ou "100g}" -> "100," ou "100}"
+    jsonStr = jsonStr.replace(/(\d+(?:\.\d+)?)\s*(g|kg|ml|l|kcal|cal)\s*([,}\]])/gi, '$1$3');
+    // Padrão 3: Valores no final de linhas (antes de quebra de linha): "40g\n" -> "40\n"
+    jsonStr = jsonStr.replace(/(\d+(?:\.\d+)?)\s*(g|kg|ml|l|kcal|cal)\s*(\n)/gi, '$1$3');
+    // Padrão 4: Valores seguidos de espaço e depois vírgula/chave (caso mais comum): "100g ," -> "100 ,"
+    jsonStr = jsonStr.replace(/(\d+(?:\.\d+)?)\s*(g|kg|ml|l|kcal|cal)\s+([,}])/gi, '$1$3');
+    // Padrão 5: Qualquer número seguido de unidade (fallback mais agressivo)
+    jsonStr = jsonStr.replace(/(\d+(?:\.\d+)?)\s*(g|kg|ml|l|kcal|cal)(?=\s*[,}\n])/gi, '$1');
+    
+    // Tentar parsear o JSON
+    let mealData: any;
+    try {
+      mealData = JSON.parse(jsonStr);
+    } catch (parseError: any) {
+      // Tentar corrigir problemas comuns
+      // Remover trailing commas antes de }
+      jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
+      
+      // Tentar novamente
+        try {
+          mealData = JSON.parse(jsonStr);
+        } catch (secondError: any) {
+          // Última tentativa: procurar por qualquer JSON válido no texto
+        const jsonMatches = jsonStr.match(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/);
+        if (jsonMatches && jsonMatches.length > 0) {
+            try {
+              mealData = JSON.parse(jsonMatches[0]);
+            } catch (thirdError) {
+              return null;
+            }
+        } else {
+          return null;
+        }
+      }
+    }
+
+    // Validar campos obrigatórios
+    if (!mealData.name || typeof mealData.calories !== 'number' || !mealData.mealType) {
+      return null;
+    }
+
+    return {
+      name: String(mealData.name).trim(),
+      calories: Math.round(Number(mealData.calories) || 0),
+      protein: parseFloat((Number(mealData.protein) || 0).toFixed(1)),
+      carbs: parseFloat((Number(mealData.carbs) || 0).toFixed(1)),
+      fat: parseFloat((Number(mealData.fat) || 0).toFixed(1)),
+      mealType: mealData.mealType,
+      foods: mealData.foods || undefined,
+    };
+  } catch (error) {
+    console.error('Error parsing meal suggestion:', error);
+    return null;
+  }
+}
+
+/**
+ * Extrai sugestão de treino da resposta da IA
+ */
+export function parseExerciseSuggestion(response: string): ParsedExerciseSuggestion | null {
+  try {
+    // Procurar por <NUTI_EXERCISE>...</NUTI_EXERCISE> (case-insensitive, multiline)
+    const exerciseMatch = response.match(/<NUTI_EXERCISE>([\s\S]*?)<\/NUTI_EXERCISE>/i);
+    if (!exerciseMatch) {
+      return null;
+    }
+
+    let jsonStr = exerciseMatch[1].trim();
+    
+    // Remover markdown code blocks se existirem
+    jsonStr = jsonStr.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
+    
+    // Limpar texto antes e depois do JSON (caso a IA tenha adicionado explicações)
+    // Procurar pelo primeiro { e último }
+    const firstBrace = jsonStr.indexOf('{');
+    const lastBrace = jsonStr.lastIndexOf('}');
+    
+    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+      // Se não encontrar chaves, tentar procurar por JSON em qualquer lugar
+      const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        jsonStr = jsonMatch[0];
+      } else {
+        return null;
+      }
+    } else {
+      jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+    }
+    
+    // Limpar caracteres problemáticos comuns
+    // Remover BOM e outros caracteres invisíveis no início
+    jsonStr = jsonStr.replace(/^\uFEFF/, '').replace(/^[\u200B-\u200D\uFEFF]/, '');
+    
+    // Remover comentários de linha se existirem (não são válidos em JSON)
+    jsonStr = jsonStr.replace(/\/\/.*$/gm, '');
+    
+    // CORREÇÃO CRÍTICA: Remover unidades (g, kg, ml, l, kcal, cal) dos valores numéricos
+    // A IA pode retornar "40g" em vez de 40, o que invalida o JSON
+    jsonStr = jsonStr.replace(/:\s*(\d+(?:\.\d+)?)\s*(g|kg|ml|l|kcal|cal)\s*([,}])/gi, ':$1$3');
+    jsonStr = jsonStr.replace(/(\d+(?:\.\d+)?)\s*(g|kg|ml|l|kcal|cal)\s*([,}\]])/gi, '$1$3');
+    
+    // Tentar parsear o JSON
+    let exerciseData: any;
+    try {
+      exerciseData = JSON.parse(jsonStr);
+    } catch (parseError: any) {
+      // Tentar corrigir problemas comuns
+      // Remover trailing commas antes de }
+      jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
+      
+      // Tentar novamente
+        try {
+          exerciseData = JSON.parse(jsonStr);
+        } catch (secondError: any) {
+          // Última tentativa: procurar por qualquer JSON válido no texto
+        const jsonMatches = jsonStr.match(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/);
+        if (jsonMatches && jsonMatches.length > 0) {
+          try {
+            exerciseData = JSON.parse(jsonMatches[0]);
+          } catch (thirdError) {
+            return null;
+        }
+        } else {
+          return null;
+        }
+      }
+    }
+
+    // Validar campos obrigatórios
+    if (!exerciseData.name || typeof exerciseData.duration !== 'number' || !exerciseData.type) {
+      return null;
+    }
+
+    return {
+      name: String(exerciseData.name).trim(),
+      type: exerciseData.type,
+      duration: Math.round(Number(exerciseData.duration) || 0),
+      calories: Math.round(Number(exerciseData.calories) || 0),
+    };
+  } catch (error) {
+    console.error('Error parsing exercise suggestion:', error);
+    return null;
+  }
+}
+
+/**
+ * Remove blocos de sugestão da resposta da IA para exibição
+ */
+export function cleanResponseForDisplay(response: string): string {
+  // Remover blocos <NUTI_MEAL> e <NUTI_EXERCISE> (case-insensitive, multiline)
+  // Estes blocos já foram parseados antes de chamar esta função
+  let cleaned = response
+    .replace(/<NUTI_MEAL>[\s\S]*?<\/NUTI_MEAL>/gi, '')
+    .replace(/<NUTI_EXERCISE>[\s\S]*?<\/NUTI_EXERCISE>/gi, '');
+  
+  // Normalizar quebras de linha: manter uma linha vazia entre parágrafos
+  // Remover múltiplas quebras de linha consecutivas (mais de 2)
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+  
+  // Remover espaços no final de cada linha
+  cleaned = cleaned.replace(/\s+$/gm, '');
+  
+  // Remover espaços em branco no início e fim
+  cleaned = cleaned.trim();
+  
+  // Remover linhas vazias no final do texto
+  cleaned = cleaned.replace(/\n+$/, '');
+  
+  return cleaned;
 }
 

@@ -801,9 +801,9 @@ export function DashboardScreen({ navigation }: any) {
     }
 
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const dateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+      const targetDate = new Date(selectedDate);
+      targetDate.setHours(0, 0, 0, 0);
+      const dateStr = targetDate.toISOString().split('T')[0]; // YYYY-MM-DD
       const waterDocRef = doc(db, 'water', `${user.uid}_${dateStr}`);
       const waterDoc = await getDoc(waterDocRef);
 
@@ -815,12 +815,13 @@ export function DashboardScreen({ navigation }: any) {
 
       await setDoc(waterDocRef, {
         userId: user.uid,
-        date: Timestamp.fromDate(today),
+        date: Timestamp.fromDate(targetDate),
         amount: newAmount,
         updatedAt: Timestamp.now(),
       });
 
-      setWaterIntake(newAmount);
+      // Recarregar água para a data selecionada
+      await loadWaterIntake(selectedDate, true);
       setShowWaterModal(false);
       setWaterAmount('250');
 
@@ -853,9 +854,9 @@ export function DashboardScreen({ navigation }: any) {
     }
 
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const dateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+      const targetDate = new Date(selectedDate);
+      targetDate.setHours(0, 0, 0, 0);
+      const dateStr = targetDate.toISOString().split('T')[0]; // YYYY-MM-DD
       const waterDocRef = doc(db, 'water', `${user.uid}_${dateStr}`);
 
       if (amount === 0) {
@@ -865,20 +866,24 @@ export function DashboardScreen({ navigation }: any) {
       } else {
         await setDoc(waterDocRef, {
           userId: user.uid,
-          date: Timestamp.fromDate(today),
+          date: Timestamp.fromDate(targetDate),
           amount: amount,
           updatedAt: Timestamp.now(),
-        });
+        }, { merge: true });
         setWaterIntake(amount);
       }
 
+      // Recarregar água para a data selecionada
+      await loadWaterIntake(selectedDate, true);
       setShowEditWaterModal(false);
       setEditWaterAmount('0');
 
       Toast.show({
         type: 'success',
         text1: t('dashboard.waterUpdated'),
-        text2: t('dashboard.waterUpdatedMessage'),
+        text2: amount === 0 
+          ? t('dashboard.waterDeleted') 
+          : `${amount}ml ${t('dashboard.waterUpdatedMessage')}`,
       });
     } catch (error) {
       console.error('Error editing water:', error);
@@ -1057,7 +1062,7 @@ export function DashboardScreen({ navigation }: any) {
                     numberOfLines={1}
                     ellipsizeMode="tail"
                   >
-                    Hello, {getFirstName() || 'there'}
+                    {t('dashboard.greeting', { name: getFirstName() || 'there' })}
                   </Text>
                   <Text 
                     style={{

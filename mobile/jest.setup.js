@@ -11,6 +11,23 @@ if (typeof global.fetch === 'undefined') {
   );
 }
 
+// Mock do FormData para testes de transcrição de áudio
+global.FormData = class FormData {
+  append(key, value) {
+    this[key] = value;
+  }
+};
+
+// Mock de console.error para evitar logs desnecessários nos testes
+const originalError = console.error;
+beforeAll(() => {
+  console.error = jest.fn();
+});
+
+afterAll(() => {
+  console.error = originalError;
+});
+
 // Limpar mocks entre testes
 beforeEach(() => {
   jest.clearAllMocks();

@@ -372,9 +372,10 @@ function AppStack() {
     <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
       {!theme.isDark && (
         <LinearGradient
-          colors={['#FFFFFF', '#FFFFFF']}
+          colors={['#3BB273', '#F0FDF4', '#FFFFFF']}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
+          locations={[0, 0.15, 1]}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
         />
       )}
@@ -413,10 +414,12 @@ function RootNavigator() {
   const [showOnboardingFromWelcome, setShowOnboardingFromWelcome] = useState(false);
   const [checkingOnboarding, setCheckingOnboarding] = useState(false);
   const [profileCreatedRecently, setProfileCreatedRecently] = useState(false);
+  const [onboardingCancelled, setOnboardingCancelled] = useState(false);
   const [OnboardingScreenComponent, setOnboardingScreenComponent] = useState<React.ComponentType<any> | null>(null);
   
   const hideOnboarding = useCallback(() => {
     setShowOnboardingFromWelcome(false);
+    setOnboardingCancelled(true); // Marcar que o utilizador cancelou o onboarding
   }, []);
 
   useEffect(() => {
@@ -484,7 +487,8 @@ function RootNavigator() {
   
   // Não mostrar onboarding se está a verificar ou se o perfil foi criado recentemente
   // Usar também o cálculo síncrono para evitar flash
-  const needsOnboarding = user && profile && !onboardingCompleted && !checkingOnboarding && !profileCreatedRecently && !isProfileRecent;
+  // Também não mostrar se o utilizador cancelou o onboarding
+  const needsOnboarding = user && profile && !onboardingCompleted && !checkingOnboarding && !profileCreatedRecently && !isProfileRecent && !onboardingCancelled;
   
   // Resetar showOnboardingFromWelcome quando o onboarding está completo
   useEffect(() => {
@@ -529,9 +533,10 @@ function RootNavigator() {
   }
 
   // Se precisa de onboarding, renderizar diretamente (fora do NavigationContainer)
-  // IMPORTANTE: Não renderizar OnboardingScreen se o onboarding já está completo
+  // IMPORTANTE: Não renderizar OnboardingScreen se o onboarding já está completo ou foi cancelado
   const shouldShowOnboarding = ((user && profile && needsOnboarding) || showOnboardingFromWelcome) && 
-                                !(user && profile && onboardingCompleted === true);
+                                !(user && profile && onboardingCompleted === true) &&
+                                !onboardingCancelled;
   
   if (shouldShowOnboarding) {
     if (!OnboardingScreenComponent) {
@@ -552,6 +557,7 @@ function RootNavigator() {
     <OnboardingContext.Provider value={{
       showOnboarding: () => {
         setShowOnboardingFromWelcome(true);
+        setOnboardingCancelled(false); // Resetar o estado de cancelamento quando o utilizador quer começar novamente
       },
       hideOnboarding: hideOnboarding,
     }}>
@@ -571,11 +577,11 @@ function RootNavigator() {
                  setNavigationReady(true);
                }}
       >
-        {user && profile ? (
-          // User autenticado e onboarding completo - mostrar AppStack
+        {user && profile && (onboardingCompleted || onboardingCancelled) ? (
+          // User autenticado e onboarding completo ou cancelado - mostrar AppStack
           <AppStack />
         ) : (
-          // Sem user - mostrar AuthStack (mas Onboarding não está aqui para evitar pré-carregamento)
+          // Sem user ou onboarding não completo - mostrar AuthStack
           <AuthStack />
         )}
       </NavigationContainer>
@@ -650,6 +656,13 @@ class NavigationErrorBoundary extends React.Component<
   }
 }
 
+// Componente para configurar StatusBar baseado no tema
+function StatusBarConfig() {
+  const { theme } = useTheme();
+  // Sempre usar texto claro (branco) para ser visível no gradiente verde quando app está em modo claro
+  return <StatusBar style="light" />;
+}
+
 export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -659,7 +672,7 @@ export default function App() {
             <UnitsProvider>
               <SelectedDateProvider>
                 <UserProvider>
-              <StatusBar style="auto" />
+              <StatusBarConfig />
               <NavigationErrorBoundary>
                 <RootNavigator />
               </NavigationErrorBoundary>

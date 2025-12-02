@@ -262,6 +262,51 @@ export function AddMealScreen({ navigation, route }: any) {
     
     setSelectedMealType(defaultMealType);
   }, []);
+
+  // Pré-preencher dados se vier de uma sugestão do chat
+  useEffect(() => {
+    const mealSuggestion = route?.params?.mealSuggestion;
+    if (mealSuggestion) {
+      // Definir nome da refeição
+      setMealName(mealSuggestion.name);
+      
+      // Definir tipo de refeição
+      setSelectedMealType(mealSuggestion.mealType);
+      
+      // Se houver alimentos na sugestão, adicionar à lista
+      if (mealSuggestion.foods && mealSuggestion.foods.length > 0) {
+        const foodsToAdd = mealSuggestion.foods.map((food: any, index: number) => ({
+          id: `suggestion_${Date.now()}_${index}`,
+          name: food.name,
+          caloriesPer100g: food.caloriesPer100g || 0,
+          proteinPer100g: food.proteinPer100g || 0,
+          carbsPer100g: food.carbsPer100g || 0,
+          fatPer100g: food.fatPer100g || 0,
+          weight: food.weight || 100,
+          quantity: 1,
+          sugarsPer100g: food.sugarsPer100g,
+          fiberPer100g: food.fiberPer100g,
+          sodiumPer100g: food.sodiumPer100g,
+          saturatedFatPer100g: food.saturatedFatPer100g,
+          transFatPer100g: food.transFatPer100g,
+        }));
+        setSelectedFoods(foodsToAdd);
+      } else {
+        // Se não houver alimentos individuais, criar um alimento genérico com os totais
+        const genericFood = {
+          id: `suggestion_${Date.now()}`,
+          name: mealSuggestion.name,
+          caloriesPer100g: mealSuggestion.calories,
+          proteinPer100g: mealSuggestion.protein,
+          carbsPer100g: mealSuggestion.carbs,
+          fatPer100g: mealSuggestion.fat,
+          weight: 100, // Peso padrão, o utilizador pode ajustar
+          quantity: 1,
+        };
+        setSelectedFoods([genericFood]);
+      }
+    }
+  }, [route?.params?.mealSuggestion]);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [scanned, setScanned] = useState(false);
@@ -2694,6 +2739,7 @@ export function AddMealScreen({ navigation, route }: any) {
           }}>
             {mode === 'search' ? t('addMeal.searchDescription') : 
              mode === 'camera' ? t('addMeal.cameraDescription') : 
+             mode === 'confirm' ? (t('addMeal.confirmDescription') || 'Confirma e edita a refeição sugerida') :
              t('addMeal.barcodeDescription')}
           </Text>
         </View>
@@ -3295,11 +3341,11 @@ export function AddMealScreen({ navigation, route }: any) {
               </Text>
               <TextInput
                 style={{
-                  backgroundColor: theme.colors.card,
+                  backgroundColor: theme.colors.card || (theme.isDark ? '#1F2937' : '#FFFFFF'),
                   borderRadius: 12,
                   padding: 16,
                   borderWidth: 1,
-                  borderColor: theme.colors.border || '#E5E7EB',
+                  borderColor: theme.colors.border || (theme.isDark ? '#374151' : '#E5E7EB'),
                   fontSize: 16,
                   color: theme.colors.text,
                 }}
@@ -3323,11 +3369,11 @@ export function AddMealScreen({ navigation, route }: any) {
               <TouchableOpacity
                 onPress={() => setShowMealTypeModal(true)}
                 style={{
-                  backgroundColor: theme.colors.card,
+                  backgroundColor: theme.colors.card || (theme.isDark ? '#1F2937' : '#FFFFFF'),
                   borderRadius: 12,
                   padding: 16,
                   borderWidth: 1,
-                  borderColor: theme.colors.border || '#E5E7EB',
+                  borderColor: theme.colors.border || (theme.isDark ? '#374151' : '#E5E7EB'),
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -3376,12 +3422,17 @@ export function AddMealScreen({ navigation, route }: any) {
                 <View
                   key={food.id}
                   style={{
-                    backgroundColor: theme.colors.card,
+                    backgroundColor: theme.colors.card || (theme.isDark ? '#1F2937' : '#FFFFFF'),
                     borderRadius: 12,
                     padding: 16,
                     marginBottom: 12,
                     borderWidth: 1,
-                    borderColor: theme.colors.border || '#E5E7EB',
+                    borderColor: theme.colors.border || (theme.isDark ? '#374151' : '#E5E7EB'),
+                    shadowColor: theme.isDark ? '#000000' : '#000000',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: theme.isDark ? 0.2 : 0.05,
+                    shadowRadius: 2,
+                    elevation: theme.isDark ? 0 : 1,
                   }}
                 >
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
@@ -3419,12 +3470,12 @@ export function AddMealScreen({ navigation, route }: any) {
                   
                   {/* Quantidade e Peso */}
                   <View style={{ 
-                    backgroundColor: theme.isDark ? '#0F172A' : '#E2E8F0',
+                    backgroundColor: theme.isDark ? '#0F172A' : '#F9FAFB',
                     borderRadius: 12,
                     padding: 12,
                     gap: 12,
                     borderWidth: 1,
-                    borderColor: theme.isDark ? '#334155' : '#CBD5E1',
+                    borderColor: theme.isDark ? '#334155' : '#E5E7EB',
                   }}>
                     {/* Quantidade */}
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>

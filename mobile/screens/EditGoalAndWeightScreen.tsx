@@ -25,6 +25,7 @@ import { useUnits } from '../context/UnitsContext';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import Slider from '@react-native-community/slider';
+import { calculateCalorieGoalFromProfile } from '../utils/nutritionUtils';
 
 export function EditGoalAndWeightScreen({ navigation }: any) {
   const { profile, updateProfile, refreshProfile } = useUser();
@@ -37,9 +38,42 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
   const [weightText, setWeightText] = useState('');
   const [weightIsEmpty, setWeightIsEmpty] = useState(false);
-  const [showGoalModal, setShowGoalModal] = useState(false);
   const initialized = useRef(false);
   const goalSpeedFromProfile = useRef<number | null>(null); // Guardar o valor do perfil para comparar
+
+  // Função para calcular o objetivo automaticamente baseado no peso desejado vs peso atual
+  const calculateGoalFromWeight = (desiredWeightKg: number, currentWeightKg: number): 'lose' | 'maintain' | 'gain' => {
+    const diff = desiredWeightKg - currentWeightKg;
+    const threshold = 0.5; // 0.5kg de diferença para considerar "maintain"
+    
+    if (Math.abs(diff) <= threshold) {
+      return 'maintain';
+    } else if (diff < 0) {
+      return 'lose';
+    } else {
+      return 'gain';
+    }
+  };
+
+  // Função para calcular peso recomendado baseado no IMC saudável (18.5-25)
+  const calculateRecommendedWeight = (): number | null => {
+    if (!profile?.height || profile.height <= 0) {
+      return null;
+    }
+
+    const heightMeters = profile.height / 100; // Converter cm para metros
+    // IMC saudável: 18.5 a 25
+    // IMC = peso / (altura^2)
+    // peso = IMC * (altura^2)
+    
+    // Usar IMC médio de 22 (meio do intervalo saudável)
+    const idealBMI = 22;
+    const recommendedWeightKg = idealBMI * (heightMeters * heightMeters);
+    
+    return recommendedWeightKg;
+  };
+
+  const recommendedWeight = calculateRecommendedWeight();
 
   // Função para formatar peso com 1 casa decimal (arredondar corretamente)
   const formatWeight = (value: number): string => {
@@ -54,36 +88,65 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
   const MIN_WEIGHT_LB = Math.round(convertWeight(MIN_WEIGHT_KG, 'kg', 'lb'));
   const MAX_WEIGHT_LB = Math.round(convertWeight(MAX_WEIGHT_KG, 'kg', 'lb'));
 
+  // Guardar a unidade anterior para detectar mudanças
+  const previousUnit = useRef(units.weight);
+
   useEffect(() => {
-    if (profile) {
-      // Converter peso desejado (ou atual) de kg (Firestore) para a unidade selecionada
+    if (profile && !initialized.current) {
+      // Inicialização inicial - só executar uma vez
       const desiredWeightKg = profile.desiredWeight ?? profile.weight ?? 0;
+      const currentWeightKg = profile.weight ?? 0;
       const weightInKg = desiredWeightKg;
       const displayWeight = units.weight === 'lb' 
         ? convertWeight(weightInKg, 'kg', 'lb')
         : weightInKg;
       
       setWeight(displayWeight > 0 ? formatWeight(displayWeight) : '');
-      setGoal(profile.goal || 'maintain');
       
-      // Só atualizar goalSpeed se o valor do perfil mudou (não durante edição local)
+      // Calcular objetivo automaticamente baseado no peso desejado vs atual
+      if (currentWeightKg > 0 && desiredWeightKg > 0) {
+        const autoGoal = calculateGoalFromWeight(desiredWeightKg, currentWeightKg);
+        setGoal(autoGoal);
+      } else {
+        setGoal(profile.goal || 'maintain');
+      }
+      
       const profileGoalSpeed = profile.goalSpeed !== undefined && profile.goalSpeed !== null 
         ? profile.goalSpeed 
         : 0.5;
       
-      // Só atualizar se o valor do perfil for diferente do que está guardado
-      if (goalSpeedFromProfile.current === null || goalSpeedFromProfile.current !== profileGoalSpeed) {
-        setGoalSpeed(profileGoalSpeed);
-        goalSpeedFromProfile.current = profileGoalSpeed;
-      }
+      setGoalSpeed(profileGoalSpeed);
+      goalSpeedFromProfile.current = profileGoalSpeed;
       
       setWeightText('');
       setWeightIsEmpty(false);
-      if (!initialized.current) {
-        initialized.current = true;
-      }
+      initialized.current = true;
+      previousUnit.current = units.weight;
     }
-  }, [profile, units.weight, convertWeight]);
+  }, [profile, convertWeight]);
+
+  // Separar useEffect para mudanças de unidade (só converter o valor atual, não resetar)
+  useEffect(() => {
+    if (profile && initialized.current && weight && previousUnit.current !== units.weight) {
+      // Se a unidade mudou, converter o valor atual para a nova unidade
+      const currentWeightValue = parseFloat(weight);
+      if (!isNaN(currentWeightValue)) {
+        // Converter o valor atual de kg para a nova unidade
+        // Primeiro, converter o valor atual da unidade antiga para kg
+        const currentWeightKg = previousUnit.current === 'lb' 
+          ? convertWeight(currentWeightValue, 'lb', 'kg')
+          : currentWeightValue;
+        
+        // Depois, converter de kg para a nova unidade
+        const newDisplayWeight = units.weight === 'lb'
+          ? convertWeight(currentWeightKg, 'kg', 'lb')
+          : currentWeightKg;
+        
+        setWeight(formatWeight(newDisplayWeight));
+      }
+      previousUnit.current = units.weight;
+    }
+  }, [units.weight, weight, profile, convertWeight]);
 
   const handleSave = async () => {
     if (!weight) {
@@ -190,13 +253,41 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
         }
       }
 
-      await updateProfile({
+      // Recalcular calorias e macros baseado nos novos valores (incluindo goalSpeed)
+      // Criar um perfil temporário com os novos valores para calcular
+      const tempProfile = {
+        ...profile,
+        goal,
+        goalSpeed: goal === 'maintain' ? undefined : goalSpeed,
+        desiredWeight: parseFloat(finalWeight),
+      } as any;
+      
+      const calculatedPlan = calculateCalorieGoalFromProfile(tempProfile);
+      
+      // Preparar dados para atualizar
+      const updateData: any = {
         desiredWeight: parseFloat(finalWeight),
         goal,
         goalSpeed: goal === 'maintain' ? undefined : goalSpeed,
-      });
+      };
 
-      // Forçar refresh do profile para garantir que o Dashboard recalcula as calorias
+      // Se conseguiu calcular, adicionar também as calorias e macros recalculadas
+      if (calculatedPlan) {
+        const calculatedCalories = calculatedPlan.calories;
+        const calculatedProtein = Math.round((calculatedCalories * 0.30) / 4);
+        const calculatedCarbs = Math.round((calculatedCalories * 0.40) / 4);
+        const calculatedFat = Math.round((calculatedCalories * 0.30) / 9);
+
+        updateData.dailyCalorieGoal = calculatedCalories;
+        updateData.dailyProteinGoal = calculatedProtein;
+        updateData.dailyCarbsGoal = calculatedCarbs;
+        updateData.dailyFatGoal = calculatedFat;
+      }
+
+      // Atualizar tudo de uma vez
+      await updateProfile(updateData);
+
+      // Forçar refresh do profile para garantir que tudo está atualizado
       await refreshProfile();
 
       setLoading(false);
@@ -334,6 +425,13 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
                   const newValue = Math.max(minValue, parseFloat((currentValue - step).toFixed(1)));
                   setWeight(formatWeight(newValue));
                   setWeightText('');
+                  
+                  // Atualizar objetivo automaticamente
+                  if (profile?.weight) {
+                    const newValueKg = units.weight === 'lb' ? convertWeight(newValue, 'lb', 'kg') : newValue;
+                    const autoGoal = calculateGoalFromWeight(newValueKg, profile.weight);
+                    setGoal(autoGoal);
+                  }
                 }}
                 activeOpacity={0.7}
                 style={{
@@ -381,12 +479,24 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
                         setWeight(formatWeight(displayKg));
                         setWeightIsEmpty(false);
                         setWeightText('');
+                        
+                        // Atualizar objetivo automaticamente
+                        if (profile?.weight) {
+                          const autoGoal = calculateGoalFromWeight(kg, profile.weight);
+                          setGoal(autoGoal);
+                        }
                       }
                     } else {
                       if (num >= MIN_WEIGHT_KG && num <= MAX_WEIGHT_KG) {
                         setWeight(formatWeight(num));
                         setWeightIsEmpty(false);
                         setWeightText('');
+                        
+                        // Atualizar objetivo automaticamente
+                        if (profile?.weight) {
+                          const autoGoal = calculateGoalFromWeight(num, profile.weight);
+                          setGoal(autoGoal);
+                        }
                       }
                     }
                   }
@@ -431,6 +541,13 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
                   const newValue = Math.min(maxValue, parseFloat((currentValue + step).toFixed(1)));
                   setWeight(formatWeight(newValue));
                   setWeightText('');
+                  
+                  // Atualizar objetivo automaticamente
+                  if (profile?.weight) {
+                    const newValueKg = units.weight === 'lb' ? convertWeight(newValue, 'lb', 'kg') : newValue;
+                    const autoGoal = calculateGoalFromWeight(newValueKg, profile.weight);
+                    setGoal(autoGoal);
+                  }
                 }}
                 activeOpacity={0.7}
                 style={{
@@ -458,6 +575,13 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
                 setWeight(formatWeight(value));
                 setWeightText('');
                 setWeightIsEmpty(false);
+                
+                // Atualizar objetivo automaticamente
+                if (profile?.weight) {
+                  const newValueKg = units.weight === 'lb' ? convertWeight(value, 'lb', 'kg') : value;
+                  const autoGoal = calculateGoalFromWeight(newValueKg, profile.weight);
+                  setGoal(autoGoal);
+                }
               }}
               minimumTrackTintColor={theme.colors.primary || '#3BB273'}
               maximumTrackTintColor={theme.colors.border || '#E5E7EB'}
@@ -465,30 +589,31 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
             />
           </View>
 
-          {/* Card: Objetivo */}
-          <View style={{
-            backgroundColor: theme.colors.card,
-            borderRadius: 16,
-            padding: 20,
-            marginBottom: 16,
-            borderWidth: 1,
-            borderColor: theme.colors.border || '#E5E7EB',
-          }}>
-            <Text style={{
-              fontSize: 18,
-              fontWeight: '700',
-              color: theme.colors.text,
-              marginBottom: 16,
-            }}>
-              {t('profile.goal')}
-            </Text>
+          {/* Card: Peso Recomendado */}
+          {recommendedWeight && (
             <TouchableOpacity
-              onPress={() => setShowGoalModal(true)}
+              onPress={() => {
+                // Definir o peso recomendado
+                const displayWeight = units.weight === 'lb' 
+                  ? convertWeight(recommendedWeight, 'kg', 'lb')
+                  : recommendedWeight;
+                
+                setWeight(formatWeight(displayWeight));
+                setWeightText('');
+                setWeightIsEmpty(false);
+                
+                // Atualizar objetivo automaticamente
+                if (profile?.weight) {
+                  const autoGoal = calculateGoalFromWeight(recommendedWeight, profile.weight);
+                  setGoal(autoGoal);
+                }
+              }}
               activeOpacity={0.7}
               style={{
-                backgroundColor: theme.isDark ? '#1F2937' : '#F9FAFB',
-                borderRadius: 12,
-                padding: 16,
+                backgroundColor: theme.colors.card,
+                borderRadius: 16,
+                padding: 20,
+                marginBottom: 16,
                 borderWidth: 1,
                 borderColor: theme.colors.border || '#E5E7EB',
                 flexDirection: 'row',
@@ -496,114 +621,55 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
                 justifyContent: 'space-between',
               }}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                  <Ionicons 
+                    name="bulb-outline" 
+                    size={20} 
+                    color={theme.colors.primary || '#3BB273'} 
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '700',
+                    color: theme.colors.text,
+                  }}>
+                    {t('profile.recommendedWeight') || 'Peso Recomendado'}
+                  </Text>
+                </View>
                 <Text style={{
-                  fontSize: 16,
-                  fontWeight: '600',
-                  color: theme.colors.text,
+                  fontSize: 13,
+                  color: theme.colors.textSecondary || '#6B7280',
+                  marginTop: 4,
                 }}>
-                  {goal === 'lose'
-                    ? t('onboarding.goal.lose')
-                    : goal === 'gain'
-                    ? t('onboarding.goal.gain')
-                    : t('onboarding.goal.maintain')}
+                  {t('profile.recommendedWeightDescription') || 'Baseado no teu IMC saudável (18.5-25)'}
                 </Text>
               </View>
-              <Ionicons name="chevron-down" size={20} color={theme.colors.textSecondary || '#9CA3AF'} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Modal de Seleção de Goal */}
-          <Modal
-            visible={showGoalModal}
-            transparent={true}
-            animationType="slide"
-            onRequestClose={() => setShowGoalModal(false)}
-          >
-            <Pressable
-              style={{
-                flex: 1,
-                backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                justifyContent: 'flex-end',
-              }}
-              onPress={() => setShowGoalModal(false)}
-            >
-              <Pressable
-                style={{
-                  backgroundColor: theme.colors.card,
-                  borderTopLeftRadius: 24,
-                  borderTopRightRadius: 24,
-                  paddingTop: 20,
-                  paddingBottom: 60,
-                  maxHeight: '60%',
-                }}
-                onPress={(e) => e.stopPropagation()}
-              >
-                {/* Handle Bar */}
-                <View style={{
-                  width: 40,
-                  height: 4,
-                  backgroundColor: theme.colors.border || '#E5E7EB',
-                  borderRadius: 2,
-                  alignSelf: 'center',
-                  marginBottom: 20,
-                }} />
-
+              <View style={{
+                alignItems: 'flex-end',
+                marginLeft: 12,
+              }}>
                 <Text style={{
                   fontSize: 20,
                   fontWeight: '700',
-                  color: theme.colors.text,
-                  paddingHorizontal: 24,
-                  marginBottom: 20,
+                  color: theme.colors.primary || '#3BB273',
                 }}>
-                  {t('profile.goal') || 'Meta'}
+                  {units.weight === 'lb' 
+                    ? formatWeight(convertWeight(recommendedWeight, 'kg', 'lb'))
+                    : formatWeight(recommendedWeight)}
                 </Text>
+                <Text style={{
+                  fontSize: 12,
+                  color: theme.colors.textSecondary || '#6B7280',
+                  marginTop: 2,
+                }}>
+                  {units.weight}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
 
-                <ScrollView showsVerticalScrollIndicator={false}>
-                  {(['lose', 'maintain', 'gain'] as const).map((g) => (
-                    <TouchableOpacity
-                      key={g}
-                      onPress={() => {
-                        setGoal(g);
-                        setShowGoalModal(false);
-                      }}
-                      activeOpacity={0.7}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        paddingVertical: 18,
-                        paddingHorizontal: 24,
-                        backgroundColor: goal === g
-                          ? (theme.colors.primary || '#3BB273') + '20'
-                          : 'transparent',
-                        borderWidth: goal === g ? 0 : 0,
-                        borderLeftWidth: goal === g ? 4 : 0,
-                        borderLeftColor: theme.colors.primary || '#3BB273',
-                      }}
-                    >
-                      <Text style={{
-                        fontSize: 16,
-                        fontWeight: goal === g ? '700' : '500',
-                        color: theme.colors.text,
-                        flex: 1,
-                      }}>
-                        {g === 'lose'
-                          ? t('onboarding.goal.lose')
-                          : g === 'gain'
-                          ? t('onboarding.goal.gain')
-                          : t('onboarding.goal.maintain')}
-                      </Text>
-                      {goal === g && (
-                        <Ionicons name="checkmark-circle" size={24} color={theme.colors.primary || '#3BB273'} />
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </Pressable>
-            </Pressable>
-          </Modal>
-
-          {/* Card: Rapidez por Semana - Só mostrar se não for maintain */}
+          {/* Card: Rapidez por Semana */}
           {goal !== 'maintain' && (
             <View style={{
               backgroundColor: theme.colors.card,

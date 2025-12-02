@@ -21,6 +21,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
+import { calculateCalorieGoalFromProfile } from '../utils/nutritionUtils';
 
 export function EditCaloriesAndMacrosScreen({ navigation }: any) {
   const { profile, updateProfile, refreshProfile } = useUser();
@@ -45,6 +46,68 @@ export function EditCaloriesAndMacrosScreen({ navigation }: any) {
       setFat(fatGoal.toString());
     }
   }, [profile]);
+
+  const handleResetToCalculated = async () => {
+    if (!profile) {
+      Toast.show({
+        type: 'error',
+        text1: t('common.error') || 'Erro',
+        text2: t('profile.profileNotFound') || 'Perfil não encontrado',
+      });
+      return;
+    }
+
+    // Recalcular baseado no perfil atual (peso, altura, idade, objetivo, etc.)
+    const calculatedPlan = calculateCalorieGoalFromProfile(profile);
+    
+    if (!calculatedPlan) {
+      Toast.show({
+        type: 'error',
+        text1: t('common.error') || 'Erro',
+        text2: t('profile.cannotCalculate') || 'Não foi possível calcular os valores. Verifica se tens peso, altura e idade definidos.',
+      });
+      return;
+    }
+
+    // Calcular macros baseados nas calorias calculadas
+    // Usar as mesmas percentagens do onboarding: 30% proteína, 40% carboidratos, 30% gordura
+    const calculatedCalories = calculatedPlan.calories;
+    const calculatedProtein = Math.round((calculatedCalories * 0.30) / 4);
+    const calculatedCarbs = Math.round((calculatedCalories * 0.40) / 4);
+    const calculatedFat = Math.round((calculatedCalories * 0.30) / 9);
+
+    // Atualizar os campos
+    setCalories(calculatedCalories.toString());
+    setProtein(calculatedProtein.toString());
+    setCarbs(calculatedCarbs.toString());
+    setFat(calculatedFat.toString());
+
+    // Guardar automaticamente os valores recalculados
+    setLoading(true);
+    try {
+      await updateProfile({
+        dailyCalorieGoal: calculatedCalories,
+        dailyProteinGoal: calculatedProtein,
+        dailyCarbsGoal: calculatedCarbs,
+        dailyFatGoal: calculatedFat,
+      } as any);
+      await refreshProfile();
+      setLoading(false);
+      
+      Toast.show({
+        type: 'success',
+        text1: t('profile.resetSuccess') || 'Redefinido',
+        text2: t('profile.resetToCalculated') || 'Valores redefinidos e guardados baseados no teu perfil atual',
+      });
+    } catch (error: any) {
+      setLoading(false);
+      Toast.show({
+        type: 'error',
+        text1: t('common.error') || 'Erro',
+        text2: error.message || t('profile.updateError') || 'Erro ao guardar valores',
+      });
+    }
+  };
 
   const handleSave = async () => {
     const caloriesNum = parseInt(calories) || 0;
@@ -405,13 +468,52 @@ export function EditCaloriesAndMacrosScreen({ navigation }: any) {
           </View>
         </ScrollView>
 
-        {/* Botão Save */}
+        {/* Botões */}
         <View style={{
           paddingHorizontal: 24,
           paddingTop: 16,
           paddingBottom: Platform.OS === 'ios' ? 32 : 24,
           backgroundColor: theme.colors.background,
         }}>
+          {/* Botão Reset */}
+          <TouchableOpacity
+            onPress={handleResetToCalculated}
+            disabled={loading}
+            style={{
+              backgroundColor: theme.colors.card,
+              borderRadius: 14,
+              paddingVertical: 14,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 12,
+              borderWidth: 1,
+              borderColor: theme.colors.border || '#E5E7EB',
+              opacity: loading ? 0.5 : 1,
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <Ionicons 
+                name="refresh-outline" 
+                size={20} 
+                color={theme.colors.text} 
+                style={{ marginRight: 8 }}
+              />
+              <Text style={{
+                fontSize: 16,
+                fontWeight: '600',
+                color: theme.colors.text,
+              }}>
+                {t('profile.resetToCalculated') || 'Redefinir para valores calculados'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Botão Save */}
           <TouchableOpacity
             onPress={handleSave}
             disabled={loading}
