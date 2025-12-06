@@ -62,9 +62,9 @@ interface UserContextType {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name: string, onboardingData?: any) => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
-  signInWithGoogleNative: () => Promise<void>;
-  signInWithGoogleWeb: () => Promise<void>;
+  signInWithGoogle: (allowCreateAccount?: boolean) => Promise<void>;
+  signInWithGoogleNative: (allowCreateAccount?: boolean) => Promise<void>;
+  signInWithGoogleWeb: (allowCreateAccount?: boolean) => Promise<void>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -205,16 +205,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
                   await setDoc(userRef, { authMethod: 'google' }, { merge: true });
                 }
               } else {
-                // Criar perfil se não existir
-                await setDoc(userRef, {
-                  name: (currentUser?.displayName) || '',
-                  email: (currentUser?.email) || '',
-                  plan: 'free',
-                  streak: 0,
-                  badges: [],
-                  createdAt: Timestamp.fromDate(new Date()),
-                  authMethod: 'google',
-                });
+                // Conta não está registada - fazer logout e lançar erro
+                await firebaseSignOut(auth);
+                throw new Error('Esta conta não está registada. Por favor, cria uma conta primeiro.');
               }
             } catch (error: any) {
               console.error('❌ Erro ao processar resposta automática:', error);
@@ -286,24 +279,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
         
         setProfile(loadedProfile);
       } else {
-        // Criar perfil se não existir
-        // Determinar método de autenticação baseado no provider
-        const authMethod = user?.providerData?.[0]?.providerId === 'google.com' ? 'google' : 'email';
-        const newProfile: UserProfile = {
-          id: userId,
-          name: user?.displayName || '',
-          email: user?.email || '',
-          plan: 'free',
-          streak: 0,
-          badges: [],
-          createdAt: new Date(),
-          authMethod,
-        };
-        await setDoc(userRef, {
-          ...newProfile,
-          createdAt: Timestamp.fromDate(new Date()),
-        });
-        setProfile(newProfile);
+        // Não criar perfil automaticamente - apenas as funções explícitas devem criar
+        // Isto previne criação automática durante sign in quando a conta não existe
+        setProfile(null);
       }
     } catch (error: any) {
       if (error?.code === 'permission-denied') {
@@ -421,7 +399,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   };
 
   // Sign in com Google - tenta nativo primeiro, depois web
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (allowCreateAccount: boolean = false) => {
     // Verificar se temos configuração básica
     if (!webClientId) {
       throw new Error(
@@ -436,7 +414,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       // No Expo Go, usar APENAS o método web (expo-auth-session)
       // Nunca tentar usar GoogleSignin nativo no Expo Go
       try {
-        await signInWithGoogleWeb();
+        await signInWithGoogleWeb(allowCreateAccount);
         return;
       } catch (error: any) {
         console.error('Google sign-in error (Expo Go):', error);
@@ -451,7 +429,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     try {
       // Tentar login nativo primeiro (apenas em dev-client/standalone)
       try {
-        await signInWithGoogleNative();
+        await signInWithGoogleNative(allowCreateAccount);
             return;
       } catch (nativeError: any) {
         // Se não for erro de "não disponível", relançar
@@ -474,7 +452,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   };
 
   // Native-only Google sign-in (dev-client / standalone)
-  const signInWithGoogleNative = async () => {
+  const signInWithGoogleNative = async (allowCreateAccount: boolean = false) => {
     // Verificar se temos client ID configurado
     if (!webClientId) {
       throw new Error('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID não está configurado no .env');
@@ -509,13 +487,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
       // Fazer login
       const userInfo = await GS.signIn();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const idTokenNative = (userInfo as any)?.idToken;
+      const idTokenNative = (userInfo as any)?.idToken;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const googleEmail = (userInfo as any)?.user?.email;
+      const googleUser = (userInfo as any)?.user;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const googleEmail = googleUser?.email;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const googleName = googleUser?.name || googleUser?.givenName || '';
 
-    if (!idTokenNative) {
+      if (!idTokenNative) {
         throw new Error('Google Sign-In não retornou idToken');
-    }
+      }
 
       // Criar credencial Firebase e fazer login
       const credentialNative = GoogleAuthProvider.credential(idTokenNative);
@@ -523,12 +505,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
       
       // Verificar se userCredential e user existem
       if (!userCredential?.user) {
-        throw new Error('Erro ao fazer login: dados do utilizador não disponíveis');
+        throw new Error('Login error: user data not available.');
       }
       
       const currentUser = userCredential.user;
       if (!currentUser) {
-        throw new Error('Erro ao fazer login: dados do utilizador não disponíveis');
+        throw new Error('Login error: user data not available.');
       }
       
       // Verificar se a conta foi criada com email/password
@@ -538,25 +520,54 @@ export function UserProvider({ children }: { children: ReactNode }) {
       if (userSnap.exists()) {
         const data = userSnap.data();
         if (data.authMethod === 'email') {
-          // Fazer logout e lançar erro
-          await firebaseSignOut(auth);
-          throw new Error('Esta conta foi criada com email e password. Por favor, usa o login com email.');
-        }
-        // Se não tem authMethod, atualizar para google
-        if (!data.authMethod) {
-          await setDoc(userRef, { authMethod: 'google' }, { merge: true });
+          // Se allowCreateAccount for true (durante onboarding/registo), atualizar para google
+          // Caso contrário, fazer logout e lançar erro
+          if (allowCreateAccount) {
+            // Durante o onboarding, permitir atualizar de email para google
+            await setDoc(userRef, { 
+              authMethod: 'google',
+              // Atualizar também nome e email se estiverem vazios ou se tivermos dados melhores do Google
+              ...(googleName && (!data.name || data.name === '') ? { name: googleName } : {}),
+              ...(googleEmail && (!data.email || data.email === '') ? { email: googleEmail } : {}),
+            }, { merge: true });
+          } else {
+            // Fazer logout e lançar erro
+            await firebaseSignOut(auth);
+            throw new Error('This account was created with an email and password. Please use the login with email.');
+          }
+        } else {
+          // Se não tem authMethod, atualizar para google
+          if (!data.authMethod) {
+            await setDoc(userRef, { authMethod: 'google' }, { merge: true });
+          }
         }
       } else {
-        // Criar perfil se não existir
-        await setDoc(userRef, {
-          name: (currentUser?.displayName) || '',
-          email: (currentUser?.email) || '',
-          plan: 'free',
-          streak: 0,
-          badges: [],
-          createdAt: Timestamp.fromDate(new Date()),
-          authMethod: 'google',
-        });
+        // Se allowCreateAccount for true, criar perfil (usado durante onboarding/registo)
+        if (allowCreateAccount) {
+          // Usar dados do Google Sign-In se disponíveis, caso contrário usar do Firebase Auth
+          const userName = googleName || currentUser?.displayName || '';
+          const userEmail = googleEmail || currentUser?.email || '';
+          
+          if (!userEmail) {
+            // Se não temos email, fazer logout e lançar erro
+            await firebaseSignOut(auth);
+            throw new Error('Unable to get user email from Google Sign-In.');
+          }
+          
+          await setDoc(userRef, {
+            name: userName,
+            email: userEmail,
+            plan: 'free',
+            streak: 0,
+            badges: [],
+            createdAt: Timestamp.fromDate(new Date()),
+            authMethod: 'google',
+          });
+        } else {
+          // Conta não está registada - fazer logout e lançar erro
+          await firebaseSignOut(auth);
+          throw new Error('This account is not registered. Please create an account first.');
+        }
       }
     } catch (error: any) {
       console.error('Native Google sign-in error:', error);
@@ -569,7 +580,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   };
 
   // Web/Expo proxy Google sign-in
-  const signInWithGoogleWeb = async () => {
+  const signInWithGoogleWeb = async (allowCreateAccount: boolean = false) => {
     // Verificar se o request está configurado
     if (!request) {
       throw new Error('Google Auth request não está configurado. Verifica EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID no .env');
@@ -594,12 +605,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
           
           // Verificar se userCredential e user existem
           if (!userCredential?.user) {
-            throw new Error('Erro ao fazer login: dados do utilizador não disponíveis');
+            throw new Error('Login error: user data not available.');
           }
           
           const currentUser = userCredential.user;
           if (!currentUser) {
-            throw new Error('Erro ao fazer login: dados do utilizador não disponíveis');
+            throw new Error('Login error: user data not available.');
           }
           
           // Verificar se a conta foi criada com email/password
@@ -609,25 +620,53 @@ export function UserProvider({ children }: { children: ReactNode }) {
           if (userSnap.exists()) {
             const data = userSnap.data();
             if (data.authMethod === 'email') {
-              // Fazer logout e lançar erro
-              await firebaseSignOut(auth);
-              throw new Error('Esta conta foi criada com email e password. Por favor, usa o login com email.');
-            }
-            // Se não tem authMethod, atualizar para google
-            if (!data.authMethod) {
-              await setDoc(userRef, { authMethod: 'google' }, { merge: true });
+              // Se allowCreateAccount for true (durante onboarding/registo), atualizar para google
+              // Caso contrário, fazer logout e lançar erro
+              if (allowCreateAccount) {
+                // Durante o onboarding, permitir atualizar de email para google
+                await setDoc(userRef, { 
+                  authMethod: 'google',
+                  // Atualizar também nome e email se estiverem vazios ou se tivermos dados melhores do Google
+                  ...(currentUser?.displayName && (!data.name || data.name === '') ? { name: currentUser.displayName } : {}),
+                  ...(currentUser?.email && (!data.email || data.email === '') ? { email: currentUser.email } : {}),
+                }, { merge: true });
+              } else {
+                // Fazer logout e lançar erro
+                await firebaseSignOut(auth);
+                throw new Error('This account was created with an email and password. Please use the login with email.');
+              }
+            } else {
+              // Se não tem authMethod, atualizar para google
+              if (!data.authMethod) {
+                await setDoc(userRef, { authMethod: 'google' }, { merge: true });
+              }
             }
           } else {
-            // Criar perfil se não existir
-            await setDoc(userRef, {
-              name: (currentUser?.displayName) || '',
-              email: (currentUser?.email) || '',
-              plan: 'free',
-              streak: 0,
-              badges: [],
-              createdAt: Timestamp.fromDate(new Date()),
-              authMethod: 'google',
-            });
+            // Se allowCreateAccount for true, criar perfil (usado durante onboarding/registo)
+            if (allowCreateAccount) {
+              const userName = currentUser?.displayName || '';
+              const userEmail = currentUser?.email || '';
+              
+              if (!userEmail) {
+                // Se não temos email, fazer logout e lançar erro
+                await firebaseSignOut(auth);
+                throw new Error('Unable to get user email from Google Sign-In.');
+              }
+              
+              await setDoc(userRef, {
+                name: userName,
+                email: userEmail,
+                plan: 'free',
+                streak: 0,
+                badges: [],
+                createdAt: Timestamp.fromDate(new Date()),
+                authMethod: 'google',
+              });
+            } else {
+              // Conta não está registada - fazer logout e lançar erro
+              await firebaseSignOut(auth);
+              throw new Error('This account is not registered. Please create an account first.');
+            }
           }
           
           return; // Sucesso, sair

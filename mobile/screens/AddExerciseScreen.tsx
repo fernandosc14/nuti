@@ -27,6 +27,8 @@ import { db } from '../services/firebase';
 import Toast from 'react-native-toast-message';
 import { ExerciseType, getExerciseConfigs, ExerciseFieldConfig } from '../types/exercise';
 import { getExerciseTypeFromName, getExerciseNameFromType } from '../utils/exerciseUtils';
+import { useBadgeNotification } from '../hooks/useBadgeNotification';
+import { BadgeNotificationModal } from '../components/BadgeNotificationModal';
 
 export function AddExerciseScreen({ navigation, route }: any) {
   const { user, profile } = useUser();
@@ -34,6 +36,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
   const { theme } = useTheme();
   const { selectedDate } = useSelectedDate();
   const insets = useSafeAreaInsets();
+  const { showModal, earnedBadge, checkAndShowBadges, closeModal } = useBadgeNotification();
   const [selectedExerciseType, setSelectedExerciseType] = useState<string>('');
   const [exerciseDuration, setExerciseDuration] = useState('30');
   const [customExerciseName, setCustomExerciseName] = useState('');
@@ -542,14 +545,28 @@ export function AddExerciseScreen({ navigation, route }: any) {
 
       await addDoc(collection(db, 'exercises'), exerciseData);
 
-
       setAddingExercise(false);
+      
+      // Verificar e mostrar badges ganhas ANTES de navegar
+      if (user) {
+        await checkAndShowBadges(user.uid);
+        // Aguardar um pouco para o modal aparecer antes de navegar
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
       Toast.show({
         type: 'success',
         text1: t('dashboard.exerciseAdded') || 'Exercício adicionado',
         text2: `${exerciseName} - ${duration} min`,
       });
-      navigation.goBack();
+      
+      // Navegar de volta - verificar se é possível fazer goBack
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        // Se não for possível, navegar para o Dashboard
+        navigation.navigate('Dashboard');
+      }
     } catch (error: any) {
       setAddingExercise(false);
       console.error('Error adding exercise:', error);
@@ -589,7 +606,11 @@ export function AddExerciseScreen({ navigation, route }: any) {
                   setSelectedExerciseType('');
                   setCustomExerciseName('');
                 } else {
-                  navigation.goBack();
+                  if (navigation.canGoBack()) {
+                    navigation.goBack();
+                  } else {
+                    navigation.navigate('Dashboard');
+                  }
                 }
               }}
               activeOpacity={0.7}
@@ -2098,6 +2119,13 @@ export function AddExerciseScreen({ navigation, route }: any) {
           </View>
         </View>
       </Modal>
+
+      {/* Badge Notification Modal */}
+      <BadgeNotificationModal
+        visible={showModal}
+        badge={earnedBadge}
+        onClose={closeModal}
+      />
     </SafeAreaView>
   );
 }

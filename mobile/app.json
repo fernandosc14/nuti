@@ -13,11 +13,13 @@
       "**/*"
     ],
     "ios": {
+      "icon": "./assets/logo-app.png",
       "supportsTablet": true,
       "bundleIdentifier": "com.nuti.app"
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./assets/logo-app.png",
         "backgroundColor": "#3BB273"
       },
       "package": "com.nuti.app",

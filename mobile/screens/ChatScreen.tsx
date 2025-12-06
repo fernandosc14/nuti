@@ -17,6 +17,7 @@ import {
   Animated,
   Modal,
   Pressable,
+  StyleSheet,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUser } from '../context/UserContext';
@@ -49,6 +50,9 @@ export function ChatScreen({ navigation }: any) {
   const { t, language } = useLanguage();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  
+  // Verificar se o utilizador tem plano premium
+  const isPremium = profile?.plan === 'premium';
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -843,6 +847,158 @@ export function ChatScreen({ navigation }: any) {
     }
   };
 
+  // Renderizar skeleton de chat (bolhas de mensagens)
+  const renderSkeletonContent = () => {
+    const textSkeletonColor = theme.isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)';
+    const timestampSkeletonColor = theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
+    
+    // Cores exatas das bolhas reais
+    const userBubbleColor = theme.colors.primary || '#3BB273';
+    const assistantBubbleColor = theme.colors.card || (theme.isDark ? '#1F2937' : '#F3F4F6');
+    
+    return (
+      <ScrollView
+        style={{ flex: 1, paddingHorizontal: 24, paddingVertical: 30 }}
+        contentContainerStyle={{ 
+          paddingBottom: 100,
+        }}
+        scrollEnabled={false}
+      >
+        {/* Bolhas de mensagens skeleton - padrão alternado igual ao chat real */}
+        {[
+          { role: 'user', width: '70%', lines: [100, 85] },
+          { role: 'assistant', width: '75%', lines: [100, 100, 60] },
+          { role: 'user', width: '65%', lines: [100] },
+          { role: 'assistant', width: '80%', lines: [100, 100, 100, 75] },
+          { role: 'user', width: '60%', lines: [100, 90] },
+          { role: 'assistant', width: '70%', lines: [100, 95] },
+        ].map((bubble, index) => (
+          <View
+            key={index}
+            style={{
+              marginBottom: 16,
+              alignItems: bubble.role === 'user' ? 'flex-end' : 'flex-start',
+            }}
+          >
+            <View
+              style={{
+                maxWidth: bubble.width,
+                borderRadius: 24,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                backgroundColor: bubble.role === 'user' ? userBubbleColor : assistantBubbleColor,
+              }}
+            >
+              {/* Linhas de texto skeleton dentro da bolha - com larguras variadas */}
+              {bubble.lines.map((lineWidth, lineIndex) => (
+                <View
+                  key={lineIndex}
+                  style={{
+                    height: 14,
+                    backgroundColor: bubble.role === 'user' 
+                      ? 'rgba(255, 255, 255, 0.3)' 
+                      : textSkeletonColor,
+                    borderRadius: 4,
+                    marginBottom: lineIndex < bubble.lines.length - 1 ? 6 : 0,
+                    width: `${lineWidth}%`,
+                  }}
+                />
+              ))}
+              {/* Timestamp skeleton - igual ao real */}
+              <View
+                style={{
+                  width: 40,
+                  height: 11,
+                  backgroundColor: bubble.role === 'user'
+                    ? 'rgba(255, 255, 255, 0.5)'
+                    : timestampSkeletonColor,
+                  borderRadius: 4,
+                  marginTop: 4,
+                }}
+              />
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+    );
+  };
+
+  // Se não for premium, mostrar tela de bloqueio com skeleton atrás
+  if (!isPremium) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top']}>
+        {!theme.isDark && (
+          <LinearGradient
+            colors={['#F0FDF4', '#FFFFFF']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          />
+        )}
+        {theme.isDark && (
+          <LinearGradient
+            colors={['#1A2E1F', theme.colors.background || '#000000']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.3 }}
+          />
+        )}
+        {/* Skeleton da tela por trás */}
+        <View style={styles.skeletonContainer}>
+          {renderSkeletonContent()}
+        </View>
+
+        {/* Overlay de bloqueio */}
+        <View style={[StyleSheet.absoluteFill, styles.lockOverlay]}>
+          <TouchableOpacity 
+            onPress={() => navigation.goBack()} 
+            style={styles.lockBackButton}
+            activeOpacity={0.7}
+          >
+            <Ionicons 
+              name="arrow-back" 
+              size={24} 
+              color={theme.colors.primary || '#3BB273'} 
+            />
+          </TouchableOpacity>
+
+          <View style={styles.lockContent}>
+            <View style={[
+              styles.lockIconContainer,
+              { backgroundColor: (theme.colors.primary || '#3BB273') + '20' },
+            ]}>
+              <Ionicons 
+                name="lock-closed" 
+                size={64} 
+                color={theme.colors.primary || '#3BB273'} 
+              />
+            </View>
+
+            <Text style={[styles.lockTitle, { color: '#FFFFFF' }]}>
+              {t('chat.premiumRequired') || 'Premium Required'}
+            </Text>
+            <Text style={[styles.lockDescription, { color: theme.isDark ? (theme.colors.textSecondary || '#6B7280') : '#6B7280' }]}>
+              {t('chat.premiumRequiredDescription') || 'This feature is available only for Premium users. Upgrade to unlock chat and more features.'}
+            </Text>
+
+            <TouchableOpacity
+              style={[
+                styles.lockUpgradeButton,
+                { backgroundColor: theme.colors.primary || '#3BB273' },
+              ]}
+              onPress={() => navigation.navigate('Premium')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.lockUpgradeButtonText}>
+                {t('premium.upgradeButton') || 'Upgrade to Premium'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top']}>
         {!theme.isDark && (
@@ -1301,7 +1457,7 @@ export function ChatScreen({ navigation }: any) {
         }}>
           {/* Sugestões de Mensagens */}
           {messages.length === 0 && !loading && (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20, justifyContent: 'flex-end' }}>
+              <View style={{ gap: 8, marginBottom: 20, alignItems: 'flex-end' }}>
                 {suggestions.map((suggestion, index) => (
                 <TouchableOpacity
                   key={index}
@@ -1317,6 +1473,8 @@ export function ChatScreen({ navigation }: any) {
                     borderStyle: 'dashed',
                     borderColor: (theme.colors.border || '#E5E7EB') + 'CC',
                     opacity: 0.75,
+                    alignSelf: 'flex-end',
+                    maxWidth: '100%',
                   }}
                   activeOpacity={0.7}
                 >
@@ -1642,4 +1800,66 @@ export function ChatScreen({ navigation }: any) {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  skeletonContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.5,
+  },
+  lockOverlay: {
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 24,
+    paddingTop: 0,
+  },
+  lockBackButton: {
+    paddingTop: 16,
+    paddingBottom: 8,
+    marginLeft: -8,
+    zIndex: 10,
+  },
+  lockContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  lockIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 32,
+  },
+  lockTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  lockDescription: {
+    fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+    paddingHorizontal: 20,
+  },
+  lockUpgradeButton: {
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    minWidth: 200,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lockUpgradeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+});
 

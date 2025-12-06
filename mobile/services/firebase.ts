@@ -7,7 +7,6 @@
 import { initializeApp } from 'firebase/app';
 import { initializeAuth, getReactNativePersistence, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Configuração do Firebase
@@ -16,7 +15,6 @@ const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "your-api-key",
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || "your-project.firebaseapp.com",
   projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "your-project-id",
-  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || "your-project.appspot.com",
   messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "123456789",
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || "your-app-id"
 };
@@ -45,17 +43,11 @@ export const auth = initializeAuth(app, {
 
 // Exportar outros serviços
 export const db = getFirestore(app);
-
-// Inicializar Storage
-// Usa o bucket do firebaseConfig (que já vem do .env ou fallback)
-// O Firebase SDK automaticamente usa o storageBucket do firebaseConfig
-export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 
 // Log para debug
 console.log('=== Firebase Configuration ===');
 console.log('Project ID:', firebaseConfig.projectId);
-console.log('Storage Bucket:', firebaseConfig.storageBucket);
 console.log('============================');
 
 export default app;

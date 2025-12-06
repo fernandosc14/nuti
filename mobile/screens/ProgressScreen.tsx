@@ -4,7 +4,7 @@
  * Tela de progresso do utilizador (em desenvolvimento)
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,19 +17,33 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Line, G, Text as SvgText } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { MotiView } from 'moti';
 import { useTheme } from '../context/ThemeContext';
 import { useUser } from '../context/UserContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useUnits } from '../context/UnitsContext';
+import { BadgeItem } from '../components/BadgeItem';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../services/firebase';
+import { getCache, setCache } from '../utils/cacheUtils';
 
 const BMI_MIN = 10;
 const BMI_MAX = 40;
 
+interface Badge {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+  earnedAt?: Date;
+}
+
 export function ProgressScreen({ navigation }: any) {
   const { theme } = useTheme();
-  const { profile } = useUser();
+  const { profile, user } = useUser();
   const { t } = useLanguage();
   const { units, convertWeight } = useUnits();
+  const [badges, setBadges] = useState<Badge[]>([]);
 
   const weightInfo = useMemo(() => {
     if (!profile?.weight) {
@@ -61,6 +75,104 @@ export function ProgressScreen({ navigation }: any) {
     
     return history;
   }, [profile?.weight, profile?.weightHistory, profile?.createdAt]);
+
+  // Carregar badges
+  useEffect(() => {
+    const loadBadges = async () => {
+      if (!user || !profile?.badges || profile.badges.length === 0) {
+        setBadges([]);
+        return;
+      }
+
+      try {
+        const badgesCacheKey = `badges_${user.uid}`;
+        const cachedBadges = await getCache<Badge[]>(badgesCacheKey);
+        
+        if (cachedBadges && cachedBadges.length > 0) {
+          setBadges(cachedBadges);
+          return;
+        }
+
+        const badgesRef = collection(db, 'badges');
+        const badgesData: Badge[] = [];
+
+        for (const badgeId of profile.badges.slice(0, 6)) {
+          const badgeDoc = await getDocs(
+            query(badgesRef, where('__name__', '==', badgeId))
+          );
+          if (!badgeDoc.empty) {
+            const badgeData = badgeDoc.docs[0].data();
+            badgesData.push({
+              id: badgeId,
+              name: badgeData.name,
+              icon: badgeData.icon,
+              description: badgeData.description,
+            });
+          }
+        }
+
+        setBadges(badgesData);
+        await setCache(badgesCacheKey, badgesData);
+      } catch (error) {
+        console.error('Error loading badges:', error);
+      }
+    };
+
+    loadBadges();
+  }, [user, profile?.badges]);
+
+  // Calcular percentagem de progresso do objetivo de peso e obter pesos
+  const weightProgressData = useMemo(() => {
+    if (!profile?.weight || !profile?.desiredWeight) {
+      return { percentage: 0, initialWeight: null, desiredWeight: null };
+    }
+
+    const currentWeight = profile.weight;
+    const desiredWeight = profile.desiredWeight;
+    const goal = profile.goal || 'maintain';
+
+    // Obter peso inicial (primeiro do histórico ou peso atual se não houver histórico)
+    const weightHistory = profile.weightHistory || [];
+    let initialWeight = currentWeight;
+    
+    if (weightHistory.length > 0) {
+      // Ordenar por data e pegar o mais antigo
+      const sortedHistory = [...weightHistory].sort((a, b) => {
+        const dateA = a.date instanceof Date ? a.date : new Date(a.date);
+        const dateB = b.date instanceof Date ? b.date : new Date(b.date);
+        return dateA.getTime() - dateB.getTime();
+      });
+      initialWeight = sortedHistory[0].weight;
+    }
+
+    // Calcular percentagem baseada no objetivo
+    let percentage = 0;
+    if (goal === 'lose') {
+      // Perder peso: (peso inicial - peso atual) / (peso inicial - peso objetivo) * 100
+      const totalToLose = initialWeight - desiredWeight;
+      const currentLoss = initialWeight - currentWeight;
+      if (totalToLose <= 0) percentage = 100; // Já atingiu ou passou o objetivo
+      else percentage = (currentLoss / totalToLose) * 100;
+    } else if (goal === 'gain') {
+      // Ganhar peso: (peso atual - peso inicial) / (peso objetivo - peso inicial) * 100
+      const totalToGain = desiredWeight - initialWeight;
+      const currentGain = currentWeight - initialWeight;
+      if (totalToGain <= 0) percentage = 100; // Já atingiu ou passou o objetivo
+      else percentage = (currentGain / totalToGain) * 100;
+    } else {
+      // Manter peso: calcular quão próximo está do peso objetivo
+      const difference = Math.abs(currentWeight - desiredWeight);
+      const tolerance = 2; // 2kg de tolerância
+      if (difference <= tolerance) percentage = 100;
+      else percentage = Math.max(0, 100 - (difference / desiredWeight) * 100);
+    }
+
+    return {
+      percentage: Math.min(100, Math.max(0, percentage)),
+      initialWeight,
+      desiredWeight,
+    };
+  }, [profile?.weight, profile?.desiredWeight, profile?.goal, profile?.weightHistory]);
 
   const bmiData = useMemo(() => {
     if (!profile?.weight || !profile?.height || profile.height <= 0) {
@@ -325,41 +437,119 @@ export function ProgressScreen({ navigation }: any) {
         </View>
       </View>
 
-      <View style={[
-        styles.card,
-        {
-          backgroundColor: theme.colors.card || '#FFFFFF',
-          borderColor: theme.colors.border || '#E5E7EB',
-        },
-      ]}>
-        <View style={styles.cardHeader}>
-          <View>
-            <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
-              {t('progress.weightCardTitle')}
-            </Text>
-            <Text style={[styles.weightSubtitle, { color: theme.colors.textSecondary || '#6B7280' }]}>
-              {t('progress.weightCardSubtitle')}
-            </Text>
+      {/* Goal Progress Percentage and Weight Card - Side by Side */}
+      {profile?.goal === 'maintain' ? (
+        /* Weight Card for Maintain - Full Width with Horizontal Layout */
+        <View style={[
+          styles.card,
+          {
+            backgroundColor: theme.colors.card || '#FFFFFF',
+            borderColor: theme.colors.border || '#E5E7EB',
+          },
+        ]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.cardTitle, { color: theme.colors.text, marginBottom: 4, fontSize: 14 }]}>
+                {t('progress.weightCardTitle')}
+              </Text>
+              <Text style={[styles.weightValueHorizontal, { color: theme.colors.text, fontSize: 28 }]}>
+                {weightInfo ? `${weightInfo.value} ${weightInfo.unit}` : t('progress.weightMissing')}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.weightButtonCompact,
+                { backgroundColor: theme.colors.primary || '#3BB273' },
+              ]}
+              onPress={() => navigation.navigate('UpdateWeight')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="create-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.weightButtonTextCompact}>
+                {t('progress.weightCardButton')}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
+      ) : (
+        /* Goal Progress and Weight Card - Side by Side for Lose/Gain */
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          {/* Goal Progress Percentage */}
+          <View style={[
+            styles.card,
+            styles.equalWidthCard,
+            styles.equalHeightCard,
+            {
+              backgroundColor: theme.colors.card || '#FFFFFF',
+              borderColor: theme.colors.border || '#E5E7EB',
+            },
+          ]}>
+            <Text style={[styles.cardTitle, { color: theme.colors.text, marginBottom: 8, fontSize: 14 }]}>
+              {t('progress.goalProgress') || 'Goal Progress'}
+            </Text>
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
+              <Text style={[styles.goalPercentage, { color: theme.colors.primary || '#3BB273' }]}>
+                {Math.round(weightProgressData.percentage)}%
+              </Text>
+              {weightProgressData.initialWeight !== null && weightProgressData.desiredWeight !== null && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 }}>
+                  <Text style={[styles.weightInfo, { color: theme.colors.textSecondary || '#6B7280' }]}>
+                    {units.weight === 'lb' 
+                      ? Math.round(convertWeight(weightProgressData.initialWeight, 'kg', 'lb'))
+                      : weightProgressData.initialWeight.toFixed(1)
+                    }
+                  </Text>
+                  <Text style={[styles.weightInfo, { color: theme.colors.textSecondary || '#6B7280' }]}>
+                    →
+                  </Text>
+                  <Text style={[styles.weightInfo, { color: theme.colors.textSecondary || '#6B7280' }]}>
+                    {units.weight === 'lb' 
+                      ? Math.round(convertWeight(weightProgressData.desiredWeight, 'kg', 'lb'))
+                      : weightProgressData.desiredWeight.toFixed(1)
+                    }
+                  </Text>
+                  <Text style={[styles.weightInfo, { color: theme.colors.textSecondary || '#6B7280' }]}>
+                    {units.weight === 'kg' ? 'kg' : 'lbs'}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
 
-        <Text style={[styles.weightValue, { color: theme.colors.text }]}>
-          {weightInfo ? `${weightInfo.value} ${weightInfo.unit}` : t('progress.weightMissing')}
-        </Text>
-
-        <TouchableOpacity
-          style={[
-            styles.weightButton,
-            { backgroundColor: theme.colors.primary || '#3BB273' },
-          ]}
-          onPress={() => navigation.navigate('UpdateWeight')}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.weightButtonText}>
-            {t('progress.weightCardButton')}
-          </Text>
-        </TouchableOpacity>
-      </View>
+          {/* Weight Card */}
+          <View style={[
+            styles.card,
+            styles.equalWidthCard,
+            styles.equalHeightCard,
+            {
+              backgroundColor: theme.colors.card || '#FFFFFF',
+              borderColor: theme.colors.border || '#E5E7EB',
+            },
+          ]}>
+            <Text style={[styles.cardTitle, { color: theme.colors.text, marginBottom: 8, fontSize: 14 }]}>
+              {t('progress.weightCardTitle')}
+            </Text>
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
+              <Text style={[styles.weightValue, { color: theme.colors.text, fontSize: 32, marginVertical: 8 }]}>
+                {weightInfo ? `${weightInfo.value} ${weightInfo.unit}` : t('progress.weightMissing')}
+              </Text>
+              <TouchableOpacity
+                style={[
+                  styles.weightButtonCompact,
+                  { backgroundColor: theme.colors.primary || '#3BB273' },
+                ]}
+                onPress={() => navigation.navigate('UpdateWeight')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="create-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.weightButtonTextCompact}>
+                  {t('progress.weightCardButton')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
 
       {/* Weight Progress Chart */}
       {profile?.weight && chartData.length > 0 && (
@@ -470,6 +660,62 @@ export function ProgressScreen({ navigation }: any) {
             : t('progress.bmiMissingData')}
         </Text>
       </View>
+
+      {/* Badges */}
+      {badges.length > 0 && (
+        <MotiView
+          from={{ opacity: 0, translateX: -20 }}
+          animate={{ opacity: 1, translateX: 0 }}
+          transition={{ type: 'timing', duration: 400, delay: 100 }}
+          style={{ marginBottom: 24 }}
+        >
+          <View style={[styles.card, {
+            backgroundColor: theme.colors.card || '#FFFFFF',
+            borderColor: theme.colors.border || '#E5E7EB',
+          }]}>
+            <View style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              marginBottom: 16 
+            }}>
+              <View style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: theme.colors.primary + '20',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: 12,
+              }}>
+                <Ionicons name="trophy" size={22} color={theme.colors.primary || '#3BB273'} />
+              </View>
+              <Text style={{
+                fontSize: 20,
+                fontWeight: '700',
+                color: theme.colors.text,
+              }}>
+                {t('dashboard.badges') || 'Badges'}
+              </Text>
+            </View>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingRight: 8 }}
+            >
+              {badges.map((badge, index) => (
+                <MotiView
+                  key={badge.id}
+                  from={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ type: 'timing', duration: 300, delay: index * 100 }}
+                >
+                  <BadgeItem {...badge} size="small" />
+                </MotiView>
+              ))}
+            </ScrollView>
+          </View>
+        </MotiView>
+      )}
     </ScrollView>
   );
 
@@ -524,7 +770,7 @@ export function ProgressScreen({ navigation }: any) {
               />
             </View>
 
-            <Text style={[styles.lockTitle, { color: theme.isDark ? theme.colors.text : '#111827' }]}>
+            <Text style={[styles.lockTitle, { color: '#FFFFFF' }]}>
               {t('progress.premiumRequired') || 'Premium Required'}
             </Text>
             <Text style={[styles.lockDescription, { color: theme.isDark ? (theme.colors.textSecondary || '#6B7280') : '#6B7280' }]}>
@@ -769,6 +1015,43 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
+  },
+  goalPercentage: {
+    fontSize: 36,
+    fontWeight: '800',
+  },
+  goalDetails: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  weightInfo: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  equalWidthCard: {
+    flex: 1,
+    minWidth: 0,
+  },
+  weightValueHorizontal: {
+    fontSize: 28,
+    fontWeight: '800',
+  },
+  equalHeightCard: {
+    minHeight: 160,
+  },
+  weightButtonCompact: {
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    marginTop: 8,
+  },
+  weightButtonTextCompact: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
 

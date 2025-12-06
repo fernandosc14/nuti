@@ -414,80 +414,116 @@ export function ProfileScreen({ navigation }: any) {
     setIsDeletingAccount(true);
     setShowDeleteAccountModal(false);
 
+    let accountDeleted = false;
+    let criticalError: any = null;
+
     try {
       const userId = user.uid;
 
-      // 1. Apagar todas as refeições (meals)
+      // 1. Apagar todas as refeições (meals) - operação não crítica
       try {
         const mealsRef = collection(db, 'meals');
         const mealsQuery = query(mealsRef, where('userId', '==', userId));
         const mealsSnapshot = await getDocs(mealsQuery);
         const mealsDeletePromises = mealsSnapshot.docs.map(doc => deleteDoc(doc.ref));
         await Promise.all(mealsDeletePromises);
-        console.log('✓ Meals deleted');
       } catch (error: any) {
         console.error('Error deleting meals:', error);
-        throw new Error(`Failed to delete meals: ${error.message}`);
+        // Não bloquear, continuar
       }
 
-      // 2. Apagar todos os exercícios (exercises)
-      const exercisesRef = collection(db, 'exercises');
-      const exercisesQuery = query(exercisesRef, where('userId', '==', userId));
-      const exercisesSnapshot = await getDocs(exercisesQuery);
-      const exercisesDeletePromises = exercisesSnapshot.docs.map(doc => deleteDoc(doc.ref));
-      await Promise.all(exercisesDeletePromises);
+      // 2. Apagar todos os exercícios (exercises) - operação não crítica
+      try {
+        const exercisesRef = collection(db, 'exercises');
+        const exercisesQuery = query(exercisesRef, where('userId', '==', userId));
+        const exercisesSnapshot = await getDocs(exercisesQuery);
+        const exercisesDeletePromises = exercisesSnapshot.docs.map(doc => deleteDoc(doc.ref));
+        await Promise.all(exercisesDeletePromises);
+      } catch (error: any) {
+        console.error('Error deleting exercises:', error);
+        // Não bloquear, continuar
+      }
 
-      // 3. Apagar todas as mensagens do chat (messages)
+      // 3. Apagar todas as mensagens do chat (messages) - operação não crítica
       try {
         const messagesRef = collection(db, 'messages');
         const messagesQuery = query(messagesRef, where('userId', '==', userId));
         const messagesSnapshot = await getDocs(messagesQuery);
         const messagesDeletePromises = messagesSnapshot.docs.map(doc => deleteDoc(doc.ref));
         await Promise.all(messagesDeletePromises);
-        console.log('✓ Messages deleted');
       } catch (error: any) {
         console.error('Error deleting messages:', error);
-        throw new Error(`Failed to delete messages: ${error.message}`);
+        // Não bloquear, continuar
       }
 
-      // 4. Apagar refeições guardadas (savedMeals)
-      const savedMealsRef = collection(db, 'savedMeals');
-      const savedMealsQuery = query(savedMealsRef, where('userId', '==', userId));
-      const savedMealsSnapshot = await getDocs(savedMealsQuery);
-      const savedMealsDeletePromises = savedMealsSnapshot.docs.map(doc => deleteDoc(doc.ref));
-      await Promise.all(savedMealsDeletePromises);
+      // 4. Apagar refeições guardadas (savedMeals) - operação não crítica
+      try {
+        const savedMealsRef = collection(db, 'savedMeals');
+        const savedMealsQuery = query(savedMealsRef, where('userId', '==', userId));
+        const savedMealsSnapshot = await getDocs(savedMealsQuery);
+        const savedMealsDeletePromises = savedMealsSnapshot.docs.map(doc => deleteDoc(doc.ref));
+        await Promise.all(savedMealsDeletePromises);
+      } catch (error: any) {
+        console.error('Error deleting saved meals:', error);
+        // Não bloquear, continuar
+      }
 
-      // 5. Apagar tipos de exercícios personalizados (customExerciseTypes)
-      const customExerciseTypesRef = collection(db, 'customExerciseTypes');
-      const customExerciseTypesQuery = query(customExerciseTypesRef, where('userId', '==', userId));
-      const customExerciseTypesSnapshot = await getDocs(customExerciseTypesQuery);
-      const customExerciseTypesDeletePromises = customExerciseTypesSnapshot.docs.map(doc => deleteDoc(doc.ref));
-      await Promise.all(customExerciseTypesDeletePromises);
+      // 5. Apagar tipos de exercícios personalizados (customExerciseTypes) - operação não crítica
+      try {
+        const customExerciseTypesRef = collection(db, 'customExerciseTypes');
+        const customExerciseTypesQuery = query(customExerciseTypesRef, where('userId', '==', userId));
+        const customExerciseTypesSnapshot = await getDocs(customExerciseTypesQuery);
+        const customExerciseTypesDeletePromises = customExerciseTypesSnapshot.docs.map(doc => deleteDoc(doc.ref));
+        await Promise.all(customExerciseTypesDeletePromises);
+      } catch (error: any) {
+        console.error('Error deleting custom exercise types:', error);
+        // Não bloquear, continuar
+      }
 
-      // 6. Apagar registos de água (water) - usando o padrão de ID userId_dateStr
-      const waterRef = collection(db, 'water');
-      const waterQuery = query(waterRef, where('userId', '==', userId));
-      const waterSnapshot = await getDocs(waterQuery);
-      const waterDeletePromises = waterSnapshot.docs.map(doc => deleteDoc(doc.ref));
-      await Promise.all(waterDeletePromises);
+      // 6. Apagar registos de água (water) - operação não crítica
+      try {
+        const waterRef = collection(db, 'water');
+        const waterQuery = query(waterRef, where('userId', '==', userId));
+        const waterSnapshot = await getDocs(waterQuery);
+        const waterDeletePromises = waterSnapshot.docs.map(doc => deleteDoc(doc.ref));
+        await Promise.all(waterDeletePromises);
+      } catch (error: any) {
+        console.error('Error deleting water records:', error);
+        // Não bloquear, continuar
+      }
 
-      // 7. Apagar registos de passos (steps) - usando o padrão de ID userId_dateStr
-      const stepsRef = collection(db, 'steps');
-      const stepsQuery = query(stepsRef, where('userId', '==', userId));
-      const stepsSnapshot = await getDocs(stepsQuery);
-      const stepsDeletePromises = stepsSnapshot.docs.map(doc => deleteDoc(doc.ref));
-      await Promise.all(stepsDeletePromises);
+      // 7. Apagar registos de passos (steps) - operação não crítica
+      try {
+        const stepsRef = collection(db, 'steps');
+        const stepsQuery = query(stepsRef, where('userId', '==', userId));
+        const stepsSnapshot = await getDocs(stepsQuery);
+        const stepsDeletePromises = stepsSnapshot.docs.map(doc => deleteDoc(doc.ref));
+        await Promise.all(stepsDeletePromises);
+      } catch (error: any) {
+        console.error('Error deleting steps:', error);
+        // Não bloquear, continuar
+      }
 
-      // 8. Apagar o perfil do utilizador (users)
-      const userRef = doc(db, 'users', userId);
-      await deleteDoc(userRef);
+      // 8. Apagar o perfil do utilizador (users) - OPERAÇÃO CRÍTICA
+      try {
+        const userRef = doc(db, 'users', userId);
+        await deleteDoc(userRef);
+      } catch (error: any) {
+        console.error('Error deleting user profile:', error);
+        criticalError = error;
+        throw error; // Esta é crítica, bloquear se falhar
+      }
 
-      // 9. Limpar AsyncStorage antes de remover o utilizador
-      await AsyncStorage.removeItem('userId');
-      await AsyncStorage.removeItem(`chat_rate_limit_${userId}`);
+      // 9. Limpar AsyncStorage - operação não crítica
+      try {
+        await AsyncStorage.removeItem('userId');
+        await AsyncStorage.removeItem(`chat_rate_limit_${userId}`);
+      } catch (error: any) {
+        console.error('Error clearing AsyncStorage:', error);
+        // Não bloquear, continuar
+      }
 
-      // 10. Enviar email de confirmação via Cloud Function
-      // Nota: Isto deve ser feito ANTES de remover o utilizador do Auth
+      // 10. Enviar email de confirmação via Cloud Function - operação não crítica
       try {
         const functions = getFunctions();
         const sendDeletionEmail = httpsCallable(functions, 'sendAccountDeletionEmail');
@@ -502,70 +538,88 @@ export function ProfileScreen({ navigation }: any) {
         // Não mostrar erro ao utilizador, a exclusão continua
       }
 
-      // 11. Reautenticar antes de apagar (requerido pelo Firebase)
+      // 11. Eliminar utilizador do Auth - OPERAÇÃO CRÍTICA
       const currentUser = auth.currentUser;
       if (!currentUser) {
-        throw new Error('User not authenticated');
-      }
-
-      // Verificar se é Google Sign-In e reautenticar
-      const providerData = currentUser.providerData;
-      const isGoogleAuth = providerData.some(provider => provider.providerId === 'google.com');
-
-      if (isGoogleAuth) {
-        try {
-          // Tentar reautenticação com Google
-          // Nota: Para React Native, precisamos obter um novo token do Google
-          // Por agora, vamos tentar apagar diretamente e se falhar, pedir reautenticação
-          await deleteUser(currentUser);
-        } catch (reauthError: any) {
-          if (reauthError.code === 'auth/requires-recent-login') {
-            // Se falhar, mostrar mensagem ao utilizador para fazer logout e login novamente
-            setIsDeletingAccount(false);
-            Toast.show({
-              type: 'error',
-              text1: t('profile.settings.deleteError') || 'Erro',
-              text2: t('profile.settings.requiresRecentLogin') || 'Por favor, faça logout e login novamente antes de excluir a conta por motivos de segurança.',
-              visibilityTime: 6000,
-            });
-            throw reauthError;
-          }
-          throw reauthError;
-        }
+        // Se não há utilizador autenticado, considerar conta eliminada (já foi eliminada)
+        accountDeleted = true;
       } else {
-        // Para email/password, também tentar apagar
         try {
-          await deleteUser(currentUser);
-        } catch (reauthError: any) {
-          if (reauthError.code === 'auth/requires-recent-login') {
-            setIsDeletingAccount(false);
-            Toast.show({
-              type: 'error',
-              text1: t('profile.settings.deleteError') || 'Erro',
-              text2: 'Por favor, faz logout e login novamente antes de excluir a conta.',
-              visibilityTime: 5000,
-            });
-            throw reauthError;
+          // Verificar se é Google Sign-In
+          const providerData = currentUser.providerData;
+          const isGoogleAuth = providerData.some(provider => provider.providerId === 'google.com');
+
+          if (isGoogleAuth) {
+            try {
+              await deleteUser(currentUser);
+              accountDeleted = true;
+            } catch (reauthError: any) {
+              if (reauthError.code === 'auth/requires-recent-login') {
+                // Se falhar por reautenticação, não considerar erro crítico se o perfil já foi eliminado
+                // O utilizador pode fazer logout manualmente
+                accountDeleted = true; // Perfil já foi eliminado
+                criticalError = reauthError;
+              } else {
+                throw reauthError;
+              }
+            }
+          } else {
+            try {
+              await deleteUser(currentUser);
+              accountDeleted = true;
+            } catch (reauthError: any) {
+              if (reauthError.code === 'auth/requires-recent-login') {
+                // Se falhar por reautenticação, não considerar erro crítico se o perfil já foi eliminado
+                accountDeleted = true; // Perfil já foi eliminado
+                criticalError = reauthError;
+              } else {
+                throw reauthError;
+              }
+            }
           }
-          throw reauthError;
+        } catch (error: any) {
+          console.error('Error deleting user from Auth:', error);
+          // Se o perfil já foi eliminado, considerar sucesso
+          accountDeleted = true;
+          criticalError = error;
         }
       }
 
-      // 13. Mostrar mensagem de confirmação
-      Toast.show({
-        type: 'success',
-        text1: t('profile.settings.accountDeleted'),
-        text2: t('profile.settings.accountDeletedMessage'),
-        visibilityTime: 5000,
-      });
+      // Se a conta foi eliminada (perfil eliminado), mostrar sucesso
+      if (accountDeleted) {
+        // Fazer sign out para limpar estado local
+        try {
+          await signOut();
+        } catch (error: any) {
+          console.error('Error signing out:', error);
+          // Não bloquear, continuar
+        }
+
+        Toast.show({
+          type: 'success',
+          text1: t('profile.settings.accountDeleted'),
+          text2: t('profile.settings.accountDeletedMessage'),
+          visibilityTime: 5000,
+        });
+      } else {
+        // Se não foi eliminada, mostrar erro
+        throw criticalError || new Error('Failed to delete account');
+      }
     } catch (error: any) {
       console.error('Error deleting account:', error);
       setIsDeletingAccount(false);
-      Toast.show({
-        type: 'error',
-        text1: t('profile.settings.deleteError'),
-        text2: t('profile.settings.deleteErrorMessage'),
-      });
+      
+      // Só mostrar erro se a conta não foi eliminada
+      if (!accountDeleted) {
+        Toast.show({
+          type: 'error',
+          text1: t('profile.settings.deleteError'),
+          text2: t('profile.settings.deleteErrorMessage'),
+        });
+      } else {
+        // Se foi eliminada mas houve erro não crítico, não mostrar erro
+        // A mensagem de sucesso já foi mostrada
+      }
     }
   };
 

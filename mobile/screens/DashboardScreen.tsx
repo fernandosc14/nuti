@@ -30,12 +30,15 @@ import { ChartCircle } from '../components/ChartCircle';
 import { MealCard } from '../components/MealCard';
 import { BadgeItem } from '../components/BadgeItem';
 import { PremiumPromoCard } from '../components/PremiumPromoCard';
+import { useBadgeNotification } from '../hooks/useBadgeNotification';
+import { BadgeNotificationModal } from '../components/BadgeNotificationModal';
 import { Ionicons } from '@expo/vector-icons';
 import { collection, query, where, getDocs, Timestamp, doc, deleteDoc, setDoc, getDoc, addDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { updateStreak, updateStreakAfterDelete } from '../utils/streakUtils';
 import { calculateCalorieGoalFromProfile } from '../utils/nutritionUtils';
 import { getCache, setCache, removeCache } from '../utils/cacheUtils';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { MotiView } from 'moti';
 import { Image, Dimensions } from 'react-native';
@@ -68,13 +71,7 @@ interface Meal {
   }>; // Lista de alimentos individuais da refeição
 }
 
-interface Badge {
-  id: string;
-  name: string;
-  icon: string;
-  description: string;
-  earnedAt?: Date;
-}
+// Badge interface moved to ProgressScreen
 
 interface Exercise {
   id: string;
@@ -148,6 +145,8 @@ const calculateHealthScore = (meal: Meal): number => {
 export function DashboardScreen({ navigation }: any) {
   const { user, profile, refreshProfile, updateProfile } = useUser();
   const { t, language } = useLanguage();
+  const { showModal, earnedBadge, checkAndShowBadges, closeModal } = useBadgeNotification();
+  // Badges moved to ProgressScreen
   const { theme } = useTheme();
   const { setSelectedDate: setContextSelectedDate } = useSelectedDate();
   const insets = useSafeAreaInsets();
@@ -155,7 +154,7 @@ export function DashboardScreen({ navigation }: any) {
   const [consumed, setConsumed] = useState(0);
   const [goal, setGoal] = useState(2000);
   const [meals, setMeals] = useState<Meal[]>([]);
-  const [badges, setBadges] = useState<Badge[]>([]);
+  // Badges moved to ProgressScreen - removed state
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [macros, setMacros] = useState({ protein: 0, carbs: 0, fat: 0 });
@@ -199,7 +198,7 @@ export function DashboardScreen({ navigation }: any) {
     if (!user) {
       setLoading(false);
       setMeals([]);
-      setBadges([]);
+      // Badges moved to ProgressScreen
       setConsumed(0);
       return;
     }
@@ -246,7 +245,28 @@ export function DashboardScreen({ navigation }: any) {
     const mealsCalories = meals.reduce((sum, meal) => sum + (meal.calories || 0), 0);
     const netCalories = mealsCalories - caloriesBurned;
     setConsumed(Math.max(0, netCalories)); // Não permitir valores negativos
-  }, [meals, caloriesBurned]);
+
+    // Verificar se atingiu meta de calorias (apenas uma vez por dia)
+    if (user && profile && netCalories >= goal && goal > 0) {
+      const checkGoalBadge = async () => {
+        try {
+          const todayStr = new Date().toISOString().split('T')[0];
+          const lastCheckKey = `goal_badge_check_${user.uid}_${todayStr}`;
+          const lastCheck = await AsyncStorage.getItem(lastCheckKey);
+          
+          if (!lastCheck) {
+            // Ainda não verificou hoje, verificar badges
+            await checkAndShowBadges(user.uid);
+            await AsyncStorage.setItem(lastCheckKey, 'true');
+          }
+        } catch (error) {
+          console.error('Error checking goal badge:', error);
+        }
+      };
+      
+      checkGoalBadge();
+    }
+  }, [meals, caloriesBurned, goal, user, profile, checkAndShowBadges]);
 
 
   const loadDashboardData = async (forceRefresh: boolean = false) => {
@@ -353,82 +373,7 @@ export function DashboardScreen({ navigation }: any) {
       });
 
 
-      // Buscar badges (usar cache - badges raramente mudam)
-      if (profile?.badges && profile.badges.length > 0) {
-        const badgesCacheKey = `badges_${currentUserId}`;
-        
-        // Tentar cache primeiro
-        if (!forceRefresh) {
-          const cachedBadges = await getCache<Badge[]>(badgesCacheKey);
-          if (cachedBadges && cachedBadges.length > 0) {
-            if (user && user.uid === currentUserId) {
-              setBadges(cachedBadges);
-            }
-          } else {
-            // Se não houver cache, buscar do Firestore
-            const badgesRef = collection(db, 'badges');
-            const badgesData: Badge[] = [];
-
-            for (const badgeId of profile.badges.slice(0, 3)) {
-              // Verificar antes de cada query
-              if (!user || user.uid !== currentUserId) {
-                return;
-              }
-
-              const badgeDoc = await getDocs(
-                query(badgesRef, where('__name__', '==', badgeId))
-              );
-              if (!badgeDoc.empty) {
-                const badgeData = badgeDoc.docs[0].data();
-                badgesData.push({
-                  id: badgeId,
-                  name: badgeData.name,
-                  icon: badgeData.icon,
-                  description: badgeData.description,
-                });
-              }
-            }
-
-            // Verificar antes de setState
-            if (user && user.uid === currentUserId) {
-              setBadges(badgesData);
-              // Guardar no cache (TTL padrão de 5 minutos é suficiente para badges)
-              await setCache(badgesCacheKey, badgesData);
-            }
-          }
-        } else {
-          // Se for refresh forçado, buscar do Firestore
-          const badgesRef = collection(db, 'badges');
-          const badgesData: Badge[] = [];
-
-          for (const badgeId of profile.badges.slice(0, 3)) {
-            // Verificar antes de cada query
-            if (!user || user.uid !== currentUserId) {
-              return;
-            }
-
-            const badgeDoc = await getDocs(
-              query(badgesRef, where('__name__', '==', badgeId))
-            );
-            if (!badgeDoc.empty) {
-              const badgeData = badgeDoc.docs[0].data();
-              badgesData.push({
-                id: badgeId,
-                name: badgeData.name,
-                icon: badgeData.icon,
-                description: badgeData.description,
-              });
-            }
-          }
-
-          // Verificar antes de setState
-          if (user && user.uid === currentUserId) {
-            setBadges(badgesData);
-            // Atualizar cache
-            await setCache(badgesCacheKey, badgesData);
-          }
-        }
-      }
+      // Badges moved to ProgressScreen - removed loading logic
 
       // Carregar água do dia selecionado (só se ainda houver user)
       if (user && user.uid === currentUserId) {
@@ -825,6 +770,9 @@ export function DashboardScreen({ navigation }: any) {
       setShowWaterModal(false);
       setWaterAmount('250');
 
+      // Verificar e mostrar badges ganhas (pode ganhar badge de água)
+      await checkAndShowBadges(user.uid);
+
       Toast.show({
         type: 'success',
         text1: t('dashboard.waterAdded'),
@@ -1196,56 +1144,6 @@ export function DashboardScreen({ navigation }: any) {
               </View>
             </MotiView>
 
-          {/* Badges */}
-          {badges.length > 0 && (
-            <MotiView
-              from={{ opacity: 0, translateX: -20 }}
-              animate={{ opacity: 1, translateX: 0 }}
-              transition={{ type: 'timing', duration: 400, delay: 100 }}
-              style={{ marginBottom: 24 }}
-            >
-              <View style={{ 
-                flexDirection: 'row', 
-                alignItems: 'center', 
-                marginBottom: 16 
-              }}>
-                <View style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  backgroundColor: theme.colors.primary + '20',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginRight: 12,
-                }}>
-                  <Ionicons name="trophy" size={22} color={theme.colors.primary || '#3BB273'} />
-                </View>
-                <Text style={{
-                  fontSize: 20,
-                  fontWeight: '700',
-                  color: theme.colors.text,
-                }}>
-                  {t('dashboard.badges')}
-                </Text>
-              </View>
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingRight: 8 }}
-              >
-                {badges.map((badge, index) => (
-                  <MotiView
-                    key={badge.id}
-                    from={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ type: 'timing', duration: 300, delay: index * 100 }}
-                  >
-                    <BadgeItem {...badge} size="small" />
-                  </MotiView>
-                ))}
-              </ScrollView>
-            </MotiView>
-          )}
 
           {/* Calendar Selector */}
           <MotiView
@@ -1395,13 +1293,6 @@ export function DashboardScreen({ navigation }: any) {
           </View>
           </MotiView>
 
-          {/* Premium Promo Card */}
-          <PremiumPromoCard
-            variant="compact"
-            fullWidth={true}
-            onPress={() => navigation.navigate('Premium')}
-          />
-
           {/* Gráfico Circular */}
             <MotiView
               from={{ opacity: 0, scale: 0.9 }}
@@ -1419,6 +1310,13 @@ export function DashboardScreen({ navigation }: any) {
             <ChartCircle consumed={consumed} goal={goal} />
             </TouchableOpacity>
           </MotiView>
+
+          {/* Premium Promo Card */}
+          <PremiumPromoCard
+            variant="compact"
+            fullWidth={true}
+            onPress={() => navigation.navigate('Premium')}
+          />
 
           {/* Macros Cards com Swipe */}
           <MotiView
@@ -4676,6 +4574,13 @@ export function DashboardScreen({ navigation }: any) {
           </MotiView>
         </Pressable>
       </Modal>
+
+      {/* Badge Notification Modal */}
+      <BadgeNotificationModal
+        visible={showModal}
+        badge={earnedBadge}
+        onClose={closeModal}
+      />
     </View>
   );
 }

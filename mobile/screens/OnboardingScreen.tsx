@@ -25,7 +25,7 @@ import Slider from '@react-native-community/slider';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '../context/UserContext';
 import { useLanguage } from '../context/LanguageContext';
-import { useTheme } from '../context/ThemeContext';
+// import { useTheme } from '../context/ThemeContext'; // Não usado - onboarding sempre em modo escuro
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 // import * as Clipboard from 'expo-clipboard';
@@ -60,7 +60,22 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
   // Não usar navigation diretamente, apenas receber como prop para evitar erros
   const { signInWithGoogleNative, updateProfile, user, profile, refreshProfile, signOut } = useUser();
   const { t, language } = useLanguage();
-  const { theme } = useTheme();
+  
+  // Forçar modo escuro no onboarding
+  const theme = {
+    isDark: true,
+    colors: {
+      background: '#0F172A',
+      surface: '#1E293B',
+      text: '#F1F5F9',
+      textSecondary: '#94A3B8',
+      primary: '#3BB273',
+      border: '#334155',
+      card: '#1E293B',
+      error: '#EF4444',
+      success: '#3BB273',
+    },
+  };
   
   // Não podemos acessar o contexto diretamente aqui porque o OnboardingScreen
   // é renderizado fora do NavigationContainer. Vamos usar uma prop ou callback.
@@ -682,8 +697,8 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
         onboardingCompleted: true,
       };
 
-      // Fazer login com Google
-      await signInWithGoogleNative();
+      // Fazer login com Google (permitir criar conta durante onboarding)
+      await signInWithGoogleNative(true);
 
       // Aguardar um pouco para o perfil ser criado e o onAuthStateChanged processar
       await new Promise(resolve => setTimeout(resolve, 1500));
@@ -798,7 +813,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
   // Se o onboarding está completo, não renderizar nada - o App.tsx vai redirecionar
   if (isOnboardingComplete) {
     return (
-      <SafeAreaView className="flex-1 bg-white dark:bg-gray-900">
+      <SafeAreaView className="flex-1 bg-gray-900">
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#3BB273" />
           <Text style={{ marginTop: 16, color: theme.colors.textSecondary || '#9CA3AF' }}>
@@ -811,7 +826,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
   
   if (shouldShowLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-white dark:bg-gray-900">
+      <SafeAreaView className="flex-1 bg-gray-900">
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#3BB273" />
         </View>
@@ -830,21 +845,21 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
               width: 40,
               height: 40,
               borderRadius: 20,
-              backgroundColor: theme.colors.card || (theme.isDark ? '#1F2937' : '#F9FAFB'),
+              backgroundColor: theme.colors.card,
               justifyContent: 'center',
               alignItems: 'center',
               borderWidth: 1,
-              borderColor: theme.colors.border || (theme.isDark ? '#374151' : '#E5E7EB'),
+              borderColor: theme.colors.border,
               opacity: (calculating || loading || creatingAccount) ? 0.5 : 1,
             }}
           >
             <Ionicons
               name="arrow-back"
               size={20}
-              color={theme.colors.text || (theme.isDark ? '#FFFFFF' : '#111827')}
+              color={theme.colors.text}
             />
           </TouchableOpacity>
-          <View style={{ flex: 1, height: 4, backgroundColor: theme.isDark ? '#374151' : '#E5E7EB', borderRadius: 2 }}>
+          <View style={{ flex: 1, height: 4, backgroundColor: '#374151', borderRadius: 2 }}>
             <View
               style={{
                 height: 4,
@@ -864,10 +879,10 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
       case 'gender':
         return (
           <View className="flex-1 px-6">
-            <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            <Text className="text-3xl font-bold text-white mb-2">
               👤 {t('onboarding.gender')}
             </Text>
-            <Text className="text-gray-500 dark:text-gray-400 mb-8">
+            <Text className="text-gray-400 mb-8">
               {t('onboarding.genderDescription')}
             </Text>
             <View style={{ flex: 1, justifyContent: 'center' }}>
@@ -905,13 +920,13 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                         className={`rounded-xl py-5 px-6 border-2 mb-3 ${
                           gender === option.value
                             ? 'bg-green-500 border-green-500'
-                            : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700'
+                            : 'bg-gray-800 border-gray-700'
                         }`}
                         style={{ marginBottom: 12 }}
                       >
                         <Text
                           className={`text-lg font-semibold text-center ${
-                            gender === option.value ? 'text-white' : 'text-gray-900 dark:text-white'
+                            gender === option.value ? 'text-white' : 'text-white'
                           }`}
                         >
                           {option.label}
@@ -937,10 +952,10 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
         ];
         return (
           <View className="flex-1 px-6">
-            <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            <Text className="text-3xl font-bold text-white mb-2">
               💪 {t('onboarding.workoutsPerWeek')}
             </Text>
-            <Text className="text-gray-500 dark:text-gray-400 mb-6">
+            <Text className="text-gray-400 mb-6">
               {t('onboarding.workoutsPerWeekDescription')}
             </Text>
             <ScrollView 
@@ -983,10 +998,10 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                           borderWidth: isSelected ? 2.5 : 2,
                           backgroundColor: isSelected
                             ? '#3BB273'
-                            : (theme.isDark ? '#1F2937' : '#FFFFFF'),
+                            : '#1F2937',
                           borderColor: isSelected
                             ? '#3BB273'
-                            : (theme.isDark ? '#374151' : '#E5E7EB'),
+                            : '#374151',
                           shadowColor: isSelected ? '#3BB273' : '#000',
                           shadowOffset: { width: 0, height: isSelected ? 4 : 2 },
                           shadowOpacity: isSelected ? 0.2 : 0.1,
@@ -1000,7 +1015,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                             width: 48,
                             height: 48,
                             borderRadius: 24,
-                            backgroundColor: isSelected ? 'rgba(255, 255, 255, 0.2)' : (theme.isDark ? '#374151' : '#F3F4F6'),
+                            backgroundColor: isSelected ? 'rgba(255, 255, 255, 0.2)' : '#374151',
                             alignItems: 'center',
                             justifyContent: 'center',
                             marginRight: 14,
@@ -1106,7 +1121,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                         className={`rounded-xl py-5 px-6 border-2 flex-row items-center mb-3 ${
                           heardFrom === source.name
                             ? 'bg-green-500 border-green-500'
-                            : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700'
+                            : 'bg-gray-800 border-gray-700'
                         }`}
                         style={{ marginBottom: 12 }}
                       >
@@ -1119,7 +1134,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                           className={`text-lg font-semibold ml-4 ${
                             heardFrom === source.name
                               ? 'text-white'
-                              : 'text-gray-900 dark:text-white'
+                              : 'text-white'
                           }`}
                         >
                           {source.name}
@@ -1174,7 +1189,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                         className={`rounded-xl py-5 px-6 border-2 mb-3 ${
                           triedOtherApps === option.value
                             ? 'bg-green-500 border-green-500'
-                            : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700'
+                            : 'bg-gray-800 border-gray-700'
                         }`}
                         style={{ marginBottom: 12 }}
                       >
@@ -1182,7 +1197,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                           className={`text-lg font-semibold text-center ${
                             triedOtherApps === option.value
                               ? 'text-white'
-                              : 'text-gray-900 dark:text-white'
+                              : 'text-white'
                           }`}
                         >
                           {option.label}
@@ -1204,10 +1219,10 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
         
         return (
           <View className="flex-1 px-6">
-            <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            <Text className="text-3xl font-bold text-white mb-2">
               📏 {t('onboarding.heightQuestion')}
             </Text>
-            <Text className="text-gray-500 dark:text-gray-400 mb-8">
+            <Text className="text-gray-400 mb-8">
               {t('onboarding.heightDescription')}
             </Text>
             <View style={{ flex: 1, justifyContent: 'center' }}>
@@ -1218,7 +1233,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
               }}>
                 <View style={{
                   flexDirection: 'row',
-                  backgroundColor: theme.isDark ? '#374151' : '#E5E7EB',
+                  backgroundColor: '#374151',
                   borderRadius: 30,
                   padding: 4,
                   width: 200,
@@ -1240,7 +1255,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                       fontWeight: '600',
                       color: !isImperial 
                         ? '#FFFFFF' 
-                        : (theme.isDark ? '#9CA3AF' : '#6B7280'),
+                        : '#9CA3AF',
                     }}>
                       {t('onboarding.metric') || 'Métrico'}
                     </Text>
@@ -1264,7 +1279,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                       fontWeight: '600',
                       color: isImperial 
                         ? '#FFFFFF' 
-                        : (theme.isDark ? '#9CA3AF' : '#6B7280'),
+                        : '#9CA3AF',
                     }}>
                       {t('onboarding.imperial') || 'Imperial'}
                     </Text>
@@ -1306,7 +1321,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                     setHeightIsEmpty(false);
                     setHeightText(''); // Limpar texto temporário
                   }}
-                  className="bg-gray-200 dark:bg-gray-700 rounded-full w-12 h-12 items-center justify-center mr-4"
+                  className="bg-gray-700 rounded-full w-12 h-12 items-center justify-center mr-4"
                   activeOpacity={0.7}
                 >
                   <Ionicons name="remove" size={24} color="#3BB273" />
@@ -1400,13 +1415,13 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                     setHeightIsEmpty(false);
                     setHeightText(''); // Limpar texto temporário
                   }}
-                  className="bg-gray-200 dark:bg-gray-700 rounded-full w-12 h-12 items-center justify-center ml-4"
+                  className="bg-gray-700 rounded-full w-12 h-12 items-center justify-center ml-4"
                   activeOpacity={0.7}
                 >
                   <Ionicons name="add" size={24} color="#3BB273" />
                 </TouchableOpacity>
               </View>
-              <Text className="text-gray-500 dark:text-gray-400 mt-2">
+              <Text className="text-gray-400 mt-2">
                 {isImperial ? "ft'in\"" : "cm"}
               </Text>
             </View>
@@ -1429,10 +1444,10 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
 
               {/* Min/Max Labels */}
               <View className="flex-row justify-between mt-2">
-                <Text className="text-gray-500 dark:text-gray-400">
+                <Text className="text-gray-400">
                   {isImperial ? "4'0\"" : '120 cm'}
                 </Text>
-                <Text className="text-gray-500 dark:text-gray-400">
+                <Text className="text-gray-400">
                   {isImperial ? "7'0\"" : '220 cm'}
                 </Text>
               </View>
@@ -1448,10 +1463,10 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
         
         return (
           <View className="flex-1 px-6">
-            <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            <Text className="text-3xl font-bold text-white mb-2">
               ⚖️ {t('onboarding.weightQuestion')}
             </Text>
-            <Text className="text-gray-500 dark:text-gray-400 mb-8">
+            <Text className="text-gray-400 mb-8">
               {t('onboarding.weightDescription')}
             </Text>
             <View style={{ flex: 1, justifyContent: 'center' }}>
@@ -1462,7 +1477,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
               }}>
                 <View style={{
                   flexDirection: 'row',
-                  backgroundColor: theme.isDark ? '#374151' : '#E5E7EB',
+                  backgroundColor: '#374151',
                   borderRadius: 30,
                   padding: 4,
                   width: 200,
@@ -1484,7 +1499,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                       fontWeight: '600',
                       color: !isImperial 
                         ? '#FFFFFF' 
-                        : (theme.isDark ? '#9CA3AF' : '#6B7280'),
+                        : '#9CA3AF',
                     }}>
                       {t('onboarding.metric') || 'Métrico'}
                     </Text>
@@ -1508,7 +1523,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                       fontWeight: '600',
                       color: isImperial 
                         ? '#FFFFFF' 
-                        : (theme.isDark ? '#9CA3AF' : '#6B7280'),
+                        : '#9CA3AF',
                     }}>
                       {t('onboarding.imperial') || 'Imperial'}
                     </Text>
@@ -1560,7 +1575,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                     setWeightIsEmpty(false);
                     setWeightText(''); // Limpar texto temporário
                   }}
-                  className="bg-gray-200 dark:bg-gray-700 rounded-full w-12 h-12 items-center justify-center mr-4"
+                  className="bg-gray-700 rounded-full w-12 h-12 items-center justify-center mr-4"
                   activeOpacity={0.7}
                 >
                   <Ionicons name="remove" size={24} color="#3BB273" />
@@ -1643,13 +1658,13 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                     setWeightIsEmpty(false);
                     setWeightText(''); // Limpar texto temporário
                   }}
-                  className="bg-gray-200 dark:bg-gray-700 rounded-full w-12 h-12 items-center justify-center ml-4"
+                  className="bg-gray-700 rounded-full w-12 h-12 items-center justify-center ml-4"
                   activeOpacity={0.7}
                 >
                   <Ionicons name="add" size={24} color="#3BB273" />
                 </TouchableOpacity>
               </View>
-              <Text className="text-gray-500 dark:text-gray-400 mt-2">
+              <Text className="text-gray-400 mt-2">
                 {isImperial ? "lbs" : "kg"}
               </Text>
             </View>
@@ -1672,10 +1687,10 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
 
               {/* Min/Max Labels */}
               <View className="flex-row justify-between mt-2">
-                <Text className="text-gray-500 dark:text-gray-400">
+                <Text className="text-gray-400">
                   {isImperial ? '66 lbs' : '30 kg'}
                 </Text>
-                <Text className="text-gray-500 dark:text-gray-400">
+                <Text className="text-gray-400">
                   {isImperial ? '440 lbs' : '200 kg'}
                 </Text>
               </View>
@@ -1688,10 +1703,10 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
         
         return (
           <View className="flex-1 px-6">
-            <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            <Text className="text-3xl font-bold text-white mb-2">
               🎂 {t('onboarding.ageQuestion')}
             </Text>
-            <Text className="text-gray-500 dark:text-gray-400 mb-8">
+            <Text className="text-gray-400 mb-8">
               {t('onboarding.ageDescription')}
             </Text>
             <View style={{ flex: 1, justifyContent: 'center' }}>
@@ -1704,7 +1719,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                     const newValue = Math.max(18, ageNum - 1);
                     setAge(newValue.toString());
                   }}
-                  className="bg-gray-200 dark:bg-gray-700 rounded-full w-12 h-12 items-center justify-center mr-4"
+                  className="bg-gray-700 rounded-full w-12 h-12 items-center justify-center mr-4"
                   activeOpacity={0.7}
                 >
                   <Ionicons name="remove" size={24} color="#3BB273" />
@@ -1734,13 +1749,13 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                     const newValue = Math.min(150, ageNum + 1);
                     setAge(newValue.toString());
                   }}
-                  className="bg-gray-200 dark:bg-gray-700 rounded-full w-12 h-12 items-center justify-center ml-4"
+                  className="bg-gray-700 rounded-full w-12 h-12 items-center justify-center ml-4"
                   activeOpacity={0.7}
                 >
                   <Ionicons name="add" size={24} color="#3BB273" />
                 </TouchableOpacity>
               </View>
-                <Text className="text-gray-500 dark:text-gray-400 mt-2">
+                <Text className="text-gray-400 mt-2">
                   {t('onboarding.yearsOld')}
                 </Text>
               </View>
@@ -1751,10 +1766,10 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
       case 'goal':
         return (
           <View className="flex-1 px-6">
-            <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            <Text className="text-3xl font-bold text-white mb-2">
               🎯 {t('onboarding.goal')}
             </Text>
-            <Text className="text-gray-500 dark:text-gray-400 mb-8">
+            <Text className="text-gray-400 mb-8">
               {t('onboarding.goalDescription')}
             </Text>
             <View style={{ flex: 1, justifyContent: 'center' }}>
@@ -1793,7 +1808,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                         className={`rounded-xl py-5 px-6 border-2 mb-3 ${
                           goal === option.value
                             ? 'bg-green-500 border-green-500'
-                            : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700'
+                            : 'bg-gray-800 border-gray-700'
                         }`}
                         style={{ marginBottom: 12 }}
                       >
@@ -1801,7 +1816,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                           className={`text-lg font-semibold text-center ${
                             goal === option.value
                               ? 'text-white'
-                              : 'text-gray-900 dark:text-white'
+                              : 'text-white'
                           }`}
                         >
                           {option.label}
@@ -1844,7 +1859,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
 
         return (
           <View className="flex-1 px-6">
-            <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            <Text className="text-3xl font-bold text-white mb-2">
               ⚡ {t('onboarding.goalSpeed.title')}
             </Text>
             <Text className="text-gray-500 dark:text-gray-400 mb-8 text-left">
@@ -1916,7 +1931,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                       setGoalSpeed(value);
                     }}
                     minimumTrackTintColor="#3BB273"
-                    maximumTrackTintColor={theme.isDark ? '#374151' : '#E5E7EB'}
+                    maximumTrackTintColor="#374151"
                     thumbTintColor="#3BB273"
                     step={0.1}
                   />
@@ -1929,7 +1944,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                     setGoalSpeed(recommendedSpeedKg);
                   }}
                   style={{
-                    backgroundColor: theme.isDark ? '#374151' : '#F3F4F6',
+                    backgroundColor: '#374151',
                     paddingVertical: 10,
                     paddingHorizontal: 20,
                     borderRadius: 20,
@@ -1958,10 +1973,10 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
         ];
         return (
           <View className="flex-1 px-6">
-            <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            <Text className="text-3xl font-bold text-white mb-2">
               🥗 {t('onboarding.diet.title')}
             </Text>
-            <Text className="text-gray-500 dark:text-gray-400 mb-6">
+            <Text className="text-gray-400 mb-6">
               {t('onboarding.diet.description')}
             </Text>
             <View style={{ flex: 1, justifyContent: 'center' }}>
@@ -2001,10 +2016,10 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                           borderWidth: isSelected ? 2.5 : 2,
                           backgroundColor: isSelected
                             ? '#3BB273'
-                            : (theme.isDark ? '#1F2937' : '#FFFFFF'),
+                            : '#1F2937',
                           borderColor: isSelected
                             ? '#3BB273'
-                            : (theme.isDark ? '#374151' : '#E5E7EB'),
+                            : '#374151',
                           shadowColor: isSelected ? '#3BB273' : '#000',
                           shadowOffset: { width: 0, height: isSelected ? 4 : 2 },
                           shadowOpacity: isSelected ? 0.2 : 0.1,
@@ -2018,7 +2033,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                             width: 48,
                             height: 48,
                             borderRadius: 24,
-                            backgroundColor: isSelected ? 'rgba(255, 255, 255, 0.2)' : (theme.isDark ? '#374151' : '#F3F4F6'),
+                            backgroundColor: isSelected ? 'rgba(255, 255, 255, 0.2)' : '#374151',
                             alignItems: 'center',
                             justifyContent: 'center',
                             marginRight: 14,
@@ -2115,23 +2130,23 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
         
         return (
           <View className="flex-1 px-6">
-            <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            <Text className="text-3xl font-bold text-white mb-2">
               🎯 {t('onboarding.desiredWeightQuestion')}
             </Text>
-            <Text className="text-gray-500 dark:text-gray-400 mb-2">
+            <Text className="text-gray-400 mb-2">
               {t('onboarding.currentWeight')}: {currentWeightDisplay} {isImperial ? 'lbs' : 'kg'}
             </Text>
             {hintText !== '' && (
-              <Text className="text-gray-400 dark:text-gray-500 mb-6 text-sm">
+              <Text className="text-gray-500 mb-6 text-sm">
                 {hintText}
               </Text>
             )}
             <View style={{ flex: 1, justifyContent: 'center' }}>
               <TextInput
-                className={`bg-gray-100 dark:bg-gray-800 rounded-xl px-4 py-4 text-gray-900 dark:text-white border-2 text-2xl text-center ${
+                className={`bg-gray-800 rounded-xl px-4 py-4 text-white border-2 text-2xl text-center ${
                   desiredWeight && !isValidWeight
                     ? 'border-red-500'
-                    : 'border-gray-200 dark:border-gray-700'
+                    : 'border-gray-700'
                 }`}
                 placeholder={isImperial ? "165.0" : "75.0"}
                 value={desiredWeight}
@@ -2150,7 +2165,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                   }
                 </Text>
               )}
-              <Text className="mt-2 text-center text-gray-600 dark:text-gray-400">
+              <Text className="mt-2 text-center text-gray-400">
                 {isImperial ? 'lbs' : 'kg'}
               </Text>
             </View>
@@ -2353,17 +2368,18 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
 
         return (
           <View className="flex-1 px-6">
-            <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            <Text className="text-3xl font-bold text-white mb-2">
               {t('onboarding.referralCode')}
             </Text>
-            <Text className="text-gray-500 dark:text-gray-400 mb-8">
+            <Text className="text-gray-400 mb-8">
               {t('onboarding.referralCodeQuestion')}
             </Text>
             <View style={{ flex: 1, justifyContent: 'center' }}>
               <View className="flex-row items-center">
                 <TextInput
-                  className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-xl px-4 py-4 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 text-lg text-center mr-2"
+                  className="flex-1 bg-gray-800 rounded-xl px-4 py-4 text-white border border-gray-700 text-lg text-center mr-2"
                   placeholder={t('onboarding.referralCode.placeholder')}
+                  placeholderTextColor="#FFFFFF"
                   value={referralCode}
                   onChangeText={(text) => {
                     // Permitir apenas letras, números e hífens, em maiúsculas
@@ -2381,7 +2397,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                   <Ionicons name="clipboard-outline" size={24} color="#FFFFFF" />
                 </TouchableOpacity>
               </View>
-              <Text className="mt-2 text-center text-gray-400 dark:text-gray-500 text-sm">
+              <Text className="mt-2 text-center text-gray-500 text-sm">
                 {t('onboarding.referralCode.skip')}
               </Text>
             </View>
@@ -2477,7 +2493,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                           width: 24,
                           height: 24,
                           borderRadius: 12,
-                          backgroundColor: isCompleted ? '#3BB273' : (theme.isDark ? '#374151' : '#E5E7EB'),
+                          backgroundColor: isCompleted ? '#3BB273' : '#374151',
                           alignItems: 'center',
                           justifyContent: 'center',
                           marginRight: 12,
@@ -2647,7 +2663,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
 
                   return (
                     <View style={{
-                      backgroundColor: theme.isDark ? '#1F2937' : '#FFFFFF',
+                      backgroundColor: '#1F2937',
                       borderRadius: 16,
                       padding: 16,
                       marginBottom: 24,
@@ -2779,7 +2795,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                         width: 32,
                         height: 32,
                         borderRadius: 16,
-                        backgroundColor: theme.isDark ? '#374151' : '#F3F4F6',
+                        backgroundColor: '#374151',
                         alignItems: 'center',
                         justifyContent: 'center',
                       }}
@@ -2842,7 +2858,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                         width: 32,
                         height: 32,
                         borderRadius: 16,
-                        backgroundColor: theme.isDark ? '#374151' : '#F3F4F6',
+                        backgroundColor: '#374151',
                         alignItems: 'center',
                         justifyContent: 'center',
                       }}
@@ -2905,7 +2921,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                         width: 32,
                         height: 32,
                         borderRadius: 16,
-                        backgroundColor: theme.isDark ? '#374151' : '#F3F4F6',
+                        backgroundColor: '#374151',
                         alignItems: 'center',
                         justifyContent: 'center',
                       }}
@@ -2985,7 +3001,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                       onChangeText={setEditValue}
                       keyboardType="numeric"
                       style={{
-                        backgroundColor: theme.isDark ? '#1F2937' : '#F9FAFB',
+                        backgroundColor: '#1F2937',
                         borderRadius: 12,
                         padding: 16,
                         fontSize: 18,
@@ -3006,7 +3022,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                         }}
                         style={{
                           flex: 1,
-                          backgroundColor: theme.isDark ? '#374151' : '#F3F4F6',
+                          backgroundColor: '#374151',
                           borderRadius: 12,
                           padding: 16,
                           alignItems: 'center',
@@ -3406,7 +3422,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                   flexDirection: 'row',
                   shadowColor: '#000',
                   shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: theme.isDark ? 0.3 : 0.15,
+                  shadowOpacity: 0.3,
                   shadowRadius: 8,
                   elevation: 5,
                   minWidth: 320,
@@ -3439,7 +3455,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-gray-900">
+    <SafeAreaView className="flex-1 bg-gray-900">
       {renderProgressBar()}
       <ScrollView
         style={{ flex: 1 }}
@@ -3452,15 +3468,15 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
 
       {/* Navigation Buttons */}
       {currentStep !== 'createAccount' && (
-        <View className="px-6 pb-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+        <View className="px-6 pb-6 pt-4 border-t border-gray-700">
           <View className="flex-row" style={{ gap: 12 }}>
             <TouchableOpacity
               onPress={handleBack}
               disabled={calculating || loading || creatingAccount}
-              className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-xl py-4 items-center"
+              className="flex-1 bg-gray-800 rounded-xl py-4 items-center"
               style={{ opacity: (calculating || loading || creatingAccount) ? 0.5 : 1 }}
             >
-              <Text className="text-gray-900 dark:text-white font-semibold">
+              <Text className="text-white font-semibold">
                 {t('onboarding.back')}
               </Text>
             </TouchableOpacity>

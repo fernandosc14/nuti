@@ -6,6 +6,7 @@
 
 import { db } from '../services/firebase';
 import { collection, query, where, getDocs, Timestamp, doc, getDoc, setDoc } from 'firebase/firestore';
+import { checkAndAwardBadges } from '../services/gamification';
 
 /**
  * Verifica e atualiza o streak do utilizador
@@ -113,6 +114,15 @@ export async function updateStreak(userId: string): Promise<number> {
       streak: streak,
       lastStreakDate: lastStreakDate ? Timestamp.fromDate(lastStreakDate) : null,
     }, { merge: true });
+
+    // Verificar badges relacionadas com streak (mas não mostrar modal aqui, apenas atualizar)
+    // O modal será mostrado quando o utilizador adicionar uma refeição
+    try {
+      await checkAndAwardBadges(userId);
+    } catch (error) {
+      // Ignorar erros de badges silenciosamente
+      console.error('Error checking badges in streak update:', error);
+    }
 
     return streak;
   } catch (error: any) {

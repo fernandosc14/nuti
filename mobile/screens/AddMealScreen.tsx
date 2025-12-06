@@ -35,6 +35,8 @@ import { removeCache } from '../utils/cacheUtils';
 import Toast from 'react-native-toast-message';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useBadgeNotification } from '../hooks/useBadgeNotification';
+import { BadgeNotificationModal } from '../components/BadgeNotificationModal';
 
 // Função melhorada para calcular Health Score e gerar sugestões
 const calculateHealthScoreAndSuggestions = (
@@ -232,6 +234,7 @@ export function AddMealScreen({ navigation, route }: any) {
   const { t, language } = useLanguage();
   const { theme } = useTheme();
   const { units } = useUnits();
+  const { showModal, earnedBadge, checkAndShowBadges, closeModal } = useBadgeNotification();
   const insets = useSafeAreaInsets();
   const mode = route?.params?.mode || 'search';
   const selectedDateParam = route?.params?.selectedDate;
@@ -1084,6 +1087,9 @@ export function AddMealScreen({ navigation, route }: any) {
       await updateStreak(user.uid);
       await refreshProfile();
 
+      // Verificar e mostrar badges ganhas
+      await checkAndShowBadges(user.uid);
+
       // Invalidar cache de daysWithMeals (pode ter mudado)
       const daysWithMealsCacheKey = `daysWithMeals_${user.uid}`;
       await removeCache(daysWithMealsCacheKey);
@@ -1187,6 +1193,9 @@ export function AddMealScreen({ navigation, route }: any) {
       // Atualizar streak
       await updateStreak(user.uid);
       await refreshProfile();
+
+      // Verificar e mostrar badges ganhas
+      await checkAndShowBadges(user.uid);
 
       // Invalidar cache de daysWithMeals (pode ter mudado)
       const daysWithMealsCacheKey = `daysWithMeals_${user.uid}`;
@@ -1752,6 +1761,9 @@ export function AddMealScreen({ navigation, route }: any) {
       // Atualizar streak
       await updateStreak(user.uid);
       await refreshProfile();
+
+      // Verificar e mostrar badges ganhas
+      await checkAndShowBadges(user.uid);
 
       // Invalidar cache
       const daysWithMealsCacheKey = `daysWithMeals_${user.uid}`;
@@ -5028,6 +5040,13 @@ export function AddMealScreen({ navigation, route }: any) {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Badge Notification Modal */}
+      <BadgeNotificationModal
+        visible={showModal}
+        badge={earnedBadge}
+        onClose={closeModal}
+      />
     </SafeAreaView>
   );
 }

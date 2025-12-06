@@ -424,7 +424,12 @@ function RootNavigator() {
 
   useEffect(() => {
     // Inicializar badges padrão
-    initializeBadges();
+    // Nota: Pode falhar se as regras do Firestore não permitirem criação
+    // Nesse caso, cria as badges manualmente no Firebase Console
+    initializeBadges().catch((error) => {
+      console.warn('[Badges] Could not initialize badges automatically. Create them manually in Firebase Console.');
+      console.warn('[Badges] See scripts/create-badges.js for badge definitions.');
+    });
   }, []);
 
 

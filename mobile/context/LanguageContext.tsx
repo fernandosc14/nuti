@@ -89,6 +89,7 @@ const translations: Record<Language, Record<string, string>> = {
     'auth.passwordMismatch': 'Passwords do not match',
     'auth.weakPassword': 'Password should be at least 6 characters',
     'auth.emailInUse': 'This email is already in use',
+    'auth.accountNotRegistered': 'This account is not registered. Please sign up first.',
     
     // Onboarding
     'onboarding.gender': 'Gender',
@@ -539,6 +540,7 @@ const translations: Record<Language, Record<string, string>> = {
     'chat.messageTooShortMessage': 'Write at least 10 characters',
     'chat.premiumRequired': 'Premium Required',
     'chat.premiumRequiredMessage': 'Chat is only available for Premium users. Upgrade to Premium to access the chat!',
+    'chat.premiumRequiredDescription': 'This feature is available only for Premium users. Upgrade to unlock chat and more features.',
     'chat.rateLimitReached': 'Rate limit reached',
     'chat.rateLimitMessage': 'Please wait a moment before sending another message.',
     'chat.audioNotRecognized': 'Audio not recognized',
@@ -556,6 +558,7 @@ const translations: Record<Language, Record<string, string>> = {
     'chat.clearChatConfirm': 'Are you sure you want to delete all messages? This action cannot be undone.',
     'chat.clear': 'Clear',
     'chat.chatCleared': 'Chat cleared',
+    'badges.earned': 'Badge Unlocked!',
     'chat.chatClearedMessage': 'All messages have been deleted',
     'chat.errorClearingChat': 'Error clearing chat',
     'chat.limitReached': 'Limit reached',
@@ -890,6 +893,7 @@ const translations: Record<Language, Record<string, string>> = {
     'auth.passwordMismatch': 'As palavras-passe não coincidem',
     'auth.weakPassword': 'A palavra-passe deve ter pelo menos 6 caracteres',
     'auth.emailInUse': 'Este email já está em uso',
+    'auth.accountNotRegistered': 'Esta conta não está registada. Por favor, cria uma conta primeiro.',
     
     // Onboarding
     'onboarding.gender': 'Género',
@@ -1340,6 +1344,7 @@ const translations: Record<Language, Record<string, string>> = {
     'chat.messageTooShortMessage': 'Escreve pelo menos 10 caracteres',
     'chat.premiumRequired': 'Premium Necessário',
     'chat.premiumRequiredMessage': 'O chat está disponível apenas para utilizadores Premium. Atualiza para Premium para aceder ao chat!',
+    'chat.premiumRequiredDescription': 'Esta funcionalidade está disponível apenas para utilizadores Premium. Atualiza para desbloquear o chat e mais funcionalidades.',
     'chat.rateLimitReached': 'Limite de mensagens atingido',
     'chat.rateLimitMessage': 'Aguarda um momento antes de enviar outra mensagem.',
     'chat.audioNotRecognized': 'Áudio não reconhecido',
@@ -1358,6 +1363,7 @@ const translations: Record<Language, Record<string, string>> = {
     'chat.clear': 'Limpar',
     'chat.chatCleared': 'Chat limpo',
     'chat.chatClearedMessage': 'Todas as mensagens foram eliminadas',
+    'badges.earned': 'Badge Desbloqueada!',
     'chat.errorClearingChat': 'Erro ao limpar o chat',
     'chat.limitReached': 'Limite atingido',
     'chat.limitMessage': 'Atualiza para Premium para chat ilimitado!',
@@ -1691,6 +1697,7 @@ const translations: Record<Language, Record<string, string>> = {
     'auth.passwordMismatch': 'Las contraseñas no coinciden',
     'auth.weakPassword': 'La contraseña debe tener al menos 6 caracteres',
     'auth.emailInUse': 'Este correo ya está en uso',
+    'auth.accountNotRegistered': 'Esta cuenta no está registrada. Por favor, crea una cuenta primero.',
     
     // Onboarding
     'onboarding.gender': 'Género',
@@ -2147,6 +2154,7 @@ const translations: Record<Language, Record<string, string>> = {
     'chat.messageTooShortMessage': 'Escribe al menos 10 caracteres',
     'chat.premiumRequired': 'Premium Requerido',
     'chat.premiumRequiredMessage': 'El chat está disponible solo para usuarios Premium. ¡Actualiza a Premium para acceder al chat!',
+    'chat.premiumRequiredDescription': 'Esta función está disponible solo para usuarios Premium. Actualiza para desbloquear el chat y más funciones.',
     'chat.rateLimitReached': 'Límite de mensajes alcanzado',
     'chat.rateLimitMessage': 'Espera un momento antes de enviar otro mensaje.',
     'chat.audioNotRecognized': 'Audio no reconocido',
@@ -2165,6 +2173,7 @@ const translations: Record<Language, Record<string, string>> = {
     'chat.clear': 'Limpiar',
     'chat.chatCleared': 'Chat limpiado',
     'chat.chatClearedMessage': 'Todos los mensajes han sido eliminados',
+    'badges.earned': '¡Insignia Desbloqueada!',
     'chat.errorClearingChat': 'Error al limpiar el chat',
     
     // Add Meal
@@ -2482,6 +2491,7 @@ const translations: Record<Language, Record<string, string>> = {
     'auth.passwordMismatch': 'Les mots de passe ne correspondent pas',
     'auth.weakPassword': 'Le mot de passe doit contenir au moins 6 caractères',
     'auth.emailInUse': 'Cet email est déjà utilisé',
+    'auth.accountNotRegistered': 'Ce compte n\'est pas enregistré. Veuillez créer un compte d\'abord.',
     
     // Onboarding
     'onboarding.gender': 'Genre',
@@ -2931,6 +2941,7 @@ const translations: Record<Language, Record<string, string>> = {
     'chat.messageTooShortMessage': 'Écrivez au moins 10 caractères',
     'chat.premiumRequired': 'Premium Requis',
     'chat.premiumRequiredMessage': 'Le chat est disponible uniquement pour les utilisateurs Premium. Passez à Premium pour accéder au chat!',
+    'chat.premiumRequiredDescription': 'Cette fonctionnalité est disponible uniquement pour les utilisateurs Premium. Mettez à niveau pour débloquer le chat et plus de fonctionnalités.',
     'chat.rateLimitReached': 'Limite de messages atteint',
     'chat.rateLimitMessage': 'Veuillez attendre un moment avant d\'envoyer un autre message.',
     'chat.audioNotRecognized': 'Audio non reconnu',
@@ -2949,6 +2960,7 @@ const translations: Record<Language, Record<string, string>> = {
     'chat.clear': 'Effacer',
     'chat.chatCleared': 'Chat effacé',
     'chat.chatClearedMessage': 'Tous les messages ont été supprimés',
+    'badges.earned': 'Badge Débloquée!',
     'chat.errorClearingChat': 'Erreur lors de l\'effacement du chat',
     'chat.limitReached': 'Limite atteinte',
     'chat.limitMessage': 'Passez à Premium pour un chat illimité !',
@@ -3273,6 +3285,7 @@ const translations: Record<Language, Record<string, string>> = {
     'auth.passwordMismatch': 'Passwörter stimmen nicht überein',
     'auth.weakPassword': 'Das Passwort muss mindestens 6 Zeichen lang sein',
     'auth.emailInUse': 'Diese E-Mail wird bereits verwendet',
+    'auth.accountNotRegistered': 'Dieses Konto ist nicht registriert. Bitte erstelle zuerst ein Konto.',
     
     // Onboarding
     'onboarding.gender': 'Geschlecht',
@@ -3701,6 +3714,7 @@ const translations: Record<Language, Record<string, string>> = {
     'chat.messageTooShortMessage': 'Schreibe mindestens 10 Zeichen',
     'chat.premiumRequired': 'Premium Erforderlich',
     'chat.premiumRequiredMessage': 'Der Chat ist nur für Premium-Benutzer verfügbar. Upgrade auf Premium, um auf den Chat zuzugreifen!',
+    'chat.premiumRequiredDescription': 'Diese Funktion ist nur für Premium-Benutzer verfügbar. Aktualisieren Sie, um Chat und weitere Funktionen freizuschalten.',
     'chat.rateLimitReached': 'Nachrichtenlimit erreicht',
     'chat.rateLimitMessage': 'Bitte warten Sie einen Moment, bevor Sie eine weitere Nachricht senden.',
     'chat.audioNotRecognized': 'Audio nicht erkannt',
@@ -3719,6 +3733,7 @@ const translations: Record<Language, Record<string, string>> = {
     'chat.clear': 'Löschen',
     'chat.chatCleared': 'Chat gelöscht',
     'chat.chatClearedMessage': 'Alle Nachrichten wurden gelöscht',
+    'badges.earned': 'Abzeichen Freigeschaltet!',
     'chat.errorClearingChat': 'Fehler beim Löschen des Chats',
     
     // Add Meal
@@ -4036,6 +4051,7 @@ const translations: Record<Language, Record<string, string>> = {
     'auth.passwordMismatch': 'Le password non corrispondono',
     'auth.weakPassword': 'La password deve contenere almeno 6 caratteri',
     'auth.emailInUse': 'Questa email è già in uso',
+    'auth.accountNotRegistered': 'Questo account non è registrato. Si prega di creare un account prima.',
     
     // Onboarding
     'onboarding.gender': 'Genere',
@@ -4485,6 +4501,7 @@ const translations: Record<Language, Record<string, string>> = {
     'chat.messageTooShortMessage': 'Scrivi almeno 10 caratteri',
     'chat.premiumRequired': 'Premium Richiesto',
     'chat.premiumRequiredMessage': 'La chat è disponibile solo per gli utenti Premium. Aggiorna a Premium per accedere alla chat!',
+    'chat.premiumRequiredDescription': 'Questa funzione è disponibile solo per gli utenti Premium. Aggiorna per sbloccare la chat e altre funzioni.',
     'chat.rateLimitReached': 'Limite di messaggi raggiunto',
     'chat.rateLimitMessage': 'Attendi un momento prima di inviare un altro messaggio.',
     'chat.audioNotRecognized': 'Audio non riconosciuto',
@@ -4503,6 +4520,7 @@ const translations: Record<Language, Record<string, string>> = {
     'chat.clear': 'Cancella',
     'chat.chatCleared': 'Chat cancellata',
     'chat.chatClearedMessage': 'Tutti i messaggi sono stati eliminati',
+    'badges.earned': 'Badge Sbloccata!',
     'chat.errorClearingChat': 'Errore durante la cancellazione della chat',
     'chat.limitReached': 'Limite raggiunto',
     'chat.limitMessage': 'Passa a Premium per chat illimitato!',

@@ -28,7 +28,8 @@ export function RegisterScreen({ navigation }: any) {
   const handleGoogleRegister = async () => {
     setLoading(true);
     try {
-      await signInWithGoogleNative();
+      // Permitir criar conta durante o registo
+      await signInWithGoogleNative(true);
       Toast.show({
         type: 'success',
         text1: t('common.success'),
