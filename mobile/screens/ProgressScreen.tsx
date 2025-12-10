@@ -23,7 +23,7 @@ import { useUser } from '../context/UserContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useUnits } from '../context/UnitsContext';
 import { BadgeItem } from '../components/BadgeItem';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, Timestamp, orderBy } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { getCache, setCache } from '../utils/cacheUtils';
 
@@ -44,6 +44,15 @@ export function ProgressScreen({ navigation }: any) {
   const { t } = useLanguage();
   const { units, convertWeight } = useUnits();
   const [badges, setBadges] = useState<Badge[]>([]);
+  const [macrosData, setMacrosData] = useState<{
+    protein: number;
+    carbs: number;
+    fat: number;
+    calories: number;
+    days: number;
+  } | null>(null);
+  const [loadingMacros, setLoadingMacros] = useState(false);
+  const [macrosPeriod, setMacrosPeriod] = useState<'1d' | '7d' | '1m' | '6m'>('7d');
 
   const weightInfo = useMemo(() => {
     if (!profile?.weight) {
@@ -120,6 +129,96 @@ export function ProgressScreen({ navigation }: any) {
 
     loadBadges();
   }, [user, profile?.badges]);
+
+  // Carregar macros baseado no período selecionado
+  useEffect(() => {
+    const loadMacros = async () => {
+      if (!user) {
+        setMacrosData(null);
+        return;
+      }
+
+      setLoadingMacros(true);
+      try {
+        const macrosCacheKey = `macros_${macrosPeriod}_${user.uid}`;
+        const cachedMacros = await getCache<typeof macrosData>(macrosCacheKey);
+        
+        if (cachedMacros) {
+          setMacrosData(cachedMacros);
+          setLoadingMacros(false);
+          return;
+        }
+
+        // Calcular data inicial baseada no período
+        const startDate = new Date();
+        startDate.setHours(0, 0, 0, 0);
+        
+        switch (macrosPeriod) {
+          case '1d':
+            // Último dia (hoje)
+            break;
+          case '7d':
+            startDate.setDate(startDate.getDate() - 7);
+            break;
+          case '1m':
+            startDate.setMonth(startDate.getMonth() - 1);
+            break;
+          case '6m':
+            startDate.setMonth(startDate.getMonth() - 6);
+            break;
+        }
+
+        const mealsRef = collection(db, 'meals');
+        const mealsQuery = query(
+          mealsRef,
+          where('userId', '==', user.uid),
+          where('date', '>=', Timestamp.fromDate(startDate)),
+          orderBy('date', 'desc')
+        );
+        
+        const mealsSnapshot = await getDocs(mealsQuery);
+        
+        let totalProtein = 0;
+        let totalCarbs = 0;
+        let totalFat = 0;
+        let totalCalories = 0;
+        const daysWithMeals = new Set<string>();
+
+        mealsSnapshot.forEach((doc) => {
+          const data = doc.data();
+          totalProtein += data.protein || 0;
+          totalCarbs += data.carbs || 0;
+          totalFat += data.fat || 0;
+          totalCalories += data.calories || 0;
+          
+          // Contar dias únicos
+          if (data.date) {
+            const mealDate = data.date.toDate();
+            const dateStr = mealDate.toISOString().split('T')[0];
+            daysWithMeals.add(dateStr);
+          }
+        });
+
+        const macros = {
+          protein: Math.round(totalProtein),
+          carbs: Math.round(totalCarbs),
+          fat: Math.round(totalFat),
+          calories: Math.round(totalCalories),
+          days: daysWithMeals.size,
+        };
+
+        setMacrosData(macros);
+        await setCache(macrosCacheKey, macros, 60 * 60 * 1000); // Cache por 1 hora
+      } catch (error) {
+        console.error('Error loading macros:', error);
+        setMacrosData(null);
+      } finally {
+        setLoadingMacros(false);
+      }
+    };
+
+    loadMacros();
+  }, [user, macrosPeriod]);
 
   // Calcular percentagem de progresso do objetivo de peso e obter pesos
   const weightProgressData = useMemo(() => {
@@ -473,7 +572,7 @@ export function ProgressScreen({ navigation }: any) {
         </View>
       ) : (
         /* Goal Progress and Weight Card - Side by Side for Lose/Gain */
-        <View style={{ flexDirection: 'row', gap: 12 }}>
+        <View style={styles.cardsRowContainer}>
           {/* Goal Progress Percentage */}
           <View style={[
             styles.card,
@@ -484,36 +583,51 @@ export function ProgressScreen({ navigation }: any) {
               borderColor: theme.colors.border || '#E5E7EB',
             },
           ]}>
-            <Text style={[styles.cardTitle, { color: theme.colors.text, marginBottom: 8, fontSize: 14 }]}>
-              {t('progress.goalProgress') || 'Goal Progress'}
-            </Text>
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
+            <View style={styles.cardHeaderCompactCenter}>
+              <Text style={[styles.cardTitleCompact, { color: theme.colors.text }]}>
+                {t('progress.goalProgress') || 'Goal Progress'}
+              </Text>
+            </View>
+            <View style={styles.cardContentCenter}>
               <Text style={[styles.goalPercentage, { color: theme.colors.primary || '#3BB273' }]}>
                 {Math.round(weightProgressData.percentage)}%
               </Text>
-              {weightProgressData.initialWeight !== null && weightProgressData.desiredWeight !== null && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 }}>
-                  <Text style={[styles.weightInfo, { color: theme.colors.textSecondary || '#6B7280' }]}>
-                    {units.weight === 'lb' 
-                      ? Math.round(convertWeight(weightProgressData.initialWeight, 'kg', 'lb'))
-                      : weightProgressData.initialWeight.toFixed(1)
-                    }
-                  </Text>
-                  <Text style={[styles.weightInfo, { color: theme.colors.textSecondary || '#6B7280' }]}>
-                    →
-                  </Text>
-                  <Text style={[styles.weightInfo, { color: theme.colors.textSecondary || '#6B7280' }]}>
-                    {units.weight === 'lb' 
-                      ? Math.round(convertWeight(weightProgressData.desiredWeight, 'kg', 'lb'))
-                      : weightProgressData.desiredWeight.toFixed(1)
-                    }
-                  </Text>
-                  <Text style={[styles.weightInfo, { color: theme.colors.textSecondary || '#6B7280' }]}>
-                    {units.weight === 'kg' ? 'kg' : 'lbs'}
-                  </Text>
-                </View>
-              )}
             </View>
+            {weightProgressData.initialWeight !== null && weightProgressData.desiredWeight !== null && (
+              <View style={styles.cardFooter}>
+                <View style={styles.weightInfoContainer}>
+                  <View style={styles.weightInfoItem}>
+                    <Text style={[styles.weightInfoLabel, { color: theme.colors.textSecondary || '#6B7280' }]}>
+                      Start
+                    </Text>
+                    <Text style={[styles.weightInfoValue, { color: theme.colors.text }]}>
+                      {units.weight === 'lb' 
+                        ? Math.round(convertWeight(weightProgressData.initialWeight, 'kg', 'lb'))
+                        : weightProgressData.initialWeight.toFixed(1)
+                      }
+                      <Text style={[styles.weightInfoUnit, { color: theme.colors.textSecondary || '#6B7280' }]}>
+                        {' '}{units.weight === 'kg' ? 'kg' : 'lbs'}
+                      </Text>
+                    </Text>
+                  </View>
+                  <Ionicons name="arrow-forward" size={16} color={theme.colors.textSecondary || '#6B7280'} style={{ marginHorizontal: 8 }} />
+                  <View style={styles.weightInfoItem}>
+                    <Text style={[styles.weightInfoLabel, { color: theme.colors.textSecondary || '#6B7280' }]}>
+                      Goal
+                    </Text>
+                    <Text style={[styles.weightInfoValue, { color: theme.colors.text }]}>
+                      {units.weight === 'lb' 
+                        ? Math.round(convertWeight(weightProgressData.desiredWeight, 'kg', 'lb'))
+                        : weightProgressData.desiredWeight.toFixed(1)
+                      }
+                      <Text style={[styles.weightInfoUnit, { color: theme.colors.textSecondary || '#6B7280' }]}>
+                        {' '}{units.weight === 'kg' ? 'kg' : 'lbs'}
+                      </Text>
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )}
           </View>
 
           {/* Weight Card */}
@@ -526,13 +640,17 @@ export function ProgressScreen({ navigation }: any) {
               borderColor: theme.colors.border || '#E5E7EB',
             },
           ]}>
-            <Text style={[styles.cardTitle, { color: theme.colors.text, marginBottom: 8, fontSize: 14 }]}>
-              {t('progress.weightCardTitle')}
-            </Text>
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
-              <Text style={[styles.weightValue, { color: theme.colors.text, fontSize: 32, marginVertical: 8 }]}>
+            <View style={styles.cardHeaderCompactCenter}>
+              <Text style={[styles.cardTitleCompact, { color: theme.colors.text }]}>
+                {t('progress.weightCardTitle')}
+              </Text>
+            </View>
+            <View style={styles.cardContentCenter}>
+              <Text style={[styles.weightValueCompact, { color: theme.colors.text }]}>
                 {weightInfo ? `${weightInfo.value} ${weightInfo.unit}` : t('progress.weightMissing')}
               </Text>
+            </View>
+            <View style={styles.cardFooter}>
               <TouchableOpacity
                 style={[
                   styles.weightButtonCompact,
@@ -573,13 +691,250 @@ export function ProgressScreen({ navigation }: any) {
         </View>
       )}
 
-      <View style={[
-        styles.card,
-        {
-          backgroundColor: theme.colors.card || '#FFFFFF',
-          borderColor: theme.colors.border || '#E5E7EB',
-        },
-      ]}>
+      {/* Macros Card */}
+      <View style={[styles.card, {
+        backgroundColor: theme.colors.card || '#FFFFFF',
+        borderColor: theme.colors.border || '#E5E7EB',
+      }]}>
+        <View style={styles.cardHeader}>
+          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
+            {t('progress.macrosTitle') || 'Macros'}
+          </Text>
+        </View>
+
+        {/* Period Selector */}
+        <View style={{
+          flexDirection: 'row',
+          gap: 8,
+          marginBottom: 16,
+          paddingBottom: 16,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.colors.border || '#E5E7EB',
+        }}>
+          {(['1d', '7d', '1m', '6m'] as const).map((period) => {
+            const isSelected = macrosPeriod === period;
+            const periodLabels: Record<typeof period, string> = {
+              '1d': t('progress.period.1d') || '1D',
+              '7d': t('progress.period.7d') || '7D',
+              '1m': t('progress.period.1m') || '1M',
+              '6m': t('progress.period.6m') || '6M',
+            };
+            
+            // Cor de fundo para botões não selecionados baseada no tema
+            const unselectedBgColor = theme.isDark 
+              ? 'rgba(255, 255, 255, 0.1)' 
+              : 'rgba(0, 0, 0, 0.05)';
+            
+            return (
+              <TouchableOpacity
+                key={period}
+                onPress={() => setMacrosPeriod(period)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderRadius: 8,
+                  backgroundColor: isSelected
+                    ? (theme.colors.primary || '#3BB273')
+                    : unselectedBgColor,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: isSelected ? 0 : 1,
+                  borderColor: isSelected ? 'transparent' : (theme.colors.border || '#E5E7EB'),
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={{
+                  fontSize: 13,
+                  fontWeight: '600',
+                  color: isSelected
+                    ? '#FFFFFF'
+                    : theme.colors.text,
+                }}>
+                  {periodLabels[period]}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {loadingMacros ? (
+          <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+            <Text style={{ color: theme.colors.textSecondary || '#6B7280' }}>
+              {t('common.loading') || 'Loading...'}
+            </Text>
+          </View>
+        ) : macrosData ? (
+          <View>
+            {/* Total Calories */}
+            <View style={{ marginBottom: 20 }}>
+              <Text style={[styles.description, { fontSize: 12, marginBottom: 8, color: theme.colors.textSecondary || '#6B7280' }]}>
+                {t('progress.totalCalories') || 'Total Calories'}
+              </Text>
+              <Text style={[styles.bmiValue, { fontSize: 32, marginBottom: 0, color: theme.colors.text }]}>
+                {macrosData.calories.toLocaleString()}
+              </Text>
+            </View>
+
+            {/* Macros Breakdown */}
+            <View style={{ gap: 16 }}>
+              {/* Protein */}
+              <View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: 6,
+                      backgroundColor: '#EF4444',
+                      marginRight: 8,
+                    }} />
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.text }}>
+                      {t('dashboard.protein') || 'Protein'}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: theme.colors.text }}>
+                    {macrosData.protein}g
+                  </Text>
+                </View>
+                <View style={[styles.progressBar, { 
+                  height: 8, 
+                  marginTop: 0,
+                  backgroundColor: theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+                  borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+                }]}>
+                  <View style={{
+                    height: '100%',
+                    width: `${Math.min(100, (macrosData.protein / (Math.max(1, macrosData.days) * 150)) * 100)}%`,
+                    backgroundColor: '#EF4444',
+                    borderRadius: 999,
+                  }} />
+                </View>
+              </View>
+
+              {/* Carbs */}
+              <View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: 6,
+                      backgroundColor: '#3B82F6',
+                      marginRight: 8,
+                    }} />
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.text }}>
+                      {t('dashboard.carbs') || 'Carbs'}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: theme.colors.text }}>
+                    {macrosData.carbs}g
+                  </Text>
+                </View>
+                <View style={[styles.progressBar, { 
+                  height: 8, 
+                  marginTop: 0,
+                  backgroundColor: theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+                  borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+                }]}>
+                  <View style={{
+                    height: '100%',
+                    width: `${Math.min(100, (macrosData.carbs / (Math.max(1, macrosData.days) * 200)) * 100)}%`,
+                    backgroundColor: '#3B82F6',
+                    borderRadius: 999,
+                  }} />
+                </View>
+              </View>
+
+              {/* Fat */}
+              <View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: 6,
+                      backgroundColor: '#F59E0B',
+                      marginRight: 8,
+                    }} />
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.text }}>
+                      {t('dashboard.fat') || 'Fat'}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: theme.colors.text }}>
+                    {macrosData.fat}g
+                  </Text>
+                </View>
+                <View style={[styles.progressBar, { 
+                  height: 8, 
+                  marginTop: 0,
+                  backgroundColor: theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+                  borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+                }]}>
+                  <View style={{
+                    height: '100%',
+                    width: `${Math.min(100, (macrosData.fat / (Math.max(1, macrosData.days) * 65)) * 100)}%`,
+                    backgroundColor: '#F59E0B',
+                    borderRadius: 999,
+                  }} />
+                </View>
+              </View>
+            </View>
+
+            {/* Average per day */}
+            <View style={{ marginTop: 20, paddingTop: 16, borderTopWidth: 1, borderTopColor: theme.colors.border || '#E5E7EB' }}>
+              <Text style={[styles.description, { fontSize: 12, marginBottom: 8, color: theme.colors.textSecondary || '#6B7280' }]}>
+                {t('progress.averagePerDay') || 'Average per day'}
+              </Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 18, fontWeight: '700', color: theme.colors.text }}>
+                    {Math.round(macrosData.protein / Math.max(1, macrosData.days))}g
+                  </Text>
+                  <Text style={{ fontSize: 11, color: theme.colors.textSecondary || '#6B7280', marginTop: 2 }}>
+                    {t('dashboard.protein') || 'Protein'}
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 18, fontWeight: '700', color: theme.colors.text }}>
+                    {Math.round(macrosData.carbs / Math.max(1, macrosData.days))}g
+                  </Text>
+                  <Text style={{ fontSize: 11, color: theme.colors.textSecondary || '#6B7280', marginTop: 2 }}>
+                    {t('dashboard.carbs') || 'Carbs'}
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 18, fontWeight: '700', color: theme.colors.text }}>
+                    {Math.round(macrosData.fat / Math.max(1, macrosData.days))}g
+                  </Text>
+                  <Text style={{ fontSize: 11, color: theme.colors.textSecondary || '#6B7280', marginTop: 2 }}>
+                    {t('dashboard.fat') || 'Fat'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        ) : (
+          <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+            <Text style={{ color: theme.colors.textSecondary || '#6B7280' }}>
+              {t('progress.noMacrosData') || 'No macros data available'}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {/* BMI Card */}
+      <TouchableOpacity
+        style={[
+          styles.card,
+          {
+            backgroundColor: theme.colors.card || '#FFFFFF',
+            borderColor: theme.colors.border || '#E5E7EB',
+          },
+        ]}
+        onPress={() => navigation.navigate('BMI')}
+        activeOpacity={0.7}
+      >
         <View style={styles.cardHeader}>
           <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
             {t('progress.bmiTitle')}
@@ -659,7 +1014,7 @@ export function ProgressScreen({ navigation }: any) {
             ? bmiData.description
             : t('progress.bmiMissingData')}
         </Text>
-      </View>
+      </TouchableOpacity>
 
       {/* Badges */}
       {badges.length > 0 && (
@@ -1037,16 +1392,72 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   equalHeightCard: {
-    minHeight: 160,
+    minHeight: 180,
+  },
+  cardsRowContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 0,
+  },
+  cardHeaderCompact: {
+    marginBottom: 12,
+  },
+  cardHeaderCompactCenter: {
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  cardTitleCompact: {
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  cardContentCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardFooter: {
+    marginTop: 'auto',
+    paddingTop: 12,
+  },
+  weightInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    justifyContent: 'center',
+  },
+  weightInfoItem: {
+    alignItems: 'center',
+  },
+  weightInfoLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  weightInfoValue: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  weightInfoUnit: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  weightValueCompact: {
+    fontSize: 28,
+    fontWeight: '800',
+    marginBottom: 12,
+    textAlign: 'center',
   },
   weightButtonCompact: {
     borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    marginTop: 8,
+    minWidth: 100,
   },
   weightButtonTextCompact: {
     color: '#FFFFFF',
@@ -1059,10 +1470,11 @@ const styles = StyleSheet.create({
 const WeightChart = ({ data, units, convertWeight, theme, t }: any) => {
   const { width } = Dimensions.get('window');
   const chartWidth = width - 88; // padding + borders
-  const chartHeight = 200;
-  const padding = 40;
+  const chartHeight = 240; // Aumentado de 200 para 240
+  const padding = 50; // Aumentado de 40 para 50
   const innerWidth = chartWidth - padding * 2;
   const innerHeight = chartHeight - padding * 2;
+  const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
 
   // Processar dados
   const processedData = useMemo(() => {
@@ -1100,14 +1512,14 @@ const WeightChart = ({ data, units, convertWeight, theme, t }: any) => {
   const minWeight = Math.min(...weights);
   const maxWeight = Math.max(...weights);
   const weightRange = maxWeight - minWeight || 1;
-  const paddingY = weightRange * 0.2; // 20% padding
+  const paddingY = weightRange * 0.15; // Reduzido de 20% para 15%
 
   // Gerar pontos do gráfico
   const points = processedData.map((entry, index) => {
     const x = padding + (index / (processedData.length - 1 || 1)) * innerWidth;
     const normalizedWeight = (entry.displayWeight - minWeight + paddingY) / (weightRange + paddingY * 2);
     const y = padding + innerHeight - (normalizedWeight * innerHeight);
-    return { x, y, weight: entry.displayWeight, date: entry.date };
+    return { x, y, weight: entry.displayWeight, date: entry.date, index };
   });
 
   // Gerar path para a linha
@@ -1115,31 +1527,75 @@ const WeightChart = ({ data, units, convertWeight, theme, t }: any) => {
     return `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`;
   }).join(' ');
 
+  // Gerar path para área preenchida (adiciona pontos na parte inferior)
+  const areaPath = `${pathData} L ${points[points.length - 1].x} ${chartHeight - padding} L ${points[0].x} ${chartHeight - padding} Z`;
+
   // Formatar datas para labels
   const formatDate = (date: Date) => {
     const now = new Date();
     const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
     
-    if (diffDays === 0) return 'Today';
+    if (diffDays === 0) return t('common.today') || 'Today';
     if (diffDays === 1) return '1d';
     if (diffDays < 7) return `${diffDays}d`;
     if (diffDays < 30) return `${Math.floor(diffDays / 7)}w`;
     return `${Math.floor(diffDays / 30)}mo`;
   };
 
-  // Labels do eixo Y (peso)
-  const yLabels = [0, 1, 2, 3].map(i => {
-    const value = minWeight - paddingY + (weightRange + paddingY * 2) * (1 - i / 3);
+  // Formatar data completa
+  const formatFullDate = (date: Date) => {
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  // Labels do eixo Y (peso) - mais labels
+  const yLabels = [0, 1, 2, 3, 4].map(i => {
+    const value = minWeight - paddingY + (weightRange + paddingY * 2) * (1 - i / 4);
     return {
-      value: value.toFixed(1),
-      y: padding + (i / 3) * innerHeight,
+      value: value.toFixed(units.weight === 'lb' ? 0 : 1),
+      y: padding + (i / 4) * innerHeight,
     };
   });
 
+  const primaryColor = theme.colors.primary || '#3BB273';
+  const gradientStart = primaryColor + '40'; // 25% opacity
+  const gradientEnd = primaryColor + '00'; // 0% opacity
+
   return (
-    <View style={{ height: chartHeight }}>
+    <View style={{ height: chartHeight, position: 'relative' }}>
+      {/* Tooltip para ponto selecionado */}
+      {selectedPoint !== null && points[selectedPoint] && (
+        <View
+          style={{
+            position: 'absolute',
+            left: points[selectedPoint].x - 50,
+            top: points[selectedPoint].y - 50,
+            backgroundColor: theme.colors.card || '#FFFFFF',
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: theme.colors.border || '#E5E7EB',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+            elevation: 3,
+            zIndex: 10,
+            minWidth: 100,
+            alignItems: 'center',
+          }}
+        >
+          <Text style={{ fontSize: 14, fontWeight: '700', color: theme.colors.text }}>
+            {points[selectedPoint].weight.toFixed(units.weight === 'lb' ? 0 : 1)} {units.weight === 'kg' ? 'kg' : 'lbs'}
+          </Text>
+          <Text style={{ fontSize: 10, color: theme.colors.textSecondary || '#6B7280', marginTop: 2 }}>
+            {formatFullDate(points[selectedPoint].date)}
+          </Text>
+        </View>
+      )}
+
       <Svg width={chartWidth} height={chartHeight}>
-        {/* Grid lines */}
+        {/* Grid lines - mais suaves */}
         {yLabels.map((label, i) => (
           <Line
             key={`grid-${i}`}
@@ -1149,42 +1605,56 @@ const WeightChart = ({ data, units, convertWeight, theme, t }: any) => {
             y2={label.y}
             stroke={theme.colors.border || '#E5E7EB'}
             strokeWidth={0.5}
-            strokeDasharray="4,4"
-            opacity={0.5}
+            strokeDasharray="3,3"
+            opacity={theme.isDark ? 0.3 : 0.4}
           />
         ))}
 
-        {/* Path da linha */}
+        {/* Área preenchida com gradiente (simulado com múltiplas linhas) */}
+        <Path
+          d={areaPath}
+          fill={gradientStart}
+          opacity={0.2}
+        />
+
+        {/* Path da linha - mais espessa e suave */}
         <Path
           d={pathData}
           fill="none"
-          stroke={theme.colors.primary || '#3BB273'}
-          strokeWidth={3}
+          stroke={primaryColor}
+          strokeWidth={3.5}
           strokeLinecap="round"
           strokeLinejoin="round"
         />
 
-        {/* Pontos */}
-        {points.map((point, index) => (
-          <Circle
-            key={`point-${index}`}
-            cx={point.x}
-            cy={point.y}
-            r={4}
-            fill={theme.colors.primary || '#3BB273'}
-            stroke={theme.colors.card || '#FFFFFF'}
-            strokeWidth={2}
-          />
-        ))}
+        {/* Pontos - maiores e mais visíveis */}
+        {points.map((point, index) => {
+          const isSelected = selectedPoint === index;
+          const isFirstOrLast = index === 0 || index === points.length - 1;
+          
+          return (
+            <Circle
+              key={`point-${index}`}
+              cx={point.x}
+              cy={point.y}
+              r={isSelected ? 7 : isFirstOrLast ? 6 : 5}
+              fill={primaryColor}
+              stroke={theme.colors.card || '#FFFFFF'}
+              strokeWidth={isSelected ? 3 : 2.5}
+              opacity={isSelected ? 1 : 0.9}
+            />
+          );
+        })}
 
-        {/* Labels do eixo Y */}
+        {/* Labels do eixo Y - melhor formatação */}
         <G>
           {yLabels.map((label, i) => (
             <SvgText
               key={`y-label-${i}`}
-              x={padding - 8}
-              y={label.y + 4}
-              fontSize="11"
+              x={padding - 12}
+              y={label.y + 5}
+              fontSize="12"
+              fontWeight="600"
               fill={theme.colors.textSecondary || '#6B7280'}
               textAnchor="end"
             >
@@ -1193,13 +1663,17 @@ const WeightChart = ({ data, units, convertWeight, theme, t }: any) => {
           ))}
         </G>
 
-        {/* Labels do eixo X (datas) */}
+        {/* Labels do eixo X (datas) - mais labels e melhor formatação */}
         <G>
           {points.map((point, index) => {
-            // Mostrar apenas alguns labels para não sobrecarregar
-            const showLabel = index === 0 || 
-                            index === points.length - 1 || 
-                            index === Math.floor(points.length / 2);
+            // Mostrar mais labels se houver poucos pontos
+            const showLabel = processedData.length <= 5 
+              ? true 
+              : index === 0 || 
+                index === points.length - 1 || 
+                index === Math.floor(points.length / 2) ||
+                (processedData.length > 10 && index % Math.ceil(processedData.length / 5) === 0);
+            
             if (!showLabel) return null;
             
             return (
@@ -1207,7 +1681,8 @@ const WeightChart = ({ data, units, convertWeight, theme, t }: any) => {
                 key={`x-label-${index}`}
                 x={point.x}
                 y={chartHeight - padding + 16}
-                fontSize="10"
+                fontSize="11"
+                fontWeight="500"
                 fill={theme.colors.textSecondary || '#6B7280'}
                 textAnchor="middle"
               >
@@ -1217,6 +1692,32 @@ const WeightChart = ({ data, units, convertWeight, theme, t }: any) => {
           })}
         </G>
       </Svg>
+
+      {/* Área interativa para toque nos pontos */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: chartHeight,
+        }}
+      >
+        {points.map((point, index) => (
+          <TouchableOpacity
+            key={`touch-${index}`}
+            style={{
+              position: 'absolute',
+              left: point.x - 20,
+              top: point.y - 20,
+              width: 40,
+              height: 40,
+            }}
+            onPress={() => setSelectedPoint(selectedPoint === index ? null : index)}
+            activeOpacity={0.7}
+          />
+        ))}
+      </View>
     </View>
   );
 };

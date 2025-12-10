@@ -175,22 +175,19 @@ export async function checkAndAwardBadges(userId: string): Promise<string[]> {
     const currentBadges = userData.badges || [];
     const streak = userData.streak || 0;
 
-    // Contar refeições totais
+    // Paralelizar queries que não dependem umas das outras
     const mealsRef = collection(db, 'meals');
-    const mealsQuery = query(mealsRef, where('userId', '==', userId));
-    const mealsSnapshot = await getDocs(mealsQuery);
-    const mealCount = mealsSnapshot.size;
-
-    // Contar exercícios totais
     const exercisesRef = collection(db, 'exercises');
-    const exercisesQuery = query(exercisesRef, where('userId', '==', userId));
-    const exercisesSnapshot = await getDocs(exercisesQuery);
-    const exerciseCount = exercisesSnapshot.size;
-
-    // Verificar água - dias consecutivos com água registada
     const waterRef = collection(db, 'water');
-    const waterQuery = query(waterRef, where('userId', '==', userId));
-    const waterSnapshot = await getDocs(waterQuery);
+    
+    const [mealsSnapshot, exercisesSnapshot, waterSnapshot] = await Promise.all([
+      getDocs(query(mealsRef, where('userId', '==', userId))),
+      getDocs(query(exercisesRef, where('userId', '==', userId))),
+      getDocs(query(waterRef, where('userId', '==', userId))),
+    ]);
+    
+    const mealCount = mealsSnapshot.size;
+    const exerciseCount = exercisesSnapshot.size;
     
     // Criar Set com datas que têm água (formato: YYYY-MM-DD)
     const daysWithWater = new Set<string>();
@@ -246,18 +243,23 @@ export async function checkAndAwardBadges(userId: string): Promise<string[]> {
     const caloriePlan = calculateCalorieGoalFromProfile(userData as any);
     const calorieGoal = (userData as any).dailyCalorieGoal || caloriePlan?.calories || 2000;
     
-    // Buscar refeições de hoje
+    // Buscar refeições de hoje e badges em paralelo
     const todayStart = new Date(today);
+    todayStart.setHours(0, 0, 0, 0);
     const todayEnd = new Date(today);
     todayEnd.setHours(23, 59, 59, 999);
     
-    const todayMealsQuery = query(
-      mealsRef,
-      where('userId', '==', userId),
-      where('date', '>=', Timestamp.fromDate(todayStart)),
-      where('date', '<=', Timestamp.fromDate(todayEnd))
-    );
-    const todayMealsSnapshot = await getDocs(todayMealsQuery);
+    const badgesRef = collection(db, 'badges');
+    
+    const [todayMealsSnapshot, badgesSnapshot] = await Promise.all([
+      getDocs(query(
+        mealsRef,
+        where('userId', '==', userId),
+        where('date', '>=', Timestamp.fromDate(todayStart)),
+        where('date', '<=', Timestamp.fromDate(todayEnd))
+      )),
+      getDocs(badgesRef),
+    ]);
     
     let todayCalories = 0;
     todayMealsSnapshot.forEach((doc) => {
@@ -266,10 +268,6 @@ export async function checkAndAwardBadges(userId: string): Promise<string[]> {
     });
     
     const goalAchieved = todayCalories >= calorieGoal;
-
-    // Buscar todas as badges
-    const badgesRef = collection(db, 'badges');
-    const badgesSnapshot = await getDocs(badgesRef);
     const allBadges = badgesSnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),

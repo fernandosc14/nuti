@@ -19,6 +19,7 @@ import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { UnitsProvider } from './context/UnitsContext';
 import { SelectedDateProvider, useSelectedDate } from './context/SelectedDateContext';
+import { AdProvider } from './context/AdContext';
 import { WelcomeScreen } from './screens/WelcomeScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { RegisterScreen } from './screens/RegisterScreen';
@@ -38,6 +39,7 @@ import { AddExerciseScreen } from './screens/AddExerciseScreen';
 import { UpdateWeightScreen } from './screens/UpdateWeightScreen';
 import { PremiumScreen } from './screens/PremiumScreen';
 import { ProgressScreen } from './screens/ProgressScreen';
+import { BMIScreen } from './screens/BMIScreen';
 import { PreferencesScreen } from './screens/PreferencesScreen';
 import { PremiumWelcomeModal } from './components/PremiumWelcomeModal';
 import { Ionicons } from '@expo/vector-icons';
@@ -90,12 +92,26 @@ function AddButton() {
   const { theme } = useTheme();
   const { t } = useLanguage();
   const { selectedDate } = useSelectedDate();
+  const { profile } = useUser();
   const [showMenu, setShowMenu] = useState(false);
   const buttonRef = useRef<TouchableOpacity>(null);
   const [buttonLayout, setButtonLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
   
+  const isPremium = profile?.plan === 'premium';
+  
   const handleOption = (mode: 'camera' | 'barcode' | 'search') => {
+    // Fechar menu imediatamente
     setShowMenu(false);
+    
+    // Se não for premium e tentar usar camera ou barcode, redirecionar para Premium
+    if (!isPremium && (mode === 'camera' || mode === 'barcode')) {
+      // Navegar diretamente para Premium screen (menu já foi fechado)
+      requestAnimationFrame(() => {
+        (navigation as any).getParent()?.navigate('Premium');
+      });
+      return;
+    }
+    
     setTimeout(() => {
       (navigation as any).getParent()?.navigate('AddMeal', { 
         mode,
@@ -398,6 +414,7 @@ function AppStack() {
       <Stack.Screen name="EditCaloriesAndMacros" component={EditCaloriesAndMacrosScreen} />
       <Stack.Screen name="AddExercise" component={AddExerciseScreen} />
       <Stack.Screen name="UpdateWeight" component={UpdateWeightScreen} />
+      <Stack.Screen name="BMI" component={BMIScreen} />
       <Stack.Screen name="Premium" component={PremiumScreen} />
       <Stack.Screen name="Preferences" component={PreferencesScreen} />
     </Stack.Navigator>
@@ -677,12 +694,14 @@ export default function App() {
             <UnitsProvider>
               <SelectedDateProvider>
                 <UserProvider>
-              <StatusBarConfig />
-              <NavigationErrorBoundary>
-                <RootNavigator />
-              </NavigationErrorBoundary>
-              <PremiumWelcomeModal />
-              <Toast />
+                  <AdProvider>
+                    <StatusBarConfig />
+                    <NavigationErrorBoundary>
+                      <RootNavigator />
+                    </NavigationErrorBoundary>
+                    <PremiumWelcomeModal />
+                    <Toast />
+                  </AdProvider>
                 </UserProvider>
               </SelectedDateProvider>
             </UnitsProvider>

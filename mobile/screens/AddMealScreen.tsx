@@ -37,6 +37,7 @@ import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useBadgeNotification } from '../hooks/useBadgeNotification';
 import { BadgeNotificationModal } from '../components/BadgeNotificationModal';
+import { AdBanner } from '../components/AdBanner';
 
 // Função melhorada para calcular Health Score e gerar sugestões
 const calculateHealthScoreAndSuggestions = (
@@ -230,7 +231,7 @@ const calculateHealthScoreAndSuggestions = (
 };
 
 export function AddMealScreen({ navigation, route }: any) {
-  const { user, refreshProfile } = useUser();
+  const { user, refreshProfile, profile } = useUser();
   const { t, language } = useLanguage();
   const { theme } = useTheme();
   const { units } = useUnits();
@@ -238,6 +239,18 @@ export function AddMealScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
   const mode = route?.params?.mode || 'search';
   const selectedDateParam = route?.params?.selectedDate;
+  
+  const isPremium = profile?.plan === 'premium';
+  
+  // Verificar se o usuário é premium quando tentar usar camera ou barcode
+  useEffect(() => {
+    if ((mode === 'camera' || mode === 'barcode') && !isPremium) {
+      // Redirecionar para modo search
+      navigation.setParams({ mode: 'search' });
+      // Navegar diretamente para Premium screen
+      navigation.navigate('Premium');
+    }
+  }, [mode, isPremium]);
   const [searchQuery, setSearchQuery] = useState('');
   const [barcodeInput, setBarcodeInput] = useState('');
   const [foodResults, setFoodResults] = useState<FoodItem[]>([]);
@@ -444,16 +457,21 @@ export function AddMealScreen({ navigation, route }: any) {
     }, [loading, capturedImage, editingFood])
   );
 
-  // Se o modo for 'camera', abrir câmera automaticamente
+  // Se o modo for 'camera', abrir câmera automaticamente (apenas se premium)
   React.useEffect(() => {
-    if (mode === 'camera') {
+    if (!isPremium && (mode === 'camera' || mode === 'barcode')) {
+      // Se não for premium, não fazer nada aqui - o outro useEffect já trata isso
+      return;
+    }
+    
+    if (mode === 'camera' && isPremium) {
       // Setar flag ANTES de abrir a câmera para prevenir cleanup prematuro
       isCameraActiveRef.current = true;
       // Pequeno delay para garantir que a flag foi setada antes de qualquer cleanup
       setTimeout(() => {
       handleTakePhoto();
       }, 100);
-    } else if (mode === 'barcode') {
+    } else if (mode === 'barcode' && isPremium) {
       // Modo código de barras - abrir scanner de câmera
       if (cameraPermission?.granted) {
         setShowBarcodeScanner(true);
@@ -463,7 +481,7 @@ export function AddMealScreen({ navigation, route }: any) {
         requestCameraPermission();
       }
     }
-  }, [mode, cameraPermission]);
+  }, [mode, cameraPermission, isPremium]);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -1083,26 +1101,33 @@ export function AddMealScreen({ navigation, route }: any) {
         ...(totals.transFat > 0 && { transFat: totals.transFat }),
       });
 
-      // Atualizar streak
-      await updateStreak(user.uid);
-      await refreshProfile();
-
-      // Verificar e mostrar badges ganhas
-      await checkAndShowBadges(user.uid);
-
-      // Invalidar cache de daysWithMeals (pode ter mudado)
+      // Invalidar cache (rápido, não bloquear)
       const daysWithMealsCacheKey = `daysWithMeals_${user.uid}`;
-      await removeCache(daysWithMealsCacheKey);
+      removeCache(daysWithMealsCacheKey).catch(() => {});
 
+      // Mostrar toast e navegar IMEDIATAMENTE (não esperar pelo resto)
       Toast.show({
         type: 'success',
         text1: t('addMeal.mealAdded') || 'Meal added!',
         text2: t('addMeal.foodsAddedToDiary', { count: selectedFoods.length }) || `${selectedFoods.length} food(s) added to your diary`,
       });
 
-      // Limpar lista e voltar
+      // Limpar lista e voltar IMEDIATAMENTE
       setSelectedFoods([]);
       navigation.goBack();
+
+      // Executar operações pesadas em background (não bloquear navegação)
+      Promise.all([
+        updateStreak(user.uid),
+        refreshProfile(),
+      ]).then(() => {
+        // Verificar badges após streak e profile atualizados
+        checkAndShowBadges(user.uid).catch(err => {
+          console.error('Error checking badges:', err);
+        });
+      }).catch(err => {
+        console.error('Error updating streak/profile:', err);
+      });
     } catch (error: any) {
       console.error('Error adding meal:', error);
       Toast.show({
@@ -1190,17 +1215,11 @@ export function AddMealScreen({ navigation, route }: any) {
         foods: foodsToSave, // Lista de alimentos individuais
       });
 
-      // Atualizar streak
-      await updateStreak(user.uid);
-      await refreshProfile();
-
-      // Verificar e mostrar badges ganhas
-      await checkAndShowBadges(user.uid);
-
-      // Invalidar cache de daysWithMeals (pode ter mudado)
+      // Invalidar cache (rápido, não bloquear)
       const daysWithMealsCacheKey = `daysWithMeals_${user.uid}`;
-      await removeCache(daysWithMealsCacheKey);
+      removeCache(daysWithMealsCacheKey).catch(() => {});
 
+      // Mostrar toast e navegar IMEDIATAMENTE (não esperar pelo resto)
       Toast.show({
         type: 'success',
         text1: t('addMeal.mealAdded') || 'Meal added!',
@@ -1208,6 +1227,19 @@ export function AddMealScreen({ navigation, route }: any) {
       });
 
       navigation.goBack();
+
+      // Executar operações pesadas em background (não bloquear navegação)
+      Promise.all([
+        updateStreak(user.uid),
+        refreshProfile(),
+      ]).then(() => {
+        // Verificar badges após streak e profile atualizados
+        checkAndShowBadges(user.uid).catch(err => {
+          console.error('Error checking badges:', err);
+        });
+      }).catch(err => {
+        console.error('Error updating streak/profile:', err);
+      });
     } catch (error: any) {
       console.error('Error adding meal:', error);
       Toast.show({
@@ -1758,29 +1790,36 @@ export function AddMealScreen({ navigation, route }: any) {
         ...(totals.transFat > 0 && { transFat: totals.transFat }),
       });
 
-      // Atualizar streak
-      await updateStreak(user.uid);
-      await refreshProfile();
-
-      // Verificar e mostrar badges ganhas
-      await checkAndShowBadges(user.uid);
-
-      // Invalidar cache
+      // Invalidar cache (rápido, não bloquear)
       const daysWithMealsCacheKey = `daysWithMeals_${user.uid}`;
-      await removeCache(daysWithMealsCacheKey);
+      removeCache(daysWithMealsCacheKey).catch(() => {});
 
+      // Mostrar toast e navegar IMEDIATAMENTE (não esperar pelo resto)
       Toast.show({
         type: 'success',
         text1: t('addMeal.mealAdded') || 'Meal added!',
         text2: (t('addMeal.savedMealAdded') || '{name} was added to your diary').replace('{name}', finalMealName),
       });
 
-      // Fechar tela de edição e voltar
+      // Fechar tela de edição e voltar IMEDIATAMENTE
       setEditingSavedMeal(null);
       setEditingSavedMealFoods([]);
       setEditingSavedMealName('');
       setSelectedIcon('bookmark');
       navigation.goBack();
+
+      // Executar operações pesadas em background (não bloquear navegação)
+      Promise.all([
+        updateStreak(user.uid),
+        refreshProfile(),
+      ]).then(() => {
+        // Verificar badges após streak e profile atualizados
+        checkAndShowBadges(user.uid).catch(err => {
+          console.error('Error checking badges:', err);
+        });
+      }).catch(err => {
+        console.error('Error updating streak/profile:', err);
+      });
     } catch (error: any) {
       console.error('Error adding saved meal:', error);
       Toast.show({
@@ -3094,73 +3133,80 @@ export function AddMealScreen({ navigation, route }: any) {
           };
           
           return (
-            <View style={{ marginBottom: 24 }}>
-              <Text style={{
-                fontSize: 18,
-                fontWeight: '700',
-                color: theme.colors.text,
-                marginBottom: 16,
-              }}>
-                {t('addMeal.popularFoods') || 'Alimentos Populares'}
-              </Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-                {popularFoods.map((food) => {
-                  const foodName = getFoodName(food);
-                  return (
-                    <TouchableOpacity
-                      key={food.pt}
-                      onPress={() => {
-                        setSearchQuery(foodName);
-                        handleSearch();
-                      }}
-                      style={{
-                        backgroundColor: theme.colors.card,
-                        borderRadius: 16,
-                        paddingHorizontal: 20,
-                        paddingVertical: 14,
-                borderWidth: 1,
-                borderColor: theme.colors.border || '#E5E7EB',
-                        minWidth: 100,
-              }}
-            >
-              <Text style={{
-                fontSize: 16,
-                        fontWeight: '600',
-                        color: theme.colors.text,
-                        textAlign: 'center',
-              }}>
-                        {foodName.charAt(0).toUpperCase() + foodName.slice(1)}
-              </Text>
-            </TouchableOpacity>
-                  );
-                })}
-          </View>
-              <View style={{
-                marginTop: 24,
-                backgroundColor: theme.isDark ? '#1F2937' : '#F9FAFB',
-                borderRadius: 12,
-                padding: 16,
-              }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                  <Ionicons name="bulb-outline" size={20} color={theme.colors.primary || '#3BB273'} />
+            <>
+              <View style={{ marginBottom: 24 }}>
+                <Text style={{
+                  fontSize: 18,
+                  fontWeight: '700',
+                  color: theme.colors.text,
+                  marginBottom: 16,
+                }}>
+                  {t('addMeal.popularFoods') || 'Alimentos Populares'}
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                  {popularFoods.map((food) => {
+                    const foodName = getFoodName(food);
+                    return (
+                      <TouchableOpacity
+                        key={food.pt}
+                        onPress={() => {
+                          setSearchQuery(foodName);
+                          handleSearch();
+                        }}
+                        style={{
+                          backgroundColor: theme.colors.card,
+                          borderRadius: 16,
+                          paddingHorizontal: 20,
+                          paddingVertical: 14,
+                  borderWidth: 1,
+                  borderColor: theme.colors.border || '#E5E7EB',
+                          minWidth: 100,
+                }}
+              >
+                <Text style={{
+                  fontSize: 16,
+                          fontWeight: '600',
+                          color: theme.colors.text,
+                          textAlign: 'center',
+                }}>
+                          {foodName.charAt(0).toUpperCase() + foodName.slice(1)}
+                </Text>
+              </TouchableOpacity>
+                    );
+                  })}
+            </View>
+                <View style={{
+                  marginTop: 24,
+                  backgroundColor: theme.isDark ? '#1F2937' : '#F9FAFB',
+                  borderRadius: 12,
+                  padding: 16,
+                }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    <Ionicons name="bulb-outline" size={20} color={theme.colors.primary || '#3BB273'} />
+                    <Text style={{
+                      fontSize: 16,
+                      fontWeight: '700',
+                      color: theme.colors.text,
+                      marginLeft: 8,
+                    }}>
+                      {t('addMeal.searchTip') || 'Dica de Pesquisa'}
+                    </Text>
+                  </View>
                   <Text style={{
-                    fontSize: 16,
-                    fontWeight: '700',
-                    color: theme.colors.text,
-                    marginLeft: 8,
+                    fontSize: 14,
+                    color: theme.colors.textSecondary || '#9CA3AF',
+                    lineHeight: 20,
                   }}>
-                    {t('addMeal.searchTip') || 'Dica de Pesquisa'}
+                    {t('addMeal.searchTipMessage') || 'Pesquise por nome do alimento, tipo de comida ou ingrediente. Podes pesquisar em qualquer idioma!'}
                   </Text>
                 </View>
-                <Text style={{
-                  fontSize: 14,
-                  color: theme.colors.textSecondary || '#9CA3AF',
-                  lineHeight: 20,
-                }}>
-                  {t('addMeal.searchTipMessage') || 'Pesquise por nome do alimento, tipo de comida ou ingrediente. Podes pesquisar em qualquer idioma!'}
-                </Text>
               </View>
-            </View>
+              {/* Ad Banner - Abaixo do card de pesquisa */}
+              <AdBanner
+                adSize="banner"
+                position="inline"
+              />
+            </>
           );
         })()}
 

@@ -32,6 +32,7 @@ import { BadgeItem } from '../components/BadgeItem';
 import { PremiumPromoCard } from '../components/PremiumPromoCard';
 import { useBadgeNotification } from '../hooks/useBadgeNotification';
 import { BadgeNotificationModal } from '../components/BadgeNotificationModal';
+import { AdBanner } from '../components/AdBanner';
 import { Ionicons } from '@expo/vector-icons';
 import { collection, query, where, getDocs, Timestamp, doc, deleteDoc, setDoc, getDoc, addDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -192,6 +193,7 @@ export function DashboardScreen({ navigation }: any) {
   const [showStreakModal, setShowStreakModal] = useState(false);
   const [last7DaysWithMeals, setLast7DaysWithMeals] = useState<Set<string>>(new Set());
   const [checkingStreakModal, setCheckingStreakModal] = useState(false);
+  const [isDeletingMeal, setIsDeletingMeal] = useState(false);
 
   useEffect(() => {
     // Se não houver user, limpar estado e não carregar dados
@@ -205,9 +207,13 @@ export function DashboardScreen({ navigation }: any) {
 
     // Só carregar dados se houver user e profile
     if (user && profile) {
-      loadDashboardData();
-      loadDaysWithMeals(); // Carregar quais dias têm refeições
-      loadExercises(selectedDate);
+      // Paralelizar carregamento inicial
+      Promise.all([
+        loadDashboardData(),
+        loadDaysWithMeals(), // Carregar quais dias têm refeições
+      ]).catch(err => {
+        console.error('Error loading dashboard data:', err);
+      });
     }
   }, [user, profile, selectedDate]);
 
@@ -217,11 +223,15 @@ export function DashboardScreen({ navigation }: any) {
       if (user && profile) {
         // Usar cache primeiro (não forçar refresh imediatamente)
         // Só fazer refresh forçado se o utilizador fizer pull-to-refresh
-        loadDashboardData(false);
-        loadDaysWithMeals();
-        loadExercises(selectedDate, false);
+        // Paralelizar para melhor performance
+        Promise.all([
+          loadDashboardData(false),
+          loadDaysWithMeals(),
+        ]).catch(err => {
+          console.error('Error refreshing dashboard data:', err);
+        });
       }
-    }, [user, profile])
+    }, [user, profile, selectedDate])
   );
 
   // Atualizar contexto quando a data selecionada mudar
@@ -361,58 +371,76 @@ export function DashboardScreen({ navigation }: any) {
         return;
       }
 
-      const sortedMeals = mealsData.sort((a, b) => b.date.getTime() - a.date.getTime());
-      
-      setMeals(sortedMeals);
-      // O useEffect vai recalcular as calorias líquidas automaticamente
-      
-      setMacros({
-        protein: Math.round(totalProtein),
-        carbs: Math.round(totalCarbs),
-        fat: Math.round(totalFat),
-      });
-
-
-      // Badges moved to ProgressScreen - removed loading logic
-
-      // Carregar água do dia selecionado (só se ainda houver user)
-      if (user && user.uid === currentUserId) {
-        await loadWaterIntake(selectedDay);
-        await loadSteps(selectedDay);
-        await loadExercises(selectedDay);
-      }
-
       // Verificar antes de atualizar streak (só se for o dia atual)
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const selectedDayNormalized = new Date(selectedDate);
       selectedDayNormalized.setHours(0, 0, 0, 0);
       
-      if (user && user.uid === currentUserId) {
-        if (selectedDayNormalized.getTime() === today.getTime()) {
-          // Contar refeições de hoje para mostrar no streak
-          const todayMealsRef = collection(db, 'meals');
-          const tomorrow = new Date(today);
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          const todayMealsQuery = query(
-            todayMealsRef,
-            where('userId', '==', user.uid),
-            where('date', '>=', Timestamp.fromDate(today)),
-            where('date', '<', Timestamp.fromDate(tomorrow))
-          );
-          const todayMealsSnapshot = await getDocs(todayMealsQuery);
-          const todayMealCountValue = todayMealsSnapshot.size;
-          setTodayMealCount(todayMealCountValue);
-          
-          await updateStreak(user.uid);
-          await refreshProfile();
-          
-          // Verificar se deve mostrar o modal do streak automaticamente
-          await checkAndShowStreakModal(todayMealCountValue);
-        } else {
-          // Se não for hoje, usar o número de refeições do dia selecionado
-          setTodayMealCount(mealsData.length);
-        }
+      // Carregar exercícios ANTES de atualizar meals para evitar flash visual
+      // Carregar exercícios e outros dados em paralelo
+      let exercisesPromise: Promise<void>;
+      let waterPromise: Promise<void>;
+      let stepsPromise: Promise<void>;
+      
+      if (selectedDayNormalized.getTime() === today.getTime()) {
+        // Se for hoje, incluir updateStreak e refreshProfile
+        const todayMealCountValue = mealsData.length;
+        setTodayMealCount(todayMealCountValue);
+        
+        exercisesPromise = loadExercises(selectedDay);
+        waterPromise = loadWaterIntake(selectedDay);
+        stepsPromise = loadSteps(selectedDay);
+        
+        // Aguardar exercícios primeiro (mais importante para evitar flash)
+        await exercisesPromise;
+        
+        // Depois atualizar meals e macros (agora que exercícios já estão carregados)
+        const sortedMeals = mealsData.sort((a, b) => b.date.getTime() - a.date.getTime());
+        setMeals(sortedMeals);
+        setMacros({
+          protein: Math.round(totalProtein),
+          carbs: Math.round(totalCarbs),
+          fat: Math.round(totalFat),
+        });
+        
+        // Continuar com outras operações em paralelo
+        await Promise.all([
+          waterPromise,
+          stepsPromise,
+          updateStreak(user.uid),
+        ]);
+        
+        await refreshProfile();
+        
+        // Verificar se deve mostrar o modal do streak automaticamente (não bloquear)
+        checkAndShowStreakModal(todayMealCountValue).catch(err => {
+          console.error('Error checking streak modal:', err);
+        });
+      } else {
+        // Se não for hoje, carregar exercícios primeiro
+        exercisesPromise = loadExercises(selectedDay);
+        waterPromise = loadWaterIntake(selectedDay);
+        stepsPromise = loadSteps(selectedDay);
+        
+        // Aguardar exercícios primeiro
+        await exercisesPromise;
+        
+        // Depois atualizar meals e macros
+        const sortedMeals = mealsData.sort((a, b) => b.date.getTime() - a.date.getTime());
+        setMeals(sortedMeals);
+        setMacros({
+          protein: Math.round(totalProtein),
+          carbs: Math.round(totalCarbs),
+          fat: Math.round(totalFat),
+        });
+        
+        // Continuar com outras operações
+        setTodayMealCount(mealsData.length);
+        await Promise.all([
+          waterPromise,
+          stepsPromise,
+        ]);
       }
     } catch (error: any) {
       // Se for erro de permissões e não houver user, ignorar silenciosamente (logout em progresso)
@@ -445,7 +473,7 @@ export function DashboardScreen({ navigation }: any) {
       today.setHours(0, 0, 0, 0);
       const todayStr = today.toDateString();
       
-      // Verificar se já mostrou o modal hoje
+      // Verificar se já mostrou o modal hoje (usar cache primeiro)
       const lastShownKey = `streakModalShown_${user.uid}`;
       const lastShownDate = await getCache<string>(lastShownKey);
       
@@ -454,40 +482,60 @@ export function DashboardScreen({ navigation }: any) {
       // 2. Ainda não tiver mostrado hoje (lastShownDate !== todayStr)
       // 3. O modal não estiver já visível
       if (todayMealCount === 0 && lastShownDate !== todayStr && !showStreakModal) {
-        // Salvar no cache ANTES de mostrar o modal para evitar múltiplas chamadas
+        // Salvar no cache ANTES de fazer query para evitar múltiplas chamadas
         await setCache(lastShownKey, todayStr);
         
-        // Buscar refeições dos últimos 6 dias para mostrar no modal
-        const sixDaysAgo = new Date(today);
-        sixDaysAgo.setDate(sixDaysAgo.getDate() - 5); // Últimos 6 dias (incluindo hoje)
+        // Tentar usar cache de daysWithMeals primeiro (já foi carregado)
+        const cacheKey = `daysWithMeals_${user.uid}`;
+        const cachedDays = await getCache<string[]>(cacheKey);
         
-        const mealsRef = collection(db, 'meals');
-        const q = query(
-          mealsRef,
-          where('userId', '==', user.uid),
-          where('date', '>=', Timestamp.fromDate(sixDaysAgo)),
-          where('date', '<', Timestamp.fromDate(new Date(today.getTime() + 24 * 60 * 60 * 1000)))
-        );
-        
-        const snapshot = await getDocs(q);
-        const daysWithMealsSet = new Set<string>();
-        
-        snapshot.forEach((doc) => {
-          const mealData = doc.data();
-          const mealDate = mealData.date?.toDate();
-          if (mealDate) {
-            const dateStr = mealDate.toDateString();
-            daysWithMealsSet.add(dateStr);
-          }
-        });
-        
-        setLast7DaysWithMeals(daysWithMealsSet);
-        
-        // Pequeno delay para garantir que a UI está pronta
-        setTimeout(() => {
-          setShowStreakModal(true);
-          setCheckingStreakModal(false);
-        }, 1000); // 1 segundo de delay após carregar os dados
+        if (cachedDays && cachedDays.length > 0) {
+          // Converter cache para formato do modal (dateString)
+          const daysWithMealsSet = new Set<string>();
+          cachedDays.forEach(dateKey => {
+            // Converter YYYY-MM-DD para Date e depois para dateString
+            const [year, month, day] = dateKey.split('-').map(Number);
+            const date = new Date(year, month - 1, day);
+            daysWithMealsSet.add(date.toDateString());
+          });
+          setLast7DaysWithMeals(daysWithMealsSet);
+          
+          setTimeout(() => {
+            setShowStreakModal(true);
+            setCheckingStreakModal(false);
+          }, 500);
+        } else {
+          // Se não houver cache, buscar do Firestore
+          const sixDaysAgo = new Date(today);
+          sixDaysAgo.setDate(sixDaysAgo.getDate() - 5); // Últimos 6 dias (incluindo hoje)
+          
+          const mealsRef = collection(db, 'meals');
+          const q = query(
+            mealsRef,
+            where('userId', '==', user.uid),
+            where('date', '>=', Timestamp.fromDate(sixDaysAgo)),
+            where('date', '<', Timestamp.fromDate(new Date(today.getTime() + 24 * 60 * 60 * 1000)))
+          );
+          
+          const snapshot = await getDocs(q);
+          const daysWithMealsSet = new Set<string>();
+          
+          snapshot.forEach((doc) => {
+            const mealData = doc.data();
+            const mealDate = mealData.date?.toDate();
+            if (mealDate) {
+              const dateStr = mealDate.toDateString();
+              daysWithMealsSet.add(dateStr);
+            }
+          });
+          
+          setLast7DaysWithMeals(daysWithMealsSet);
+          
+          setTimeout(() => {
+            setShowStreakModal(true);
+            setCheckingStreakModal(false);
+          }, 500);
+        }
       } else {
         setCheckingStreakModal(false);
       }
@@ -844,7 +892,9 @@ export function DashboardScreen({ navigation }: any) {
   };
 
   const confirmDeleteMeal = async () => {
-    if (!mealToDelete) return;
+    if (!mealToDelete || isDeletingMeal) return;
+    
+    setIsDeletingMeal(true);
     
     try {
       // Buscar a refeição antes de eliminá-la para obter a data
@@ -852,48 +902,84 @@ export function DashboardScreen({ navigation }: any) {
       const mealSnap = await getDoc(mealRef);
       
       let deletedMealDate: Date | null = null;
+      let deletedMealCalories = 0;
+      let deletedMealProtein = 0;
+      let deletedMealCarbs = 0;
+      let deletedMealFat = 0;
+      
       if (mealSnap.exists()) {
         const mealData = mealSnap.data();
         deletedMealDate = mealData.date?.toDate() || null;
+        deletedMealCalories = mealData.calories || 0;
+        deletedMealProtein = mealData.protein || 0;
+        deletedMealCarbs = mealData.carbs || 0;
+        deletedMealFat = mealData.fat || 0;
       }
       
-      await deleteDoc(mealRef);
+      // Remover imediatamente do estado local (otimistic update)
+      setMeals(prevMeals => prevMeals.filter(meal => meal.id !== mealToDelete));
       
-      // Fechar modais
+      // Atualizar totais imediatamente
+      setConsumed(prev => Math.max(0, prev - deletedMealCalories));
+      setMacros(prev => ({
+        protein: Math.max(0, prev.protein - deletedMealProtein),
+        carbs: Math.max(0, prev.carbs - deletedMealCarbs),
+        fat: Math.max(0, prev.fat - deletedMealFat),
+      }));
+      
+      // Fechar modais imediatamente
       setShowDeleteModal(false);
       setShowMealModal(false);
       setMealToDelete(null);
       
-      // Invalidar cache de daysWithMeals (pode ter mudado)
+      // Eliminar do Firestore
+      await deleteDoc(mealRef);
+      
+      // Invalidar cache (rápido, não bloquear)
       if (user) {
         const daysWithMealsCacheKey = `daysWithMeals_${user.uid}`;
-        await removeCache(daysWithMealsCacheKey);
-        
-        // Atualizar streak (verificar se quebrou no dia da refeição eliminada)
-        if (deletedMealDate) {
-          await updateStreakAfterDelete(user.uid, deletedMealDate);
-        }
-        // Também atualizar streak para hoje (caso tenha eliminado refeição de hoje)
-        await updateStreak(user.uid);
-        await refreshProfile();
+        removeCache(daysWithMealsCacheKey).catch(() => {});
       }
       
-      // Recarregar dados para atualizar totais e macros (forçar refresh)
-      await loadDashboardData(true);
-      await loadDaysWithMeals(); // Atualizar quais dias têm refeições
-      
+      // Mostrar toast de sucesso imediatamente
       Toast.show({
         type: 'success',
         text1: t('dashboard.mealDeleted'),
         text2: t('dashboard.mealDeletedMessage'),
       });
+      
+      // Executar operações pesadas em background (não bloquear UI)
+      if (user) {
+        Promise.all([
+          deletedMealDate ? updateStreakAfterDelete(user.uid, deletedMealDate) : Promise.resolve(0),
+          updateStreak(user.uid),
+          refreshProfile(),
+        ]).then(() => {
+          // Recarregar dados em background para sincronizar
+          loadDashboardData(true).catch(() => {});
+          loadDaysWithMeals().catch(() => {});
+        }).catch(err => {
+          console.error('Error updating streak/profile after delete:', err);
+          // Recarregar dados mesmo em caso de erro para garantir sincronização
+          loadDashboardData(true).catch(() => {});
+          loadDaysWithMeals().catch(() => {});
+        });
+      }
     } catch (error: any) {
       console.error('Error deleting meal:', error);
+      
+      // Em caso de erro, recarregar dados para restaurar estado
+      if (user) {
+        loadDashboardData(true).catch(() => {});
+      }
+      
       Toast.show({
         type: 'error',
         text1: t('common.error'),
         text2: t('dashboard.deleteMealError'),
       });
+    } finally {
+      setIsDeletingMeal(false);
     }
   };
 
@@ -1316,6 +1402,12 @@ export function DashboardScreen({ navigation }: any) {
             variant="compact"
             fullWidth={true}
             onPress={() => navigation.navigate('Premium')}
+          />
+
+          {/* Ad Banner - Entre Premium Card e Macros */}
+          <AdBanner
+            adSize="banner"
+            position="inline"
           />
 
           {/* Macros Cards com Swipe */}
@@ -1818,6 +1910,12 @@ export function DashboardScreen({ navigation }: any) {
           </View>
             )}
           </MotiView>
+
+          {/* Ad Banner - Entre Refeições e Exercícios */}
+          <AdBanner
+            adSize="mediumRectangle"
+            position="inline"
+          />
 
           {/* Exercícios de Hoje */}
           <MotiView
@@ -2637,22 +2735,29 @@ export function DashboardScreen({ navigation }: any) {
               {/* Botão Eliminar */}
               <TouchableOpacity
                 onPress={confirmDeleteMeal}
+                disabled={isDeletingMeal}
                 style={{
                   flex: 1,
-                  backgroundColor: '#EF4444',
+                  backgroundColor: isDeletingMeal ? '#EF444480' : '#EF4444',
                   borderRadius: 12,
                   paddingVertical: 14,
                   alignItems: 'center',
                   justifyContent: 'center',
+                  flexDirection: 'row',
+                  gap: 8,
+                  opacity: isDeletingMeal ? 0.7 : 1,
                 }}
                 activeOpacity={0.8}
               >
+                {isDeletingMeal && (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                )}
                 <Text style={{
                   fontSize: 16,
                   fontWeight: '600',
                   color: '#FFFFFF',
                 }}>
-                  {t('dashboard.delete')}
+                  {isDeletingMeal ? (t('common.deleting') || 'Deleting...') : t('dashboard.delete')}
                 </Text>
               </TouchableOpacity>
             </View>

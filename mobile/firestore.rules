@@ -39,19 +39,16 @@ service cloud.firestore {
     
     // Regras para water (água bebida)
     match /water/{waterId} {
-      // Permitir leitura se o utilizador estiver autenticado
-      // Verificar userId apenas quando o documento existe
+      // Simplificar regras para melhor performance
+      // Formato do ID: userId_dateStr, então verificar diretamente
       allow read: if request.auth != null && (
-        !exists(/databases/$(database)/documents/water/$(waterId)) || 
+        !resource.exists || 
         request.auth.uid == resource.data.userId ||
         request.auth.uid == waterId.split('_')[0]
       );
-      // Permitir criação/atualização se o utilizador estiver autenticado e o userId corresponder
       allow create, update: if request.auth != null && request.auth.uid == request.resource.data.userId;
-      // Permitir eliminação se o utilizador estiver autenticado e o userId corresponder
-      // Verificar tanto pelo campo userId quanto pelo ID do documento (formato userId_dateStr)
       allow delete: if request.auth != null && (
-        (exists(/databases/$(database)/documents/water/$(waterId)) && request.auth.uid == resource.data.userId) ||
+        (!resource.exists || request.auth.uid == resource.data.userId) ||
         request.auth.uid == waterId.split('_')[0]
       );
     }
@@ -83,16 +80,16 @@ service cloud.firestore {
     
     // Regras para steps (passos)
     match /steps/{stepId} {
+      // Simplificar regras para melhor performance
+      // Formato do ID: userId_dateStr, então verificar diretamente
       allow read: if request.auth != null && (
-        !exists(/databases/$(database)/documents/steps/$(stepId)) || 
+        !resource.exists || 
         request.auth.uid == resource.data.userId ||
         request.auth.uid == stepId.split('_')[0]
       );
       allow create, update: if request.auth != null && request.auth.uid == request.resource.data.userId;
-      // Permitir eliminação se o utilizador estiver autenticado e o userId corresponder
-      // Verificar tanto pelo campo userId quanto pelo ID do documento (formato userId_dateStr)
       allow delete: if request.auth != null && (
-        (exists(/databases/$(database)/documents/steps/$(stepId)) && request.auth.uid == resource.data.userId) ||
+        (!resource.exists || request.auth.uid == resource.data.userId) ||
         request.auth.uid == stepId.split('_')[0]
       );
     }

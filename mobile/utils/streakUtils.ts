@@ -26,10 +26,25 @@ export async function updateStreak(userId: string): Promise<number> {
       return 0;
     }
 
-    // Buscar todas as refeições do utilizador (para verificar dias consecutivos)
+    // Buscar streak atual para determinar quantos dias buscar
+    const currentStreak = userSnap.data()?.streak || 0;
+    
+    // Calcular quantos dias buscar baseado no streak atual:
+    // - Se streak = 0: buscar 30 dias (mínimo)
+    // - Se streak > 0: buscar streak * 2 + 10 dias de margem (garante que capturamos o streak completo)
+    // - Máximo de 365 dias para não buscar dados desnecessários
+    const daysToFetch = currentStreak === 0 
+      ? 30 
+      : Math.min(currentStreak * 2 + 10, 365);
+    
+    const startDate = new Date(today);
+    startDate.setDate(startDate.getDate() - daysToFetch);
+    startDate.setHours(0, 0, 0, 0);
+    
     const allMealsQuery = query(
       mealsRef,
-      where('userId', '==', userId)
+      where('userId', '==', userId),
+      where('date', '>=', Timestamp.fromDate(startDate))
     );
     const allMealsSnapshot = await getDocs(allMealsQuery);
     

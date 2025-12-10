@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Slider from '@react-native-community/slider';
 import Toast from 'react-native-toast-message';
 
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useUser } from '../context/UserContext';
@@ -167,6 +168,44 @@ export function UpdateWeightScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top']}>
+      {/* Header */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: 24,
+          paddingTop: 12,
+          paddingBottom: 16,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.colors.border || '#E5E7EB',
+        }}
+      >
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={{
+            marginRight: 16,
+            padding: 4,
+          }}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="arrow-back"
+            size={24}
+            color={theme.colors.text}
+          />
+        </TouchableOpacity>
+        <Text
+          style={{
+            fontSize: 20,
+            fontWeight: '700',
+            color: theme.colors.text,
+            flex: 1,
+          }}
+        >
+          {t('progress.updateWeightTitle')}
+        </Text>
+      </View>
+
       <ScrollView contentContainerStyle={{ padding: 24, gap: 24 }}>
         <View
           style={{
@@ -177,9 +216,6 @@ export function UpdateWeightScreen({ navigation }: any) {
             borderColor: theme.colors.border || '#E5E7EB',
           }}
         >
-          <Text style={{ fontSize: 24, fontWeight: '700', color: theme.colors.text, marginBottom: 8 }}>
-            {t('progress.updateWeightTitle')}
-          </Text>
           <Text style={{ color: theme.colors.textSecondary || '#6B7280', lineHeight: 20, marginBottom: 20 }}>
             {t('progress.updateWeightDescription')}
           </Text>

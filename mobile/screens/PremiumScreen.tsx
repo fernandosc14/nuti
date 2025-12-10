@@ -7,6 +7,7 @@
 import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -43,46 +44,55 @@ export function PremiumScreen({ navigation }: any) {
 
   const features = [
     {
-      icon: '💬',
-      title: t('premium.feature1') || 'Unlimited Chat',
-      description: t('premium.feature1Description') || 'Ask as many questions as you want to Nuti Help',
+      icon: 'chatbubbles',
+      iconColor: theme.colors.primary,
+      title: t('premium.feature.chat') || 'Chat Coach Nuti',
+      description: t('premium.feature.chatDescription') || 'Acesso ilimitado ao chat com o Coach Nuti para todas as tuas dúvidas sobre nutrição',
     },
     {
-      icon: '📊',
-      title: t('premium.feature2') || 'Personalized Reports',
-      description: t('premium.feature2Description') || 'Detailed analysis of your nutritional progress',
+      icon: 'stats-chart',
+      iconColor: '#4ECB87',
+      title: t('premium.feature.progress') || 'Progress Screen',
+      description: t('premium.feature.progressDescription') || 'Acompanha o teu progresso detalhado com gráficos e estatísticas avançadas',
     },
     {
-      icon: '🎯',
-      title: t('premium.feature3') || 'Meal Plans',
-      description: t('premium.feature3Description') || 'Receive personalized meal plans',
+      icon: 'camera',
+      iconColor: '#5DD99A',
+      title: t('premium.feature.photo') || 'Adicionar Refeição por Foto',
+      description: t('premium.feature.photoDescription') || 'Tira uma foto da tua refeição e deixa a IA identificar automaticamente os alimentos e valores nutricionais',
     },
     {
-      icon: '📈',
-      title: t('premium.feature4') || 'Advanced Statistics',
-      description: t('premium.feature4Description') || 'Track your progress with detailed charts',
+      icon: 'barcode',
+      iconColor: theme.colors.primary,
+      title: t('premium.feature.barcode') || 'Adicionar Refeição por Código de Barras',
+      description: t('premium.feature.barcodeDescription') || 'Escanear códigos de barras de produtos para adicionar refeições rapidamente',
     },
     {
-      icon: '🔔',
-      title: t('premium.feature5') || 'Personalized Reminders',
-      description: t('premium.feature5Description') || 'Receive notifications to maintain your habit',
-    },
-    {
-      icon: '⭐',
-      title: t('premium.feature6') || 'Exclusive Badges',
-      description: t('premium.feature6Description') || 'Unlock special badges only for Premium',
+      icon: 'close-circle',
+      iconColor: '#4ECB87',
+      title: t('premium.feature.noAds') || 'Sem Anúncios',
+      description: t('premium.feature.noAdsDescription') || 'Experiência sem interrupções, sem anúncios publicitários',
     },
   ];
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+    <View style={{ flex: 1 }}>
+      {!theme.isDark && (
+        <LinearGradient
+          colors={[theme.colors.primary, '#F0FDF4', '#FFFFFF']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          locations={[0, 0.15, 1]}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+      )}
       {/* Header Fixo */}
-      <SafeAreaView edges={['top']} style={{ backgroundColor: theme.colors.card }}>
+      <View style={{ backgroundColor: theme.isDark ? theme.colors.card : 'transparent' }}>
         <View style={{
           flexDirection: 'row',
           alignItems: 'center',
           paddingHorizontal: 20,
-          paddingTop: 0,
+          paddingTop: 18,
           paddingBottom: 12,
           borderBottomWidth: 1,
           borderBottomColor: theme.colors.border || '#E5E7EB',
@@ -111,7 +121,7 @@ export function PremiumScreen({ navigation }: any) {
             {t('premium.title') || 'Premium'}
           </Text>
         </View>
-      </SafeAreaView>
+      </View>
 
       <ScrollView
         style={{ flex: 1 }}
@@ -124,35 +134,34 @@ export function PremiumScreen({ navigation }: any) {
             from={{ opacity: 0, translateY: 20 }}
             animate={{ opacity: 1, translateY: 0 }}
             transition={{ type: 'timing', duration: 400 }}
-            style={{ alignItems: 'center', marginBottom: 32 }}
+            style={{ alignItems: 'center', marginBottom: 24 }}
           >
-            <View style={{
-              width: 120,
-              height: 120,
-              borderRadius: 60,
-              backgroundColor: '#8B5CF6',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: 20,
-              shadowColor: '#8B5CF6',
-              shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.3,
-              shadowRadius: 16,
-              elevation: 8,
-            }}>
-              <Text style={{ fontSize: 64 }}>⭐</Text>
-            </View>
+            <LinearGradient
+              colors={[theme.colors.primary, '#4ECB87']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 32,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 12,
+              }}
+            >
+              <Ionicons name="star" size={32} color="#FFFFFF" />
+            </LinearGradient>
             <Text style={{
-              fontSize: 32,
-              fontWeight: '800',
+              fontSize: 24,
+              fontWeight: '700',
               color: theme.colors.text,
-              marginBottom: 8,
+              marginBottom: 4,
               textAlign: 'center',
             }}>
               {t('premium.unlockTitle') || 'Unlock Premium'}
             </Text>
             <Text style={{
-              fontSize: 16,
+              fontSize: 14,
               color: theme.colors.textSecondary || '#9CA3AF',
               textAlign: 'center',
             }}>
@@ -189,7 +198,17 @@ export function PremiumScreen({ navigation }: any) {
                   borderColor: theme.colors.border || '#E5E7EB',
                 }}
               >
-                <Text style={{ fontSize: 32, marginRight: 16 }}>{feature.icon}</Text>
+                <View style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: feature.iconColor + '15',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 16,
+                }}>
+                  <Ionicons name={feature.icon as any} size={24} color={feature.iconColor} />
+                </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{
                     fontSize: 18,
@@ -216,53 +235,58 @@ export function PremiumScreen({ navigation }: any) {
             from={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ type: 'timing', duration: 400, delay: 450 }}
-            style={{
-              backgroundColor: '#8B5CF6',
-              borderRadius: 20,
-              padding: 24,
-              marginBottom: 24,
-              alignItems: 'center',
-              shadowColor: '#8B5CF6',
-              shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.3,
-              shadowRadius: 16,
-              elevation: 8,
-            }}
           >
-            <Text style={{
-              color: '#FFFFFF',
-              fontSize: 14,
-              fontWeight: '600',
-              marginBottom: 8,
-              opacity: 0.9,
-            }}>
-              {t('premium.specialPrice') || 'Special Price'}
-            </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 8 }}>
+            <LinearGradient
+              colors={[theme.colors.primary, '#4ECB87', '#5DD99A']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                borderRadius: 20,
+                padding: 24,
+                marginBottom: 24,
+                alignItems: 'center',
+                shadowColor: theme.colors.primary,
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.3,
+                shadowRadius: 16,
+                elevation: 8,
+              }}
+            >
               <Text style={{
                 color: '#FFFFFF',
-                fontSize: 48,
-                fontWeight: '900',
-              }}>
-                9,99€
-              </Text>
-              <Text style={{
-                color: '#FFFFFF',
-                fontSize: 18,
+                fontSize: 14,
                 fontWeight: '600',
-                marginLeft: 8,
+                marginBottom: 8,
                 opacity: 0.9,
               }}>
-                {t('premium.perMonth') || '/month'}
+                {t('premium.specialPrice') || 'Special Price'}
               </Text>
-            </View>
-            <Text style={{
-              color: '#FFFFFF',
-              fontSize: 14,
-              opacity: 0.9,
-            }}>
-              {t('premium.cancelAnytime') || 'Cancel anytime'}
-            </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 8 }}>
+                <Text style={{
+                  color: '#FFFFFF',
+                  fontSize: 48,
+                  fontWeight: '900',
+                }}>
+                  9,99€
+                </Text>
+                <Text style={{
+                  color: '#FFFFFF',
+                  fontSize: 18,
+                  fontWeight: '600',
+                  marginLeft: 8,
+                  opacity: 0.9,
+                }}>
+                  {t('premium.perMonth') || '/month'}
+                </Text>
+              </View>
+              <Text style={{
+                color: '#FFFFFF',
+                fontSize: 14,
+                opacity: 0.9,
+              }}>
+                {t('premium.cancelAnytime') || 'Cancel anytime'}
+              </Text>
+            </LinearGradient>
           </MotiView>
 
           {/* CTA Button */}
@@ -276,27 +300,35 @@ export function PremiumScreen({ navigation }: any) {
                 onPress={handleUpgrade}
                 activeOpacity={0.8}
                 style={{
-                  backgroundColor: '#8B5CF6',
                   borderRadius: 16,
-                  paddingVertical: 18,
-                  paddingHorizontal: 24,
-                  alignItems: 'center',
-                  justifyContent: 'center',
                   marginBottom: 16,
-                  shadowColor: '#8B5CF6',
+                  shadowColor: theme.colors.primary,
                   shadowOffset: { width: 0, height: 8 },
                   shadowOpacity: 0.4,
                   shadowRadius: 16,
                   elevation: 8,
+                  overflow: 'hidden',
                 }}
               >
-                <Text style={{
-                  color: '#FFFFFF',
-                  fontSize: 18,
-                  fontWeight: '700',
-                }}>
-                  {t('premium.activateButton') || 'Activate Premium Now'}
-                </Text>
+                <LinearGradient
+                  colors={[theme.colors.primary, '#4ECB87']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={{
+                    paddingVertical: 18,
+                    paddingHorizontal: 24,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{
+                    color: '#FFFFFF',
+                    fontSize: 18,
+                    fontWeight: '700',
+                  }}>
+                    {t('premium.activateButton') || 'Activate Premium Now'}
+                  </Text>
+                </LinearGradient>
               </TouchableOpacity>
             </MotiView>
           ) : (
@@ -313,11 +345,11 @@ export function PremiumScreen({ navigation }: any) {
                 justifyContent: 'center',
                 marginBottom: 16,
                 borderWidth: 2,
-                borderColor: '#8B5CF6',
+                borderColor: theme.colors.primary,
               }}
             >
               <Text style={{
-                color: '#8B5CF6',
+                color: theme.colors.primary,
                 fontSize: 18,
                 fontWeight: '700',
               }}>

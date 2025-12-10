@@ -4,11 +4,15 @@
  * Tela inicial da aplicação com opções para começar ou fazer login
  */
 
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, Pressable } from 'react-native';
+import React, { useState, useMemo, useEffect } from 'react';
+import { View, Text, TouchableOpacity, Modal, Pressable, StyleSheet, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { VideoView, useVideoPlayer } from 'expo-video';
+import { Asset } from 'expo-asset';
 import { useLanguage, Language } from '../context/LanguageContext';
+import { useUser } from '../context/UserContext';
+import Toast from 'react-native-toast-message';
 
 const languages = [
   { code: 'en' as Language, name: 'English', flag: '🇬🇧' },
@@ -21,7 +25,44 @@ const languages = [
 
 export function WelcomeScreen({ navigation, showOnboarding }: any) {
   const { t, language, setLanguage } = useLanguage();
+  const { signInWithGoogleNative } = useUser();
   const [showLanguageModal, setShowLanguageModal] = useState(false);
+  const [shouldRenderVideo, setShouldRenderVideo] = useState(false);
+  const [videoUri, setVideoUri] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  
+  useEffect(() => {
+    const loadVideo = async () => {
+      const asset = Asset.fromModule(require('../assets/welcome-video.mp4'));
+      await asset.downloadAsync();
+      if (asset.localUri) {
+        setVideoUri(asset.localUri);
+      }
+    };
+    loadVideo();
+  }, []);
+  
+  const player = useVideoPlayer(videoUri || require('../assets/welcome-video.mp4'), (player) => {
+    player.loop = true;
+    player.muted = true;
+    if (videoUri) {
+      player.play();
+      setTimeout(() => {
+        setShouldRenderVideo(true);
+      }, 100);
+    }
+  });
+  
+  useEffect(() => {
+    if (videoUri && player) {
+      player.loop = true;
+      player.muted = true;
+      player.play();
+      setTimeout(() => {
+        setShouldRenderVideo(true);
+      }, 100);
+    }
+  }, [videoUri, player]);
   
   const currentLanguage = languages.find(lang => lang.code === language) || languages[0];
   
@@ -34,9 +75,29 @@ export function WelcomeScreen({ navigation, showOnboarding }: any) {
       navigation.navigate('Onboarding');
     }
   };
+
+  const handleSignIn = async () => {
+    setLoading(true);
+    try {
+      await signInWithGoogleNative();
+      Toast.show({
+        type: 'success',
+        text1: t('common.success'),
+        text2: t('auth.signIn') + ' ' + t('common.success'),
+      });
+    } catch (error: any) {
+      Toast.show({
+        type: 'error',
+        text1: t('common.error'),
+        text2: error?.message || t('common.error'),
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
   
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-gray-900">
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#111827' }}>
       {/* Language Selector - Top Right (below status bar) */}
       <View style={{ position: 'absolute', top: 60, right: 20, zIndex: 10 }}>
         <TouchableOpacity
@@ -58,44 +119,47 @@ export function WelcomeScreen({ navigation, showOnboarding }: any) {
         </TouchableOpacity>
       </View>
 
-      <View className="flex-1 items-center justify-center px-6">
-        {/* Logo */}
-        <View className="items-center mb-12">
-          <View className="w-32 h-32 bg-green-500 rounded-full items-center justify-center mb-6">
-            <Text className="text-6xl">🥗</Text>
-          </View>
-          <Text className="text-4xl font-bold text-gray-900 dark:text-white mb-3">
-            {t('welcome.title')}
-          </Text>
-          <Text className="text-lg text-gray-500 dark:text-gray-400 text-center">
-            {t('welcome.subtitle')}
-          </Text>
+      <View style={styles.container}>
+        {/* Video no centro */}
+        <View style={styles.videoContainer}>
+          {shouldRenderVideo && player && (
+            <VideoView
+              player={player}
+              style={styles.video}
+              contentFit="contain"
+              nativeControls={false}
+              allowsPictureInPicture={false}
+            />
+          )}
         </View>
 
-        {/* Botão Get Started */}
-        <TouchableOpacity
-          onPress={handleGetStarted}
-          className="bg-green-500 rounded-xl py-4 px-12 w-full items-center justify-center mb-4 shadow-lg"
-          activeOpacity={0.8}
-        >
-          <Text className="text-white font-semibold text-lg">{t('welcome.getStarted')}</Text>
-        </TouchableOpacity>
+        {/* Botões em baixo */}
+        <View style={styles.buttonsContainer}>
+          {/* Botão Get Started */}
+          <TouchableOpacity
+            onPress={handleGetStarted}
+            style={styles.getStartedButton}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.getStartedText}>{t('welcome.getStarted')}</Text>
+          </TouchableOpacity>
 
-        {/* Link Sign In */}
-        <TouchableOpacity
-          onPress={() => navigation?.navigate('Login')}
-          activeOpacity={0.7}
-          style={{ marginTop: 16 }}
-        >
-          <Text style={{
-            color: '#3BB273',
-            fontSize: 15,
-            fontWeight: '600',
-            textAlign: 'center',
-          }}>
-            {t('welcome.alreadyRegistered')}
-          </Text>
-        </TouchableOpacity>
+          {/* Link Sign In */}
+          <TouchableOpacity
+            onPress={handleSignIn}
+            activeOpacity={0.7}
+            style={styles.signInButton}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#3BB273" />
+            ) : (
+              <Text style={styles.signInText}>
+                {t('welcome.alreadyRegistered')}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Language Selection Modal */}
@@ -117,16 +181,18 @@ export function WelcomeScreen({ navigation, showOnboarding }: any) {
           <Pressable
             onPress={(e) => e.stopPropagation()}
             style={{
-              backgroundColor: '#FFFFFF',
+              backgroundColor: '#1F2937',
               borderRadius: 20,
               padding: 20,
               width: '85%',
               maxWidth: 400,
               shadowColor: '#000',
               shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.3,
+              shadowOpacity: 0.5,
               shadowRadius: 12,
               elevation: 8,
+              borderWidth: 1,
+              borderColor: '#374151',
             }}
           >
             {/* Header */}
@@ -139,7 +205,7 @@ export function WelcomeScreen({ navigation, showOnboarding }: any) {
               <Text style={{
                 fontSize: 20,
                 fontWeight: '700',
-                color: '#111827',
+                color: '#FFFFFF',
               }}>
                 {t('welcome.selectLanguage')}
               </Text>
@@ -149,12 +215,12 @@ export function WelcomeScreen({ navigation, showOnboarding }: any) {
                   width: 32,
                   height: 32,
                   borderRadius: 16,
-                  backgroundColor: '#F3F4F6',
+                  backgroundColor: '#374151',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                <Ionicons name="close" size={20} color="#111827" />
+                <Ionicons name="close" size={20} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
 
@@ -176,18 +242,18 @@ export function WelcomeScreen({ navigation, showOnboarding }: any) {
                     borderRadius: 12,
                     backgroundColor: language === lang.code
                       ? '#3BB273'
-                      : '#F9FAFB',
+                      : '#374151',
                     borderWidth: 1,
                     borderColor: language === lang.code
                       ? '#3BB273'
-                      : '#E5E7EB',
+                      : '#4B5563',
                   }}
                 >
                   <Text style={{ fontSize: 24, marginRight: 12 }}>{lang.flag}</Text>
                   <Text style={{
                     fontSize: 16,
                     fontWeight: '600',
-                    color: language === lang.code ? '#FFFFFF' : '#111827',
+                    color: language === lang.code ? '#FFFFFF' : '#F9FAFB',
                     flex: 1,
                   }}>
                     {lang.name}
@@ -201,7 +267,105 @@ export function WelcomeScreen({ navigation, showOnboarding }: any) {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Loading Modal */}
+      <Modal
+        visible={loading}
+        transparent={true}
+        animationType="fade"
+      >
+        <View style={styles.loadingContainer}>
+          <View style={styles.loadingContent}>
+            <ActivityIndicator size="large" color="#3BB273" />
+            <Text style={styles.loadingText}>
+              {t('common.loading') || 'Loading...'}
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 40,
+  },
+  videoContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    width: '100%',
+    maxHeight: '75%',
+    backgroundColor: 'transparent',
+    overflow: 'hidden',
+    paddingBottom: 0,
+  },
+  video: {
+    width: '100%',
+    height: '100%',
+    maxWidth: 500,
+    maxHeight: 500,
+    backgroundColor: 'transparent',
+  },
+  buttonsContainer: {
+    width: '100%',
+    gap: 16,
+  },
+  getStartedButton: {
+    backgroundColor: '#3BB273',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  getStartedText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  signInButton: {
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  signInText: {
+    color: '#3BB273',
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContent: {
+    backgroundColor: '#1F2937',
+    borderRadius: 20,
+    padding: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 150,
+    borderWidth: 1,
+    borderColor: '#374151',
+  },
+  loadingText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 16,
+  },
+});
 

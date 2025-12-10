@@ -493,6 +493,15 @@ const translations: Record<Language, Record<string, string>> = {
     'progress.bmiStatusDescription.obese': 'Work with a professional to build a safe plan for reducing weight.',
     'progress.premiumRequired': 'Premium Required',
     'progress.premiumRequiredDescription': 'This feature is available only for Premium users. Upgrade to unlock progress tracking and more features.',
+    'progress.macrosTitle': 'Macros',
+    'progress.days': 'days',
+    'progress.totalCalories': 'Total Calories',
+    'progress.averagePerDay': 'Average per day',
+    'progress.noMacrosData': 'No macros data available',
+    'progress.period.1d': '1D',
+    'progress.period.7d': '7D',
+    'progress.period.1m': '1M',
+    'progress.period.6m': '6M',
     
     // Chat
     'chat.title': 'Coach Nuti',
@@ -692,6 +701,7 @@ const translations: Record<Language, Record<string, string>> = {
     'addMeal.couldNotAddMeal': 'Could not add meal',
     'addMeal.foodAddedToDiary': '{food} was added to your diary',
     'addMeal.cameraError': 'Error taking photo. Please try again.',
+    'addMeal.premiumRequiredMessage': 'Camera and barcode features are only available for Premium users. Upgrade to Premium to access!',
     
     // Profile
     'profile.title': 'Profile',
@@ -751,6 +761,16 @@ const translations: Record<Language, Record<string, string>> = {
     'premium.feature5Description': 'Receive notifications to maintain your habit',
     'premium.feature6': 'Exclusive Badges',
     'premium.feature6Description': 'Unlock special badges only for Premium',
+    'premium.feature.chat': 'Chat Coach Nuti',
+    'premium.feature.chatDescription': 'Unlimited access to chat with Coach Nuti for all your nutrition questions',
+    'premium.feature.progress': 'Progress Screen',
+    'premium.feature.progressDescription': 'Track your detailed progress with advanced charts and statistics',
+    'premium.feature.photo': 'Add Meal by Photo',
+    'premium.feature.photoDescription': 'Take a photo of your meal and let AI automatically identify foods and nutritional values',
+    'premium.feature.barcode': 'Add Meal by Barcode',
+    'premium.feature.barcodeDescription': 'Scan product barcodes to quickly add meals',
+    'premium.feature.noAds': 'No Ads',
+    'premium.feature.noAdsDescription': 'Uninterrupted experience, no advertising',
     'premium.getStarted': 'Get Started',
     'premium.title': 'Premium',
     'premium.unlockTitle': 'Unlock Premium',
@@ -849,8 +869,10 @@ const translations: Record<Language, Record<string, string>> = {
     
     // Common
     'common.loading': 'Loading...',
+    'common.deleting': 'Deleting...',
     'common.error': 'Error',
     'common.success': 'Success',
+    'common.today': 'Today',
     'common.save': 'Save',
     'common.cancel': 'Cancel',
     'common.add': 'Add',
@@ -1297,6 +1319,15 @@ const translations: Record<Language, Record<string, string>> = {
     'progress.bmiStatusDescription.obese': 'Procure acompanhamento profissional para definir um plano seguro de perda de peso.',
     'progress.premiumRequired': 'Premium Necessário',
     'progress.premiumRequiredDescription': 'Esta funcionalidade está disponível apenas para utilizadores Premium. Atualiza para desbloquear o acompanhamento de progresso e mais funcionalidades.',
+    'progress.macrosTitle': 'Macros',
+    'progress.days': 'dias',
+    'progress.totalCalories': 'Total de Calorias',
+    'progress.averagePerDay': 'Média por dia',
+    'progress.noMacrosData': 'Sem dados de macros disponíveis',
+    'progress.period.1d': '1D',
+    'progress.period.7d': '7D',
+    'progress.period.1m': '1M',
+    'progress.period.6m': '6M',
     
     // Chat
     'chat.title': 'Coach Nuti',
@@ -1496,6 +1527,7 @@ const translations: Record<Language, Record<string, string>> = {
     'addMeal.couldNotAddMeal': 'Não foi possível adicionar a refeição',
     'addMeal.foodAddedToDiary': '{food} foi adicionado ao teu diário',
     'addMeal.cameraError': 'Erro ao tirar foto. Tente novamente.',
+    'addMeal.premiumRequiredMessage': 'A funcionalidade de câmera e código de barras está disponível apenas para utilizadores Premium. Atualiza para Premium para aceder!',
     
     // Profile
     'profile.title': 'Perfil',
@@ -1555,6 +1587,16 @@ const translations: Record<Language, Record<string, string>> = {
     'premium.feature5Description': 'Recebe notificações para manter o teu hábito',
     'premium.feature6': 'Badges Exclusivas',
     'premium.feature6Description': 'Desbloqueia badges especiais apenas para Premium',
+    'premium.feature.chat': 'Chat Coach Nuti',
+    'premium.feature.chatDescription': 'Acesso ilimitado ao chat com o Coach Nuti para todas as tuas dúvidas sobre nutrição',
+    'premium.feature.progress': 'Progress Screen',
+    'premium.feature.progressDescription': 'Acompanha o teu progresso detalhado com gráficos e estatísticas avançadas',
+    'premium.feature.photo': 'Adicionar Refeição por Foto',
+    'premium.feature.photoDescription': 'Tira uma foto da tua refeição e deixa a IA identificar automaticamente os alimentos e valores nutricionais',
+    'premium.feature.barcode': 'Adicionar Refeição por Código de Barras',
+    'premium.feature.barcodeDescription': 'Escanear códigos de barras de produtos para adicionar refeições rapidamente',
+    'premium.feature.noAds': 'Sem Anúncios',
+    'premium.feature.noAdsDescription': 'Experiência sem interrupções, sem anúncios publicitários',
     'premium.getStarted': 'Começar',
     'premium.title': 'Premium',
     'premium.unlockTitle': 'Desbloqueia o Premium',
@@ -1653,8 +1695,10 @@ const translations: Record<Language, Record<string, string>> = {
     
     // Common
     'common.loading': 'A carregar...',
+    'common.deleting': 'A eliminar...',
     'common.error': 'Erro',
     'common.success': 'Sucesso',
+    'common.today': 'Hoje',
     'common.save': 'Guardar',
     'common.cancel': 'Cancelar',
     'common.add': 'Adicionar',
@@ -2100,6 +2144,15 @@ const translations: Record<Language, Record<string, string>> = {
     'progress.bmiStatusDescription.obese': 'Trabaja con un profesional para diseñar un plan seguro de reducción de peso.',
     'progress.premiumRequired': 'Premium Requerido',
     'progress.premiumRequiredDescription': 'Esta función está disponible solo para usuarios Premium. Actualiza para desbloquear el seguimiento de progreso y más funciones.',
+    'progress.macrosTitle': 'Macros',
+    'progress.days': 'días',
+    'progress.totalCalories': 'Total de Calorías',
+    'progress.averagePerDay': 'Promedio por día',
+    'progress.noMacrosData': 'No hay datos de macros disponibles',
+    'progress.period.1d': '1D',
+    'progress.period.7d': '7D',
+    'progress.period.1m': '1M',
+    'progress.period.6m': '6M',
     
     // Chat
     'chat.title': 'Coach Nuti',
@@ -2291,6 +2344,7 @@ const translations: Record<Language, Record<string, string>> = {
     'addMeal.couldNotAddMeal': 'No se pudo añadir la comida',
     'addMeal.foodAddedToDiary': '{food} fue añadido a tu diario',
     'addMeal.cameraError': 'Error al tomar foto. Por favor, intenta de nuevo.',
+    'addMeal.premiumRequiredMessage': 'Las funciones de cámara y código de barras están disponibles solo para usuarios Premium. ¡Actualiza a Premium para acceder!',
     
     // Profile
     'profile.title': 'Perfil',
@@ -2447,8 +2501,10 @@ const translations: Record<Language, Record<string, string>> = {
     
     // Common
     'common.loading': 'Cargando...',
+    'common.deleting': 'Eliminando...',
     'common.error': 'Error',
     'common.success': 'Éxito',
+    'common.today': 'Hoy',
     'common.save': 'Guardar',
     'common.cancel': 'Cancelar',
     'common.add': 'Añadir',
@@ -2894,6 +2950,15 @@ const translations: Record<Language, Record<string, string>> = {
     'progress.bmiStatusDescription.obese': 'Collaborez avec un professionnel pour élaborer un plan sûr de perte de poids.',
     'progress.premiumRequired': 'Premium Requis',
     'progress.premiumRequiredDescription': 'Cette fonctionnalité est disponible uniquement pour les utilisateurs Premium. Mettez à niveau pour débloquer le suivi des progrès et plus de fonctionnalités.',
+    'progress.macrosTitle': 'Macros',
+    'progress.days': 'jours',
+    'progress.totalCalories': 'Total des Calories',
+    'progress.averagePerDay': 'Moyenne par jour',
+    'progress.noMacrosData': 'Aucune donnée de macros disponible',
+    'progress.period.1d': '1J',
+    'progress.period.7d': '7J',
+    'progress.period.1m': '1M',
+    'progress.period.6m': '6M',
     
     // Chat
     'chat.title': 'Coach Nuti',
@@ -3085,6 +3150,7 @@ const translations: Record<Language, Record<string, string>> = {
     'addMeal.couldNotAddMeal': 'Impossible d\'ajouter le repas',
     'addMeal.foodAddedToDiary': '{food} a été ajouté à votre journal',
     'addMeal.cameraError': 'Erreur lors de la prise de photo. Veuillez réessayer.',
+    'addMeal.premiumRequiredMessage': 'Les fonctionnalités de caméra et de code-barres sont disponibles uniquement pour les utilisateurs Premium. Passez à Premium pour y accéder!',
     
     // Profile
     'profile.title': 'Profil',
@@ -3241,8 +3307,10 @@ const translations: Record<Language, Record<string, string>> = {
     
     // Common
     'common.loading': 'Chargement...',
+    'common.deleting': 'Suppression...',
     'common.error': 'Erreur',
     'common.success': 'Succès',
+    'common.today': 'Aujourd\'hui',
     'common.save': 'Enregistrer',
     'common.cancel': 'Annuler',
     'common.add': 'Ajouter',
@@ -3688,6 +3756,15 @@ const translations: Record<Language, Record<string, string>> = {
     'progress.bmiStatusDescription.obese': 'Erarbeiten Sie mit einer Fachperson einen sicheren Plan zur Gewichtsreduktion.',
     'progress.premiumRequired': 'Premium Erforderlich',
     'progress.premiumRequiredDescription': 'Diese Funktion ist nur für Premium-Benutzer verfügbar. Aktualisieren Sie, um Fortschrittsverfolgung und weitere Funktionen freizuschalten.',
+    'progress.macrosTitle': 'Makros',
+    'progress.days': 'Tage',
+    'progress.totalCalories': 'Gesamtkalorien',
+    'progress.averagePerDay': 'Durchschnitt pro Tag',
+    'progress.noMacrosData': 'Keine Makros-Daten verfügbar',
+    'progress.period.1d': '1T',
+    'progress.period.7d': '7T',
+    'progress.period.1m': '1M',
+    'progress.period.6m': '6M',
     
     // Chat
     'chat.title': 'Coach Nuti',
@@ -3851,6 +3928,7 @@ const translations: Record<Language, Record<string, string>> = {
     'addMeal.couldNotAddMeal': 'Mahlzeit konnte nicht hinzugefügt werden',
     'addMeal.foodAddedToDiary': '{food} wurde zu Ihrem Tagebuch hinzugefügt',
     'addMeal.cameraError': 'Fehler beim Aufnehmen des Fotos. Bitte versuchen Sie es erneut.',
+    'addMeal.premiumRequiredMessage': 'Kamera- und Barcode-Funktionen sind nur für Premium-Benutzer verfügbar. Upgrade auf Premium, um darauf zuzugreifen!',
     
     // Profile
     'profile.title': 'Profil',
@@ -4007,8 +4085,10 @@ const translations: Record<Language, Record<string, string>> = {
     
     // Common
     'common.loading': 'Lädt...',
+    'common.deleting': 'Löschen...',
     'common.error': 'Fehler',
     'common.success': 'Erfolg',
+    'common.today': 'Heute',
     'common.save': 'Speichern',
     'common.cancel': 'Abbrechen',
     'common.add': 'Hinzufügen',
@@ -4454,6 +4534,15 @@ const translations: Record<Language, Record<string, string>> = {
     'progress.bmiStatusDescription.obese': 'Lavora con un professionista per definire un piano sicuro di dimagrimento.',
     'progress.premiumRequired': 'Premium Richiesto',
     'progress.premiumRequiredDescription': 'Questa funzione è disponibile solo per gli utenti Premium. Aggiorna per sbloccare il monitoraggio dei progressi e altre funzioni.',
+    'progress.macrosTitle': 'Macros',
+    'progress.days': 'giorni',
+    'progress.totalCalories': 'Calorie Totali',
+    'progress.averagePerDay': 'Media al giorno',
+    'progress.noMacrosData': 'Nessun dato di macros disponibile',
+    'progress.period.1d': '1G',
+    'progress.period.7d': '7G',
+    'progress.period.1m': '1M',
+    'progress.period.6m': '6M',
     
     // Chat
     'chat.title': 'Coach Nuti',
@@ -4645,6 +4734,7 @@ const translations: Record<Language, Record<string, string>> = {
     'addMeal.couldNotAddMeal': 'Impossibile aggiungere il pasto',
     'addMeal.foodAddedToDiary': '{food} è stato aggiunto al tuo diario',
     'addMeal.cameraError': 'Errore nello scattare la foto. Riprova.',
+    'addMeal.premiumRequiredMessage': 'Le funzionalità di fotocamera e codice a barre sono disponibili solo per gli utenti Premium. Aggiorna a Premium per accedervi!',
     
     // Profile
     'profile.title': 'Profilo',
@@ -4801,8 +4891,10 @@ const translations: Record<Language, Record<string, string>> = {
     
     // Common
     'common.loading': 'Caricamento...',
+    'common.deleting': 'Eliminazione...',
     'common.error': 'Errore',
     'common.success': 'Successo',
+    'common.today': 'Oggi',
     'common.save': 'Salva',
     'common.cancel': 'Annulla',
     'common.add': 'Aggiungi',
