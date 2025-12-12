@@ -41,6 +41,7 @@ import { calculateCalorieGoalFromProfile } from '../utils/nutritionUtils';
 import { getCache, setCache, removeCache } from '../utils/cacheUtils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
+import { updateWidgetFromDashboard } from '../services/widgetService';
 import { MotiView } from 'moti';
 import { Image, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -256,6 +257,11 @@ export function DashboardScreen({ navigation }: any) {
     const netCalories = mealsCalories - caloriesBurned;
     setConsumed(Math.max(0, netCalories)); // Não permitir valores negativos
 
+    // Atualizar widget com dados atuais
+    if (profile) {
+      updateWidgetFromDashboard(netCalories, goal, macros, profile);
+    }
+
     // Verificar se atingiu meta de calorias (apenas uma vez por dia)
     if (user && profile && netCalories >= goal && goal > 0) {
       const checkGoalBadge = async () => {
@@ -276,7 +282,7 @@ export function DashboardScreen({ navigation }: any) {
       
       checkGoalBadge();
     }
-  }, [meals, caloriesBurned, goal, user, profile, checkAndShowBadges]);
+  }, [meals, caloriesBurned, goal, macros, user, profile, checkAndShowBadges]);
 
 
   const loadDashboardData = async (forceRefresh: boolean = false) => {
@@ -818,6 +824,11 @@ export function DashboardScreen({ navigation }: any) {
       setShowWaterModal(false);
       setWaterAmount('250');
 
+      // Atualizar widget com dados atuais incluindo água
+      if (profile) {
+        updateWidgetFromDashboard(consumed, goal, macros, profile, { consumed: newAmount, goal: profile?.dailyWaterGoal || 2700 });
+      }
+
       // Verificar e mostrar badges ganhas (pode ganhar badge de água)
       await checkAndShowBadges(user.uid);
 
@@ -873,6 +884,11 @@ export function DashboardScreen({ navigation }: any) {
       await loadWaterIntake(selectedDate, true);
       setShowEditWaterModal(false);
       setEditWaterAmount('0');
+
+      // Atualizar widget com dados atuais incluindo água
+      if (profile) {
+        updateWidgetFromDashboard(consumed, goal, macros, profile, { consumed: amount, goal: profile?.dailyWaterGoal || 2700 });
+      }
 
       Toast.show({
         type: 'success',

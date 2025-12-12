@@ -85,7 +85,8 @@
           "mode": "spinner"
         }
       ],
-      "expo-video"
+      "expo-video",
+      "./plugins/withWidgets"
     ],
     "updates": {
       "enabled": false,

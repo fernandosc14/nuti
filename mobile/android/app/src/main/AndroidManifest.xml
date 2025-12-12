@@ -13,6 +13,9 @@
       <category android:name="android.intent.category.BROWSABLE"/>
       <data android:scheme="https"/>
     </intent>
+    <intent>
+      <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+    </intent>
   </queries>
   <application android:name=".MainApplication" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:allowBackup="true" android:theme="@style/AppTheme" android:supportsRtl="true" android:enableOnBackInvokedCallback="false">
     <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713" tools:replace="android:value"/>
@@ -36,5 +39,30 @@
         <data android:scheme="exp+nuti"/>
       </intent-filter>
     </activity>
+    <receiver android:name=".widget.WaterWidgetProviderLight" android:exported="true">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+      </intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_water_light_info"/>
+    </receiver>
+    <receiver android:name=".widget.WaterWidgetProviderDark" android:exported="true">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+      </intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_water_dark_info"/>
+    </receiver>
+
+    <receiver android:name=".widget.MacroBarsWidgetProviderLight" android:exported="true">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+      </intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_macro_bars_light_info"/>
+    </receiver>
+    <receiver android:name=".widget.MacroBarsWidgetProviderDark" android:exported="true">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+      </intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_macro_bars_dark_info"/>
+    </receiver>
   </application>
 </manifest>

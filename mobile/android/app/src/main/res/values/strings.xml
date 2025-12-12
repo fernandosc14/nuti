@@ -1,5 +1,7 @@
 <resources>
   <string name="app_name">Nuti</string>
   <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
-  <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
+  <string name="expo_splash_screen_status_bar_translatable" translatable="false">false</string>
+  <string name="widget_water_description">Track daily water intake</string>
+  <string name="widget_macros_description">Track daily calories and macros</string>
 </resources>
