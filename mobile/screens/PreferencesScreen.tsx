@@ -4,15 +4,15 @@
  * Tela de preferências do utilizador
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  Switch,
   Modal,
   Pressable,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
@@ -20,6 +20,11 @@ import { useLanguage } from '../context/LanguageContext';
 import { useUnits } from '../context/UnitsContext';
 import { Ionicons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
+import {
+  applyReminderPreference,
+  loadReminderPreference,
+  requestNotificationPermission,
+} from '../services/notifications';
 
 export function PreferencesScreen({ navigation }: any) {
   const { theme, toggleTheme, themeMode, setThemeMode } = useTheme();
@@ -29,6 +34,21 @@ export function PreferencesScreen({ navigation }: any) {
   const [showWeightUnitModal, setShowWeightUnitModal] = useState(false);
   const [showHeightUnitModal, setShowHeightUnitModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
+  const [mealReminders, setMealReminders] = useState<boolean>(false);
+  const [waterReminders, setWaterReminders] = useState<boolean>(false);
+  const [isProcessingMeal, setIsProcessingMeal] = useState<boolean>(false);
+  const [isProcessingWater, setIsProcessingWater] = useState<boolean>(false);
+
+  useEffect(() => {
+    const loadPreferences = async () => {
+      const mealPref = await loadReminderPreference('meal');
+      const waterPref = await loadReminderPreference('water');
+      if (mealPref != null) setMealReminders(mealPref);
+      if (waterPref != null) setWaterReminders(waterPref);
+    };
+
+    loadPreferences();
+  }, []);
 
   const languages = [
     { code: 'en', name: 'English', flag: '🇬🇧' },
@@ -42,6 +62,78 @@ export function PreferencesScreen({ navigation }: any) {
   const handleLanguageChange = (langCode: string) => {
     setLanguage(langCode);
     setShowLanguageModal(false);
+  };
+
+  // Toggle básico sem animação
+  const PlainToggle = ({ value, onChange, disabled }: { value: boolean; onChange: (v: boolean) => void; disabled?: boolean }) => {
+    return (
+      <Pressable
+        onPress={() => !disabled && onChange(!value)}
+        style={{
+          width: 48,
+          height: 28,
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: theme.colors.border || '#E5E7EB',
+          backgroundColor: value ? (theme.colors.primary || '#3BB273') : (theme.colors.card || '#FFFFFF'),
+          alignItems: value ? 'flex-end' : 'flex-start',
+          justifyContent: 'center',
+          paddingHorizontal: 4,
+          opacity: disabled ? 0.6 : 1,
+        }}
+      >
+        <View
+          style={{
+            width: 20,
+            height: 20,
+            borderRadius: 10,
+            backgroundColor: value ? '#FFFFFF' : (theme.colors.textSecondary || '#9CA3AF'),
+          }}
+        />
+      </Pressable>
+    );
+  };
+
+  const handleReminderToggle = async (type: 'meal' | 'water', value: boolean) => {
+    const previousValue = type === 'meal' ? mealReminders : waterReminders;
+    try {
+      // Guardar processamento para evitar duplo toque
+      if (type === 'meal') setIsProcessingMeal(true);
+      if (type === 'water') setIsProcessingWater(true);
+
+      if (value) {
+        const granted = await requestNotificationPermission();
+        if (!granted) {
+          Alert.alert(
+            t('notifications.permission_title') || 'Permissão necessária',
+            t('notifications.permission_body') || 'Ativa as notificações nas definições para receber lembretes.',
+          );
+          // Terminar processamento
+          if (type === 'meal') setIsProcessingMeal(false);
+          if (type === 'water') setIsProcessingWater(false);
+          return;
+        }
+      }
+
+      // Otimista para evitar flicker no Switch enquanto agenda
+      if (type === 'meal') setMealReminders(value);
+      if (type === 'water') setWaterReminders(value);
+
+      await applyReminderPreference(type, value);
+    } catch (error) {
+      console.error('Reminder toggle error', error);
+      // Reverter em caso de erro
+      if (type === 'meal') setMealReminders(previousValue);
+      if (type === 'water') setWaterReminders(previousValue);
+      Alert.alert(
+        t('notifications.error_title') || 'Erro ao atualizar',
+        t('notifications.error_body') || 'Não foi possível atualizar os lembretes. Tenta novamente.',
+      );
+    }
+    finally {
+      if (type === 'meal') setIsProcessingMeal(false);
+      if (type === 'water') setIsProcessingWater(false);
+    }
   };
 
   return (
@@ -225,11 +317,10 @@ export function PreferencesScreen({ navigation }: any) {
                   {t('preferences.mealReminders') || 'Lembretes de refeições'}
                 </Text>
               </View>
-              <Switch
-                value={true}
-                onValueChange={() => {}}
-                trackColor={{ false: '#E5E7EB', true: (theme.colors.primary || '#3BB273') + '80' }}
-                thumbColor={(theme.colors.primary || '#3BB273')}
+              <PlainToggle
+                value={mealReminders}
+                onChange={(value) => !isProcessingMeal && handleReminderToggle('meal', value)}
+                disabled={isProcessingMeal}
               />
             </View>
 
@@ -250,11 +341,10 @@ export function PreferencesScreen({ navigation }: any) {
                   {t('preferences.waterReminders') || 'Lembretes de água'}
                 </Text>
               </View>
-              <Switch
-                value={true}
-                onValueChange={() => {}}
-                trackColor={{ false: '#E5E7EB', true: (theme.colors.primary || '#3BB273') + '80' }}
-                thumbColor={(theme.colors.primary || '#3BB273')}
+              <PlainToggle
+                value={waterReminders}
+                onChange={(value) => !isProcessingWater && handleReminderToggle('water', value)}
+                disabled={isProcessingWater}
               />
             </View>
           </View>

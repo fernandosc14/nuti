@@ -6,8 +6,9 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "splash": {
+      "image": "./assets/logo_app_png.png",
       "resizeMode": "contain",
-      "backgroundColor": "#3BB273"
+      "backgroundColor": "#58b646"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -20,7 +21,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo-app.png",
-        "backgroundColor": "#3BB273"
+        "backgroundColor": "#58b646"
       },
       "package": "com.nuti.app",
       "permissions": [

@@ -6,6 +6,7 @@
 
 import { useState, useCallback } from 'react';
 import { checkAndAwardBadges, getUserBadges, Badge } from '../services/gamification';
+import { notifyBadgeUnlocked } from '../services/notifications';
 
 export function useBadgeNotification() {
   const [showModal, setShowModal] = useState(false);
@@ -29,6 +30,8 @@ export function useBadgeNotification() {
           console.log('[BadgeNotification] Showing modal for badge:', newBadges[0].name);
           setEarnedBadge(newBadges[0]);
           setShowModal(true);
+          // Disparar uma notificação local para o badge ganho
+          await notifyBadgeUnlocked(newBadges[0].name, newBadges[0].description);
         }
       } else {
         console.log('[BadgeNotification] No new badges awarded');

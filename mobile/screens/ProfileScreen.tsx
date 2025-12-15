@@ -60,78 +60,8 @@ export function ProfileScreen({ navigation }: any) {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [showImagePickerModal, setShowImagePickerModal] = useState(false);
 
-  // Função para gerar código de referência único baseado no userId
-  const generateReferralCode = (userId: string): string => {
-    const code = userId.substring(0, 8).toUpperCase().replace(/[^A-Z0-9]/g, '');
-    return code || userId.substring(0, 6).toUpperCase();
-  };
-
-  const [referralCode, setReferralCode] = useState<string>('');
-
-  // Função para obter ou criar código de referência
-  const getOrCreateReferralCode = async (): Promise<string> => {
-    if (!user) return '';
-
-    try {
-      if (profile?.referralCode) {
-        return profile.referralCode;
-      }
-
-      const newReferralCode = generateReferralCode(user.uid);
-      
-      const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
-        referralCode: newReferralCode,
-      });
-      
-      await updateProfile({ referralCode: newReferralCode });
-      
-      return newReferralCode;
-    } catch (error) {
-      console.error('Error creating referral code:', error);
-      return generateReferralCode(user.uid);
-    }
-  };
-
-  useEffect(() => {
-    const loadReferralCode = async () => {
-      if (!user || !profile) return;
-      
-      if (profile.referralCode) {
-        setReferralCode(profile.referralCode);
-      } else if (user.uid) {
-        try {
-          const code = await getOrCreateReferralCode();
-          if (code) {
-            setReferralCode(code);
-          }
-        } catch (error) {
-          console.error('Error loading referral code:', error);
-        }
-      }
-    };
-    
-    loadReferralCode();
-  }, [user?.uid, profile?.id]);
-
-  const handleCopyReferralCode = async () => {
-    if (!referralCode) return;
-
-    try {
-      await Clipboard.setStringAsync(referralCode);
-      Toast.show({
-        type: 'success',
-        text1: t('profile.referralCode.copied') || 'Código copiado!',
-        text2: t('profile.referralCode.copiedMessage') || 'O código de referência foi copiado para a área de transferência',
-      });
-    } catch (error) {
-      Toast.show({
-        type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: t('profile.referralCode.copyError') || 'Erro ao copiar código',
-      });
-    }
-  };
+  // NOTA: Código de referência foi removido da UI mas a lógica de geração
+  // permanece no UserContext ao criar conta, facilitando reativação futura
 
   // Calcular idade a partir de dateOfBirth
   const calculateAge = (dateOfBirth?: Date): number | null => {
@@ -824,8 +754,14 @@ export function ProfileScreen({ navigation }: any) {
           </View>
         </View>
 
-        {/* Secção de Código de Referência - Estilo "Invita amici" */}
-        {referralCode && (
+        {/* Premium Promo Card */}
+        <PremiumPromoCard
+          variant="compact"
+          onPress={() => navigation.navigate('Premium')}
+        />
+
+        {/* CÓDIGO DE REFERÊNCIA REMOVIDO - A lógica de geração permanece no UserContext */}
+        {false && (
           <View style={{
             marginHorizontal: 24,
             marginBottom: 24,
@@ -886,12 +822,6 @@ export function ProfileScreen({ navigation }: any) {
             </View>
           </View>
         )}
-
-        {/* Premium Promo Card */}
-        <PremiumPromoCard
-          variant="compact"
-          onPress={() => navigation.navigate('Premium')}
-        />
 
         {/* Lista de Configurações */}
         <View style={{

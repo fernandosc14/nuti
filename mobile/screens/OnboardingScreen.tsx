@@ -34,6 +34,7 @@ import { calculateCaloriePlan } from '../utils/nutritionUtils';
 import { db } from '../services/firebase';
 import * as Notifications from 'expo-notifications';
 import * as Haptics from 'expo-haptics';
+import { applyReminderPreference, loadReminderPreference, requestNotificationPermission as requestNotificationPermissionService } from '../services/notifications';
 
 type OnboardingStep = 
   | 'gender'
@@ -47,14 +48,11 @@ type OnboardingStep =
   | 'goalSpeed'
   | 'diet'
   | 'desiredWeight'
-  | 'referralCode'
   | 'calorieGoal'
   | 'notifications'
-  | 'premium'
-  | 'rateApp'
   | 'createAccount';
 
-const TOTAL_STEPS = 17;
+const TOTAL_STEPS = 14;
 
 export function OnboardingScreen({ navigation: _navigation, onClose }: { navigation?: any; onClose?: () => void }) {
   // Não usar navigation diretamente, apenas receber como prop para evitar erros
@@ -125,11 +123,14 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
   const [goalSpeed, setGoalSpeed] = useState<number>(1.0); // kg per week (will convert to lbs if imperial)
   const [diet, setDiet] = useState<'classic' | 'pescatarian' | 'vegetarian' | 'vegan' | null>(null);
   const [desiredWeight, setDesiredWeight] = useState('');
-  const [referralCode, setReferralCode] = useState('');
   const [calorieGoal, setCalorieGoal] = useState<number | null>(null);
   const [calculating, setCalculating] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [requestingPermission, setRequestingPermission] = useState(false);
+  const [mealReminderEnabled, setMealReminderEnabled] = useState(true);
+  const [waterReminderEnabled, setWaterReminderEnabled] = useState(true);
+  const [togglingMealReminder, setTogglingMealReminder] = useState(false);
+  const [togglingWaterReminder, setTogglingWaterReminder] = useState(false);
   const [calculationSteps, setCalculationSteps] = useState<string[]>([]);
   const [progressPercent, setProgressPercent] = useState(0);
   const [editingMacro, setEditingMacro] = useState<'calories' | 'protein' | 'carbs' | 'fat' | null>(null);
@@ -210,12 +211,9 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
     diet: 8,
     calorieGoal: 9,
     notifications: 10,
-    referralCode: 11,
-    heardFrom: 12,
-    triedOtherApps: 13,
-    premium: 14,
-    rateApp: 15,
-    createAccount: 16,
+    heardFrom: 11,
+    triedOtherApps: 12,
+    createAccount: 13,
   };
 
   const currentStepIndex = stepIndex[currentStep];
@@ -297,6 +295,66 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
     }
   }, [currentStep]);
 
+  // Carregar preferências de lembretes (refeições e água) uma vez
+  useEffect(() => {
+    const loadPrefs = async () => {
+      try {
+        const [mealPref, waterPref] = await Promise.all([
+          loadReminderPreference('meal'),
+          loadReminderPreference('water'),
+        ]);
+        setMealReminderEnabled(mealPref);
+        setWaterReminderEnabled(waterPref);
+      } catch (error) {
+        console.warn('Não foi possível carregar preferências de lembretes', error);
+      }
+    };
+    loadPrefs();
+  }, []);
+
+  const ensureNotificationPermission = useCallback(async (): Promise<boolean> => {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status === 'granted') {
+      setNotificationsEnabled(true);
+      return true;
+    }
+    const granted = await requestNotificationPermissionService();
+    setNotificationsEnabled(granted);
+    if (!granted) {
+      Toast.show({
+        type: 'info',
+        text1: t('onboarding.notifications.denied'),
+        text2: t('onboarding.notifications.deniedMessage'),
+      });
+    }
+    return granted;
+  }, [t]);
+
+  const handleToggleReminder = useCallback(async (key: 'meal' | 'water') => {
+    const isMeal = key === 'meal';
+    const current = isMeal ? mealReminderEnabled : waterReminderEnabled;
+    const next = !current;
+    if (isMeal) setTogglingMealReminder(true); else setTogglingWaterReminder(true);
+
+    try {
+      if (next && !notificationsEnabled) {
+        const granted = await ensureNotificationPermission();
+        if (!granted) return;
+      }
+      await applyReminderPreference(key, next);
+      if (isMeal) setMealReminderEnabled(next); else setWaterReminderEnabled(next);
+    } catch (error) {
+      console.error('Erro ao aplicar lembrete', error);
+      Toast.show({
+        type: 'error',
+        text1: t('onboarding.notifications.error'),
+        text2: t('onboarding.notifications.errorMessage'),
+      });
+    } finally {
+      if (isMeal) setTogglingMealReminder(false); else setTogglingWaterReminder(false);
+    }
+  }, [ensureNotificationPermission, mealReminderEnabled, notificationsEnabled, t, waterReminderEnabled]);
+
   const handleNext = () => {
     // Processar texto temporário antes de avançar (se houver e estiver no step correto)
     if (currentStep === 'height' && heightText !== '') {
@@ -360,25 +418,22 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
       }
     }
 
-      const steps: OnboardingStep[] = [
-        'gender',
-        'age',
-        'height',
-        'weight',
-        'goal',
-        'desiredWeight',
-        'goalSpeed',
-        'workouts', // Precisa vir antes de calorieGoal
-        'diet',
-        'calorieGoal', // Precisa de workoutsPerWeek
-        'notifications',
-        'referralCode',
-        'heardFrom',
-        'triedOtherApps',
-        'premium',
-        'rateApp',
-        'createAccount',
-      ];
+    const steps: OnboardingStep[] = [
+      'gender',
+      'age',
+      'height',
+      'weight',
+      'goal',
+      'desiredWeight',
+      'goalSpeed',
+      'workouts', // Precisa vir antes de calorieGoal
+      'diet',
+      'calorieGoal', // Precisa de workoutsPerWeek
+      'notifications',
+      'heardFrom',
+      'triedOtherApps',
+      'createAccount',
+    ];
 
     const currentIndex = steps.indexOf(currentStep);
     if (currentIndex < steps.length - 1) {
@@ -447,28 +502,21 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
         const stepDelays = [300, 500, 400, 600, 300]; // Durações irregulares em ms
         
         steps.forEach((step, index) => {
-          // Calcular o delay acumulado até este step
           const cumulativeDelay = stepDelays.slice(0, index + 1).reduce((sum, delay) => sum + delay, 0);
-          
           setTimeout(() => {
             setCalculationSteps(prev => [...prev, step]);
-            // Vibrar a cada check
             triggerHaptic();
           }, cumulativeDelay);
         });
       }
       
-      // Atualizar o step usando função de callback para garantir atualização
-      setCurrentStep((prevStep) => {
-        return nextStep;
-      });
+      setCurrentStep(nextStep);
     }
   };
 
   const handleBack = async () => {
     // Se estiver no primeiro slide (gender), fechar o onboarding e voltar para Welcome/Login
     if (currentStep === 'gender') {
-      // Se o utilizador já tem conta, fazer logout para permitir login com outra conta
       if (user) {
         try {
           await signOut();
@@ -476,7 +524,6 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
           console.error('Error signing out:', error);
         }
       }
-      
       if (onClose && typeof onClose === 'function') {
         onClose();
       }
@@ -495,39 +542,32 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
       'diet',
       'calorieGoal', // Precisa de workoutsPerWeek
       'notifications',
-      'referralCode',
       'heardFrom',
       'triedOtherApps',
-      'premium',
-      'rateApp',
       'createAccount',
     ];
 
     const currentIndex = steps.indexOf(currentStep);
-    
     if (currentIndex <= 0) {
-      // Se estiver no primeiro slide, fechar o onboarding
       if (onClose && typeof onClose === 'function') {
         onClose();
       }
       return;
     }
-  
+
     let prevStep = steps[currentIndex - 1];
-    
-    // Se o goal é 'maintain', ajustar navegação para trás
+
+    // Ajustar navegação para trás quando goal é maintain
     if (goal === 'maintain') {
       if (currentStep === 'workouts') {
-        prevStep = 'goal'; // Pular desiredWeight e goalSpeed
+        prevStep = 'goal';
       } else if (currentStep === 'diet') {
-        prevStep = 'workouts'; // Voltar normalmente
+        prevStep = 'workouts';
       } else if (currentStep === 'calorieGoal') {
-        prevStep = 'diet'; // Voltar normalmente
-      } else if (currentStep === 'referralCode') {
-        prevStep = 'calorieGoal'; // Voltar normalmente
+        prevStep = 'diet';
       }
     }
-  
+
     setCurrentStep(prevStep);
   };
 
@@ -542,14 +582,12 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
       case 'triedOtherApps':
         return triedOtherApps !== null;
       case 'height':
-        // Se está vazio, não permitir continuar
         if (heightIsEmpty || heightCm === 0) {
           return false;
         }
-        // Se há texto temporário sendo editado, validar esse texto também
         if (heightText !== '') {
           if (isImperial) {
-            const cleanText = heightText.replace(/[^0-9'"]/g, '');
+            const cleanText = heightText.replace(/[^0-9'\"]/g, '');
             let feet = 0;
             let inches = 0;
             const match1 = cleanText.match(/(\d+)'(\d+)/);
@@ -580,11 +618,9 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
         }
         return heightCm >= 120 && heightCm <= 220;
       case 'weight':
-        // Se está vazio, não permitir continuar
         if (weightIsEmpty || weightKg === 0) {
           return false;
         }
-        // Se há texto temporário sendo editado, validar esse texto também
         if (weightText !== '') {
           const num = parseFloat(weightText.replace(/[^0-9.]/g, ''));
           if (!isNaN(num)) {
@@ -603,7 +639,6 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
       case 'goal':
         return goal !== null;
       case 'goalSpeed':
-        // Só precisa validar se não for 'maintain'
         if (goal === 'maintain') {
           return true;
         }
@@ -612,7 +647,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
         return diet !== null;
       case 'desiredWeight':
         if (goal === 'maintain') {
-          return true; // Não precisa validar se é maintain
+          return true;
         }
         if (!desiredWeight || desiredWeight === '') {
           return false;
@@ -621,31 +656,19 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
         if (isNaN(desiredWeightNum)) {
           return false;
         }
-        
-        // Peso atual já está em kg (do slider)
-        const currentWeight = weightKg; // kg
-        
-        // Validar baseado no goal
+        const currentWeight = weightKg;
         if (goal === 'gain') {
-          // Para ganhar peso, o peso desejado deve ser maior que o atual
           return desiredWeightNum > currentWeight;
         } else if (goal === 'lose') {
-          // Para perder peso, o peso desejado deve ser menor que o atual
           return desiredWeightNum < currentWeight;
         }
         return true;
-      case 'referralCode':
-        return true; // Referral code é opcional
       case 'calorieGoal':
         return true;
       case 'notifications':
-        return true; // Notificações são opcionais
-      case 'premium':
-        return true; // Premium é opcional
-      case 'rateApp':
-        return true; // Rate app é opcional
+        return true;
       case 'createAccount':
-        return true; // Não precisa validar aqui, valida no handleCreateAccount
+        return true;
       default:
         return true;
     }
@@ -693,8 +716,8 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
         dailyCarbsGoal: calculatedMacros?.carbs || undefined,
         dailyFatGoal: calculatedMacros?.fat || undefined,
         desiredWeight: goal === 'maintain' ? weight : desiredWeightNum, // Se é maintain, usar o peso atual
-        referralCode: referralCode.trim() || undefined, // Referral code (opcional)
         onboardingCompleted: true,
+        shouldShowPremiumOnboarding: true, // Flag para mostrar premium onboarding
       };
 
       // Fazer login com Google (permitir criar conta durante onboarding)
@@ -2303,6 +2326,100 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                 </Text>
               )}
 
+              <View style={{ marginTop: 24, gap: 8 }}>
+                <Text style={{
+                  fontSize: 18,
+                  fontWeight: '800',
+                  color: theme.colors.text,
+                  textAlign: 'left',
+                }}>
+                  {t('onboarding.notifications.remindersTitle')}
+                </Text>
+                <Text style={{
+                  fontSize: 14,
+                  color: theme.colors.textSecondary || '#9CA3AF',
+                  lineHeight: 20,
+                }}>
+                  {t('onboarding.notifications.remindersSubtitle')}
+                </Text>
+
+                <View style={{ marginTop: 12, gap: 10 }}>
+                  {[{
+                    key: 'meal' as const,
+                    title: t('preferences.mealReminders'),
+                    icon: 'restaurant',
+                    enabled: mealReminderEnabled,
+                    loading: togglingMealReminder,
+                  }, {
+                    key: 'water' as const,
+                    title: t('preferences.waterReminders'),
+                    icon: 'water',
+                    enabled: waterReminderEnabled,
+                    loading: togglingWaterReminder,
+                  }].map((reminder) => (
+                    <Pressable
+                      key={reminder.key}
+                      onPress={() => handleToggleReminder(reminder.key)}
+                      disabled={reminder.loading}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        padding: 14,
+                        borderRadius: 14,
+                        backgroundColor: theme.colors.card,
+                        borderWidth: 1,
+                        borderColor: theme.colors.border || '#334155',
+                      }}
+                    >
+                      <View style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 18,
+                        backgroundColor: '#3BB273' + '20',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: 12,
+                      }}>
+                        <Ionicons name={reminder.icon as any} size={18} color="#3BB273" />
+                      </View>
+                      <Text style={{ flex: 1, color: theme.colors.text, fontSize: 16, fontWeight: '700' }}>
+                        {reminder.title}
+                      </Text>
+                      {reminder.loading ? (
+                        <ActivityIndicator color="#3BB273" />
+                      ) : (
+                        <View style={{
+                          width: 46,
+                          height: 28,
+                          borderRadius: 14,
+                          backgroundColor: reminder.enabled ? '#10B981' : (theme.colors.border || '#334155'),
+                          padding: 4,
+                          justifyContent: 'center',
+                        }}>
+                          <View style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: 10,
+                            backgroundColor: '#FFFFFF',
+                            transform: [{ translateX: reminder.enabled ? 18 : 0 }],
+                          }} />
+                        </View>
+                      )}
+                    </Pressable>
+                  ))}
+                </View>
+
+                {!notificationsEnabled && (
+                  <Text style={{
+                    fontSize: 13,
+                    color: theme.colors.textSecondary || '#9CA3AF',
+                    marginTop: 8,
+                  }}>
+                    {t('onboarding.notifications.permissionNeeded')}
+                  </Text>
+                )}
+              </View>
+
               <TouchableOpacity
                 onPress={handleNext}
                 style={{
@@ -2319,87 +2436,6 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                   {t('onboarding.notifications.skip')}
                 </Text>
               </TouchableOpacity>
-            </View>
-          </View>
-        );
-
-      case 'referralCode':
-        const handlePaste = async () => {
-          try {
-            // Tentar usar expo-clipboard se disponível, caso contrário usar fallback
-            let text = '';
-            try {
-              const Clipboard = await import('expo-clipboard');
-              text = await Clipboard.getStringAsync();
-            } catch (clipboardError) {
-              // Se expo-clipboard não estiver disponível, mostrar mensagem
-              Toast.show({
-                type: 'info',
-                text1: t('onboarding.referralCode.clipboardNotAvailable'),
-                text2: t('onboarding.referralCode.clipboardNotAvailableMessage'),
-              });
-              return;
-            }
-            
-            if (text) {
-              // Permitir apenas letras, números e hífens, em maiúsculas
-              const upperText = text.toUpperCase().replace(/[^A-Z0-9-]/g, '');
-              setReferralCode(upperText);
-              Toast.show({
-                type: 'success',
-                text1: t('onboarding.referralCode.pasted'),
-                text2: t('onboarding.referralCode.pastedMessage'),
-              });
-            } else {
-              Toast.show({
-                type: 'info',
-                text1: t('onboarding.referralCode.empty'),
-                text2: t('onboarding.referralCode.emptyMessage'),
-              });
-            }
-          } catch (error) {
-            Toast.show({
-              type: 'error',
-              text1: t('onboarding.referralCode.error'),
-              text2: t('onboarding.referralCode.errorMessage'),
-            });
-          }
-        };
-
-        return (
-          <View className="flex-1 px-6">
-            <Text className="text-3xl font-bold text-white mb-2">
-              {t('onboarding.referralCode')}
-            </Text>
-            <Text className="text-gray-400 mb-8">
-              {t('onboarding.referralCodeQuestion')}
-            </Text>
-            <View style={{ flex: 1, justifyContent: 'center' }}>
-              <View className="flex-row items-center">
-                <TextInput
-                  className="flex-1 bg-gray-800 rounded-xl px-4 py-4 text-white border border-gray-700 text-lg text-center mr-2"
-                  placeholder={t('onboarding.referralCode.placeholder')}
-                  placeholderTextColor="#FFFFFF"
-                  value={referralCode}
-                  onChangeText={(text) => {
-                    // Permitir apenas letras, números e hífens, em maiúsculas
-                    const upperText = text.toUpperCase().replace(/[^A-Z0-9-]/g, '');
-                    setReferralCode(upperText);
-                  }}
-                  autoCapitalize="characters"
-                  maxLength={20}
-                />
-                <TouchableOpacity
-                  onPress={handlePaste}
-                  className="bg-green-500 rounded-xl px-4 py-4 items-center justify-center"
-                  style={{ minWidth: 56, minHeight: 56 }}
-                >
-                  <Ionicons name="clipboard-outline" size={24} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-              <Text className="mt-2 text-center text-gray-500 text-sm">
-                {t('onboarding.referralCode.skip')}
-              </Text>
             </View>
           </View>
         );
@@ -3140,244 +3176,6 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                 </View>
               </View>
             </ScrollView>
-          </View>
-        );
-
-      case 'premium':
-        const handleOpenPremium = async () => {
-          // TODO: Implementar compra premium
-          // Por enquanto, apenas continuar
-          handleNext();
-        };
-
-        const premiumFeatures = [
-          { icon: 'chatbubbles', text: t('onboarding.premiumFeature1') },
-          { icon: 'analytics', text: t('onboarding.premiumFeature2') },
-          { icon: 'restaurant', text: t('onboarding.premiumFeature3') },
-          { icon: 'trophy', text: t('onboarding.premiumFeature4') },
-          { icon: 'cloud', text: t('onboarding.premiumFeature5') },
-          { icon: 'shield-checkmark', text: t('onboarding.premiumFeature6') },
-        ];
-
-        const premiumColor = '#8B5CF6'; // Roxo premium
-        
-        return (
-          <View className="flex-1 px-6">
-            <View style={{ backgroundColor: premiumColor, borderRadius: 24, padding: 24, marginBottom: 24, alignItems: 'center', width: '100%' }}>
-              <Ionicons name="star" size={56} color="#FFFFFF" />
-              <Text className="text-3xl font-bold text-white mb-2 text-center mt-4">
-                {t('onboarding.premiumTitle')}
-              </Text>
-              <Text className="text-lg text-white opacity-90 text-center mb-6">
-                {t('onboarding.premiumDescription')}
-              </Text>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
-              <View style={{ marginBottom: 24 }}>
-                {premiumFeatures.map((feature, index) => (
-                  <View
-                    key={index}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      backgroundColor: theme.colors.card,
-                      borderRadius: 16,
-                      padding: 16,
-                      marginBottom: 12,
-                      borderWidth: 1,
-                      borderColor: theme.colors.border || '#E5E7EB',
-                    }}
-                  >
-                    <View style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 24,
-                      backgroundColor: premiumColor + '20',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginRight: 16,
-                    }}>
-                      <Ionicons name={feature.icon as any} size={24} color={premiumColor} />
-                    </View>
-                    <Text style={{
-                      flex: 1,
-                      fontSize: 16,
-                      fontWeight: '600',
-                      color: theme.colors.text,
-                    }}>
-                      {feature.text}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </ScrollView>
-
-            <View style={{ marginBottom: 16 }}>
-              <TouchableOpacity
-                onPress={handleOpenPremium}
-                style={{
-                  backgroundColor: premiumColor,
-                  borderRadius: 16,
-                  paddingVertical: 18,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  shadowColor: premiumColor,
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 8,
-                  elevation: 5,
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 18 }}>
-                  {t('onboarding.premiumButton')}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity
-              onPress={handleNext}
-              style={{ marginBottom: 16 }}
-            >
-              <Text style={{
-                color: theme.colors.textSecondary || '#9CA3AF',
-                textAlign: 'center',
-                fontSize: 16,
-              }}>
-                {t('onboarding.premiumSkip')}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        );
-
-      case 'rateApp':
-        const handleRateApp = async () => {
-          try {
-            const packageName = 'com.nuti.app'; // Substituir pelo package name real
-            const url = Platform.OS === 'android'
-              ? `market://details?id=${packageName}`
-              : `itms-apps://itunes.apple.com/app/id${packageName}`;
-            
-            const canOpen = await Linking.canOpenURL(url);
-            if (canOpen) {
-              await Linking.openURL(url);
-            } else {
-              // Fallback para web
-              const webUrl = Platform.OS === 'android'
-                ? `https://play.google.com/store/apps/details?id=${packageName}`
-                : `https://apps.apple.com/app/id${packageName}`;
-              await Linking.openURL(webUrl);
-            }
-          } catch (error) {
-            console.error('Error opening app store:', error);
-          }
-          // Continuar mesmo se houver erro
-          handleNext();
-        };
-
-        return (
-          <View className="flex-1 px-6 items-center justify-center">
-            <View style={{
-              backgroundColor: '#FBBF24',
-              borderRadius: 24,
-              padding: 32,
-              marginBottom: 32,
-              alignItems: 'center',
-              width: '100%',
-              shadowColor: '#FBBF24',
-              shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.3,
-              shadowRadius: 16,
-              elevation: 8,
-            }}>
-              <View style={{
-                width: 100,
-                height: 100,
-                borderRadius: 50,
-                backgroundColor: '#FFFFFF',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: 20,
-              }}>
-                <Ionicons name="star" size={60} color="#FBBF24" />
-              </View>
-              <Text style={{
-                fontSize: 32,
-                fontWeight: 'bold',
-                color: '#FFFFFF',
-                textAlign: 'center',
-                marginBottom: 12,
-              }}>
-                {t('onboarding.rateAppTitle')}
-              </Text>
-              <Text style={{
-                fontSize: 18,
-                color: '#FFFFFF',
-                textAlign: 'center',
-                opacity: 0.95,
-                lineHeight: 24,
-              }}>
-                {t('onboarding.rateAppDescription')}
-              </Text>
-            </View>
-
-            <View style={{
-              flexDirection: 'row',
-              marginBottom: 32,
-              gap: 8,
-            }}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Ionicons
-                  key={star}
-                  name="star"
-                  size={40}
-                  color="#FBBF24"
-                />
-              ))}
-            </View>
-
-            <TouchableOpacity
-              onPress={handleRateApp}
-              style={{
-                backgroundColor: '#FBBF24',
-                borderRadius: 16,
-                paddingVertical: 18,
-                paddingHorizontal: 48,
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: 16,
-                shadowColor: '#FBBF24',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.3,
-                shadowRadius: 8,
-                elevation: 5,
-                flexDirection: 'row',
-                gap: 8,
-              }}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="star" size={20} color="#FFFFFF" />
-              <Text style={{
-                color: '#FFFFFF',
-                fontWeight: 'bold',
-                fontSize: 18,
-              }}>
-                {t('onboarding.rateAppButton')}
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              onPress={handleNext}
-              activeOpacity={0.7}
-            >
-              <Text style={{
-                color: theme.colors.textSecondary || '#9CA3AF',
-                textAlign: 'center',
-                fontSize: 16,
-              }}>
-                {t('onboarding.rateAppSkip')}
-              </Text>
-            </TouchableOpacity>
           </View>
         );
 

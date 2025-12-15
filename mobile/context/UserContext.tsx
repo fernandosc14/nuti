@@ -43,6 +43,7 @@ export interface UserProfile {
   goalSpeed?: number; // kg per week
   referralCode?: string;
   onboardingCompleted?: boolean;
+  shouldShowPremiumOnboarding?: boolean;
   // Auth method
   authMethod?: 'google' | 'email';
   // Profile image
@@ -60,6 +61,8 @@ interface UserContextType {
   user: User | null;
   profile: UserProfile | null;
   loading: boolean;
+  blockProfile: boolean;
+  setBlockProfile: (block: boolean) => void;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name: string, onboardingData?: any) => Promise<void>;
   signInWithGoogle: (allowCreateAccount?: boolean) => Promise<void>;
@@ -76,6 +79,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [blockProfile, setBlockProfile] = useState(false);
 
   // Ensure OAuth flow can complete (expo web browser helper)
   WebBrowser.maybeCompleteAuthSession();
@@ -261,6 +265,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           goalSpeed: data.goalSpeed,
           referralCode: data.referralCode,
           onboardingCompleted: onboardingCompleted, // Garantir que é boolean (true ou false)
+          shouldShowPremiumOnboarding: data.shouldShowPremiumOnboarding === true,
           // Auth method
           authMethod: data.authMethod,
           // Profile image
@@ -348,6 +353,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
+      // Gerar código de referência único baseado no userId
+      const generateReferralCode = (userId: string): string => {
+        const code = userId.substring(0, 8).toUpperCase().replace(/[^A-Z0-9]/g, '');
+        return code || userId.substring(0, 6).toUpperCase();
+      };
+
       // Criar perfil no Firestore
       const userRef = doc(db, 'users', user.uid);
       const profileData: any = {
@@ -358,6 +369,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         badges: [],
         createdAt: Timestamp.fromDate(new Date()),
         authMethod: 'email',
+        referralCode: generateReferralCode(user.uid), // Gerar código automaticamente
       };
       
       if (onboardingData) {
@@ -518,28 +530,21 @@ export function UserProvider({ children }: { children: ReactNode }) {
       const userSnap = await getDoc(userRef);
       
       if (userSnap.exists()) {
+        // Se já existe, bloquear criação durante onboarding e obrigar a fazer login
+        if (allowCreateAccount) {
+          await firebaseSignOut(auth);
+          throw new Error('This account already exists. Please use "Sign in" instead of creating a new account.');
+        }
+
         const data = userSnap.data();
         if (data.authMethod === 'email') {
-          // Se allowCreateAccount for true (durante onboarding/registo), atualizar para google
-          // Caso contrário, fazer logout e lançar erro
-          if (allowCreateAccount) {
-            // Durante o onboarding, permitir atualizar de email para google
-            await setDoc(userRef, { 
-              authMethod: 'google',
-              // Atualizar também nome e email se estiverem vazios ou se tivermos dados melhores do Google
-              ...(googleName && (!data.name || data.name === '') ? { name: googleName } : {}),
-              ...(googleEmail && (!data.email || data.email === '') ? { email: googleEmail } : {}),
-            }, { merge: true });
-          } else {
-            // Fazer logout e lançar erro
-            await firebaseSignOut(auth);
-            throw new Error('This account was created with an email and password. Please use the login with email.');
-          }
-        } else {
-          // Se não tem authMethod, atualizar para google
-          if (!data.authMethod) {
-            await setDoc(userRef, { authMethod: 'google' }, { merge: true });
-          }
+          await firebaseSignOut(auth);
+          throw new Error('This account was created with an email and password. Please use the login with email.');
+        }
+
+        // Se não tem authMethod, atualizar para google
+        if (!data.authMethod) {
+          await setDoc(userRef, { authMethod: 'google' }, { merge: true });
         }
       } else {
         // Se allowCreateAccount for true, criar perfil (usado durante onboarding/registo)
@@ -554,6 +559,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
             throw new Error('Unable to get user email from Google Sign-In.');
           }
           
+          // Gerar código de referência único baseado no userId
+          const generateReferralCode = (userId: string): string => {
+            const code = userId.substring(0, 8).toUpperCase().replace(/[^A-Z0-9]/g, '');
+            return code || userId.substring(0, 6).toUpperCase();
+          };
+          
           await setDoc(userRef, {
             name: userName,
             email: userEmail,
@@ -562,6 +573,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             badges: [],
             createdAt: Timestamp.fromDate(new Date()),
             authMethod: 'google',
+            referralCode: generateReferralCode(currentUser.uid), // Gerar código automaticamente
           });
         } else {
           // Conta não está registada - fazer logout e lançar erro
@@ -618,28 +630,21 @@ export function UserProvider({ children }: { children: ReactNode }) {
           const userSnap = await getDoc(userRef);
           
           if (userSnap.exists()) {
+            // Se já existe, bloquear criação durante onboarding e obrigar a fazer login
+            if (allowCreateAccount) {
+              await firebaseSignOut(auth);
+              throw new Error('This account already exists. Please use "Sign in" instead of creating a new account.');
+            }
+
             const data = userSnap.data();
             if (data.authMethod === 'email') {
-              // Se allowCreateAccount for true (durante onboarding/registo), atualizar para google
-              // Caso contrário, fazer logout e lançar erro
-              if (allowCreateAccount) {
-                // Durante o onboarding, permitir atualizar de email para google
-                await setDoc(userRef, { 
-                  authMethod: 'google',
-                  // Atualizar também nome e email se estiverem vazios ou se tivermos dados melhores do Google
-                  ...(currentUser?.displayName && (!data.name || data.name === '') ? { name: currentUser.displayName } : {}),
-                  ...(currentUser?.email && (!data.email || data.email === '') ? { email: currentUser.email } : {}),
-                }, { merge: true });
-              } else {
-                // Fazer logout e lançar erro
-                await firebaseSignOut(auth);
-                throw new Error('This account was created with an email and password. Please use the login with email.');
-              }
-            } else {
-              // Se não tem authMethod, atualizar para google
-              if (!data.authMethod) {
-                await setDoc(userRef, { authMethod: 'google' }, { merge: true });
-              }
+              await firebaseSignOut(auth);
+              throw new Error('This account was created with an email and password. Please use the login with email.');
+            }
+
+            // Se não tem authMethod, atualizar para google
+            if (!data.authMethod) {
+              await setDoc(userRef, { authMethod: 'google' }, { merge: true });
             }
           } else {
             // Se allowCreateAccount for true, criar perfil (usado durante onboarding/registo)
@@ -653,6 +658,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
                 throw new Error('Unable to get user email from Google Sign-In.');
               }
               
+              // Gerar código de referência único baseado no userId
+              const generateReferralCode = (userId: string): string => {
+                const code = userId.substring(0, 8).toUpperCase().replace(/[^A-Z0-9]/g, '');
+                return code || userId.substring(0, 6).toUpperCase();
+              };
+              
               await setDoc(userRef, {
                 name: userName,
                 email: userEmail,
@@ -661,6 +672,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
                 badges: [],
                 createdAt: Timestamp.fromDate(new Date()),
                 authMethod: 'google',
+                referralCode: generateReferralCode(currentUser.uid), // Gerar código automaticamente
               });
             } else {
               // Conta não está registada - fazer logout e lançar erro
@@ -786,9 +798,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
   return (
     <UserContext.Provider
       value={{
-        user,
-        profile,
+        user: blockProfile ? null : user,
+        profile: blockProfile ? null : profile,
         loading,
+        blockProfile,
+        setBlockProfile,
         signIn,
         signUp,
         signInWithGoogle,

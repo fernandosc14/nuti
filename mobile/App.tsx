@@ -14,6 +14,7 @@ import { View, ActivityIndicator, TouchableOpacity, StyleSheet, Platform, Modal,
 import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserProvider, useUser } from './context/UserContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
@@ -38,6 +39,7 @@ import { EditCaloriesAndMacrosScreen } from './screens/EditCaloriesAndMacrosScre
 import { AddExerciseScreen } from './screens/AddExerciseScreen';
 import { UpdateWeightScreen } from './screens/UpdateWeightScreen';
 import { PremiumScreen } from './screens/PremiumScreen';
+import { PremiumOnboardingScreen } from './screens/PremiumOnboardingScreen';
 import { ProgressScreen } from './screens/ProgressScreen';
 import { BMIScreen } from './screens/BMIScreen';
 import { PreferencesScreen } from './screens/PreferencesScreen';
@@ -46,6 +48,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import './global.css';
 import { initializeBadges } from './services/gamification';
+import { bootstrapNotifications } from './services/notifications';
 
 // Garantir que o OAuth flow pode completar (importante para deep linking)
 WebBrowser.maybeCompleteAuthSession();
@@ -383,6 +386,18 @@ function MainTabs() {
 function AppStack() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const { profile } = useUser();
+  const navigation = useNavigation<any>();
+  
+  // Navegar automaticamente para PremiumOnboarding se necessário
+  useEffect(() => {
+    if (profile?.shouldShowPremiumOnboarding === true && navigation) {
+      // Aguardar um momento para garantir que a navegação está pronta
+      setTimeout(() => {
+        navigation.navigate('PremiumOnboarding');
+      }, 300);
+    }
+  }, [profile?.shouldShowPremiumOnboarding, navigation]);
   
   return (
     <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
@@ -416,6 +431,7 @@ function AppStack() {
       <Stack.Screen name="UpdateWeight" component={UpdateWeightScreen} />
       <Stack.Screen name="BMI" component={BMIScreen} />
       <Stack.Screen name="Premium" component={PremiumScreen} />
+      <Stack.Screen name="PremiumOnboarding" component={PremiumOnboardingScreen} />
       <Stack.Screen name="Preferences" component={PreferencesScreen} />
     </Stack.Navigator>
     </View>
@@ -423,7 +439,7 @@ function AppStack() {
 }
 
 function RootNavigator() {
-  const { user, profile, loading } = useUser();
+  const { user, profile, loading, blockProfile } = useUser();
   const { theme } = useTheme();
   
   // TODOS OS HOOKS DEVEM ESTAR NO TOPO, ANTES DE QUALQUER LÓGICA CONDICIONAL
@@ -542,7 +558,9 @@ function RootNavigator() {
   // 1. Está a carregar (sem user ou profile ainda)
   // 2. Está a verificar onboarding (apenas por um tempo limitado)
   // 3. Perfil foi criado recentemente (apenas por um tempo limitado)
+  // 4. Profile está bloqueado (durante verificação de conta existente)
   const shouldShowLoading = loading || 
+                            blockProfile ||
                             (checkingOnboarding && profileCreatedRecently) || 
                             (profileCreatedRecently && isProfileRecent);
   
@@ -553,7 +571,7 @@ function RootNavigator() {
       </View>
     );
   }
-
+  
   // Se precisa de onboarding, renderizar diretamente (fora do NavigationContainer)
   // IMPORTANTE: Não renderizar OnboardingScreen se o onboarding já está completo ou foi cancelado
   const shouldShowOnboarding = ((user && profile && needsOnboarding) || showOnboardingFromWelcome) && 
@@ -686,6 +704,12 @@ function StatusBarConfig() {
 }
 
 export default function App() {
+  useEffect(() => {
+    bootstrapNotifications().catch((error) => {
+      console.error('❌ bootstrapNotifications error', error);
+    });
+  }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>

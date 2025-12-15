@@ -19,6 +19,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
+  AppState,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -195,6 +196,43 @@ export function DashboardScreen({ navigation }: any) {
   const [last7DaysWithMeals, setLast7DaysWithMeals] = useState<Set<string>>(new Set());
   const [checkingStreakModal, setCheckingStreakModal] = useState(false);
   const [isDeletingMeal, setIsDeletingMeal] = useState(false);
+  const [lastUpdateDate, setLastUpdateDate] = useState<string>(new Date().toDateString());
+
+  // Detectar mudança de dia e atualizar widgets
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        const currentDateStr = new Date().toDateString();
+        
+        // Se mudou de dia desde a última atualização
+        if (currentDateStr !== lastUpdateDate) {
+          setLastUpdateDate(currentDateStr);
+          
+          // Resetar widgets para novo dia (valores a zeros)
+          if (profile) {
+            updateWidgetFromDashboard(0, goal, { protein: 0, carbs: 0, fat: 0 }, profile, { consumed: 0, goal: profile?.dailyWaterGoal || 2700 });
+          }
+          
+          // Recarregar dados do novo dia
+          if (user && profile) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const currentSelectedDate = new Date(selectedDate);
+            currentSelectedDate.setHours(0, 0, 0, 0);
+            
+            // Se estava a ver hoje, recarregar
+            if (currentSelectedDate.getTime() <= today.getTime()) {
+              setSelectedDate(new Date()); // Atualizar para novo dia
+            }
+          }
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [lastUpdateDate, profile, goal, user, selectedDate]);
 
   useEffect(() => {
     // Se não houver user, limpar estado e não carregar dados
@@ -257,9 +295,9 @@ export function DashboardScreen({ navigation }: any) {
     const netCalories = mealsCalories - caloriesBurned;
     setConsumed(Math.max(0, netCalories)); // Não permitir valores negativos
 
-    // Atualizar widget com dados atuais
+    // Atualizar widget com dados atuais incluindo água
     if (profile) {
-      updateWidgetFromDashboard(netCalories, goal, macros, profile);
+      updateWidgetFromDashboard(netCalories, goal, macros, profile, { consumed: waterIntake, goal: profile?.dailyWaterGoal || 2700 });
     }
 
     // Verificar se atingiu meta de calorias (apenas uma vez por dia)
@@ -282,7 +320,7 @@ export function DashboardScreen({ navigation }: any) {
       
       checkGoalBadge();
     }
-  }, [meals, caloriesBurned, goal, macros, user, profile, checkAndShowBadges]);
+  }, [meals, caloriesBurned, goal, macros, user, profile, checkAndShowBadges, waterIntake]);
 
 
   const loadDashboardData = async (forceRefresh: boolean = false) => {
