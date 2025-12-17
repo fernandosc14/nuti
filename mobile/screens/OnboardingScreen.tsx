@@ -214,35 +214,20 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
     heardFrom: 11,
     triedOtherApps: 12,
     createAccount: 13,
-  };
+  } as const;
 
-  const currentStepIndex = stepIndex[currentStep];
-  const progress = (currentStepIndex / (TOTAL_STEPS - 1)) * 100;
-
-  // Calcular meta de calorias e macros
-  // Usar useCallback para garantir que sempre usa os valores mais recentes
   const calculateCalorieGoal = useCallback(() => {
-    if (!gender || !weightKg || !heightCm || !age || !goal || !workoutsPerWeek) {
-      return null;
-    }
-
     const ageNum = parseInt(age) || 25;
     const desiredWeightKgValue = (() => {
-      if (goal === 'maintain') {
-        return weightKg;
-      }
-      if (!desiredWeight) {
-        return weightKg;
-      }
+      if (goal === 'maintain') return weightKg;
+      if (!desiredWeight) return weightKg;
       const parsed = parseFloat(desiredWeight);
-      if (isNaN(parsed)) {
-        return weightKg;
-      }
+      if (isNaN(parsed)) return weightKg;
       return isImperial ? parsed * 0.453592 : parsed;
     })();
 
     const goalSpeedToUse = goal === 'maintain' ? undefined : goalSpeed;
-    
+
     const plan = calculateCaloriePlan({
       weightKg,
       heightCm,
@@ -269,7 +254,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
       tdee: plan.maintenanceCalories,
       maintenanceCalories: plan.maintenanceCalories,
     };
-  }, [gender, weightKg, heightCm, age, goal, workoutsPerWeek, desiredWeight, isImperial, goalSpeed]);
+  }, [age, desiredWeight, gender, goal, goalSpeed, heightCm, isImperial, weightKg, workoutsPerWeek]);
 
   // Garantir que quando calculating muda para false, os macros estão definidos
   useEffect(() => {
@@ -284,38 +269,59 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
     }
   }, [currentStep, calculating, calculatedMacros, calculateCalorieGoal]);
 
-  // Verificar status de notificações quando entrar no step
+  // Verificar status de notificações quando entrar no step e pedir permissão automaticamente
   useEffect(() => {
     if (currentStep === 'notifications') {
-      const checkPermission = async () => {
-        const { status } = await Notifications.getPermissionsAsync();
-        setNotificationsEnabled(status === 'granted');
+      const checkAndRequestPermission = async () => {
+          try {
+          const { status, canAskAgain } = await Notifications.requestPermissionsAsync();
+          const granted = status === 'granted';
+
+          setNotificationsEnabled(granted);
+          setMealReminderEnabled(granted);
+          setWaterReminderEnabled(granted);
+
+          if (granted) {
+            try {
+              await applyReminderPreference('meal', true);
+              await applyReminderPreference('water', true);
+            } catch (error) {
+              console.warn('Error applying reminder preferences:', error);
+            }
+          } else if (!canAskAgain) {
+            Toast.show({
+              type: 'info',
+              text1: t('onboarding.notifications.denied'),
+              text2: t('onboarding.notifications.deniedMessage'),
+            });
+          }
+          } catch (error) {
+            console.error('Error checking notification permission:', error);
+            setNotificationsEnabled(false);
+            setMealReminderEnabled(false);
+            setWaterReminderEnabled(false);
+          }
       };
-      checkPermission();
+
+      checkAndRequestPermission();
     }
   }, [currentStep]);
 
-  // Carregar preferências de lembretes (refeições e água) uma vez
-  useEffect(() => {
-    const loadPrefs = async () => {
-      try {
-        const [mealPref, waterPref] = await Promise.all([
-          loadReminderPreference('meal'),
-          loadReminderPreference('water'),
-        ]);
-        setMealReminderEnabled(mealPref);
-        setWaterReminderEnabled(waterPref);
-      } catch (error) {
-        console.warn('Não foi possível carregar preferências de lembretes', error);
-      }
-    };
-    loadPrefs();
-  }, []);
+  // Preferências de lembretes serão carregadas/definidas quando entrar no step de notificações
 
   const ensureNotificationPermission = useCallback(async (): Promise<boolean> => {
     const { status } = await Notifications.getPermissionsAsync();
     if (status === 'granted') {
       setNotificationsEnabled(true);
+      // Auto-enable reminders when permission is granted
+      try {
+        await applyReminderPreference('meal', true);
+        await applyReminderPreference('water', true);
+        setMealReminderEnabled(true);
+        setWaterReminderEnabled(true);
+      } catch (error) {
+        console.warn('Error applying reminder preferences after ensure:', error);
+      }
       return true;
     }
     const granted = await requestNotificationPermissionService();
@@ -333,14 +339,24 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
   const handleToggleReminder = useCallback(async (key: 'meal' | 'water') => {
     const isMeal = key === 'meal';
     const current = isMeal ? mealReminderEnabled : waterReminderEnabled;
+    
+    // Always check permission before allowing toggle
+    if (!notificationsEnabled) {
+      const granted = await ensureNotificationPermission();
+      if (!granted) {
+        Toast.show({
+          type: 'info',
+          text1: t('onboarding.notifications.denied'),
+          text2: t('onboarding.notifications.deniedMessage'),
+        });
+        return;
+      }
+    }
+    
     const next = !current;
     if (isMeal) setTogglingMealReminder(true); else setTogglingWaterReminder(true);
 
     try {
-      if (next && !notificationsEnabled) {
-        const granted = await ensureNotificationPermission();
-        if (!granted) return;
-      }
       await applyReminderPreference(key, next);
       if (isMeal) setMealReminderEnabled(next); else setWaterReminderEnabled(next);
     } catch (error) {
@@ -888,7 +904,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                 height: 4,
                 backgroundColor: '#3BB273',
                 borderRadius: 2,
-                width: `${progress}%`,
+                width: `${progressPercent}%`,
               }}
             />
           </View>
@@ -2209,12 +2225,20 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
             
             if (finalStatus === 'granted') {
               setNotificationsEnabled(true);
+              // Auto-enable both reminders when permission is granted
+              await applyReminderPreference('meal', true);
+              await applyReminderPreference('water', true);
+              setMealReminderEnabled(true);
+              setWaterReminderEnabled(true);
               Toast.show({
                 type: 'success',
                 text1: t('onboarding.notifications.enabled'),
                 text2: t('onboarding.notifications.enabledMessage'),
               });
             } else {
+              setNotificationsEnabled(false);
+              setMealReminderEnabled(false);
+              setWaterReminderEnabled(false);
               Toast.show({
                 type: 'info',
                 text1: t('onboarding.notifications.denied'),
@@ -2360,7 +2384,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                     <Pressable
                       key={reminder.key}
                       onPress={() => handleToggleReminder(reminder.key)}
-                      disabled={reminder.loading}
+                      disabled={reminder.loading || !notificationsEnabled}
                       style={{
                         flexDirection: 'row',
                         alignItems: 'center',
@@ -2369,6 +2393,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                         backgroundColor: theme.colors.card,
                         borderWidth: 1,
                         borderColor: theme.colors.border || '#334155',
+                        opacity: notificationsEnabled ? 1 : 0.5,
                       }}
                     >
                       <View style={{
@@ -3184,65 +3209,123 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
           <View style={{ 
             flex: 1, 
             paddingHorizontal: 0,
-            minHeight: 500,
             backgroundColor: 'transparent',
           }}>
-            <Text style={{
-              fontSize: 28,
-              fontWeight: 'bold',
-              color: theme.colors.text,
-              marginBottom: 8,
-            }}>
-              {t('onboarding.createAccountTitle')}
-            </Text>
-            <Text style={{
-              fontSize: 16,
-              color: theme.colors.textSecondary || '#9CA3AF',
-              marginBottom: 32,
-            }}>
-              {t('onboarding.createAccountDescription')}
-            </Text>
+            <View style={{ flex: 1, justifyContent: 'flex-start', paddingTop: 0, paddingBottom: 24 }}>
+              <Text style={{
+                fontSize: 28,
+                fontWeight: 'bold',
+                color: theme.colors.text,
+                marginBottom: 12,
+                textAlign: 'left',
+                alignSelf: 'flex-start',
+              }}>
+                {t('onboarding.createAccountTitle')}
+              </Text>
+              <View style={{
+                backgroundColor: theme.colors.card,
+                borderRadius: 20,
+                borderWidth: 1,
+                borderColor: theme.colors.border || '#1f2937',
+                paddingVertical: 20,
+                paddingHorizontal: 20,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.35,
+                shadowRadius: 16,
+                elevation: 10,
+                alignSelf: 'stretch',
+                gap: 14,
+                marginTop: 48,
+              }}>
+                <View style={{ alignItems: 'center', gap: 10 }}>
+                  <Text style={{
+                    color: theme.colors.text,
+                    fontSize: 20,
+                    fontWeight: '800',
+                    textAlign: 'center',
+                  }}>
+                    {t('onboarding.createAccountCta') || 'Create your account in seconds'}
+                  </Text>
 
-            <View style={{ flex: 1, justifyContent: 'flex-start', alignItems: 'center', paddingTop: 60 }}>
-              {/* Google Sign-In */}
-              <TouchableOpacity
-                onPress={handleCreateAccountWithGoogle}
-                disabled={loading}
-                style={{
-                  backgroundColor: theme.colors.card,
-                  borderRadius: 16,
-                  paddingVertical: 20,
-                  paddingHorizontal: 40,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderWidth: 1,
-                  borderColor: theme.colors.border || '#E5E7EB',
-                  flexDirection: 'row',
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 8,
-                  elevation: 5,
-                  minWidth: 320,
-                }}
-                activeOpacity={0.8}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#4285F4" size="large" />
-                ) : (
-                  <>
-                    <Ionicons name="logo-google" size={24} color="#4285F4" />
-                    <Text style={{
-                      color: theme.colors.text,
-                      fontWeight: '700',
-                      marginLeft: 12,
-                      fontSize: 18,
-                    }}>
-                      {t('auth.continueWithGoogle')}
+                  <Text style={{
+                    color: theme.colors.textSecondary || '#9CA3AF',
+                    fontSize: 14,
+                    textAlign: 'center',
+                    paddingHorizontal: 8,
+                  }}>
+                    {t('onboarding.privacy') || 'We never post or share without permission.'}
+                  </Text>
+                </View>
+
+                {/* Google Sign-In */}
+                <TouchableOpacity
+                  onPress={handleCreateAccountWithGoogle}
+                  disabled={loading}
+                  style={{
+                    backgroundColor: '#101827',
+                    borderRadius: 14,
+                    paddingVertical: 16,
+                    paddingHorizontal: 18,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1.2,
+                    borderColor: '#2f3c4f',
+                    flexDirection: 'row',
+                    shadowColor: '#4285F4',
+                    shadowOffset: { width: 0, height: 10 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 18,
+                    elevation: 8,
+                  }}
+                  activeOpacity={0.9}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#4285F4" size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="logo-google" size={22} color="#FFFFFF" />
+                      <Text style={{
+                        color: '#FFFFFF',
+                        fontWeight: '800',
+                        marginLeft: 10,
+                        fontSize: 17,
+                        letterSpacing: 0.3,
+                      }}>
+                        {t('auth.continueWithGoogle')}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="lock-closed" size={14} color={theme.colors.textSecondary || '#9CA3AF'} style={{ marginRight: 6 }} />
+                  <Text style={{ color: theme.colors.textSecondary || '#9CA3AF', fontSize: 12 }}>
+                    {t('onboarding.googleSecure') || 'Secure Google authentication. No password needed.'}
+                  </Text>
+                </View>
+
+                {/* Consent: Terms & Privacy */}
+                <View style={{ alignItems: 'center', marginTop: 10, paddingHorizontal: 8 }}>
+                  <Text style={{ fontSize: 12, color: theme.colors.textSecondary || '#9CA3AF', textAlign: 'center' }}>
+                    {(t('auth.byContinuingAgree') as string) || 'Ao continuar, concordas com os '}
+                    <Text
+                      style={{ fontSize: 12, color: theme.colors.primary || '#3BB273' }}
+                      onPress={() => Linking.openURL('https://nuti.app/terms-and-conditions')}
+                    >
+                      {t('profile.settings.terms') || 'Termos e Condições'}
                     </Text>
-                  </>
-                )}
-              </TouchableOpacity>
+                    {' e '}
+                    <Text
+                      style={{ fontSize: 12, color: theme.colors.primary || '#3BB273' }}
+                      onPress={() => Linking.openURL('https://nuti.app/privacy-policy')}
+                    >
+                      {t('profile.settings.privacyPolicy') || 'Política de Privacidade'}
+                    </Text>
+                    {'.'}
+                  </Text>
+                </View>
+              </View>
             </View>
           </View>
         );

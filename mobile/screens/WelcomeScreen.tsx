@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Modal, Pressable, StyleSheet, Image, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, Pressable, StyleSheet, Image, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { VideoView, useVideoPlayer } from 'expo-video';
@@ -122,7 +122,7 @@ export function WelcomeScreen({ navigation, showOnboarding }: any) {
       <View style={styles.container}>
         {/* Video no centro */}
         <View style={styles.videoContainer}>
-          {shouldRenderVideo && player && (
+          {shouldRenderVideo && player ? (
             <VideoView
               player={player}
               style={styles.video}
@@ -130,6 +130,13 @@ export function WelcomeScreen({ navigation, showOnboarding }: any) {
               nativeControls={false}
               allowsPictureInPicture={false}
             />
+          ) : (
+            <View style={styles.videoPlaceholder}>
+              <Image
+                source={require('../assets/frame-welcome-video.png')}
+                style={styles.placeholderImage}
+              />
+            </View>
           )}
         </View>
 
@@ -159,6 +166,27 @@ export function WelcomeScreen({ navigation, showOnboarding }: any) {
               </Text>
             )}
           </TouchableOpacity>
+
+          {/* Consent: Terms & Privacy */}
+          <View style={{ alignItems: 'center', marginTop: 8, paddingHorizontal: 8 }}>
+            <Text style={{ fontSize: 12, color: '#9CA3AF', textAlign: 'center' }}>
+              {(t('auth.byContinuingAgree') as string) || 'Ao continuar, concordas com os '}
+              <Text
+                style={{ fontSize: 12, color: '#3BB273' }}
+                onPress={() => Linking.openURL('https://nuti.app/terms-and-conditions')}
+              >
+                {t('profile.settings.terms') || 'Termos e Condições'}
+              </Text>
+              {' e '}
+              <Text
+                style={{ fontSize: 12, color: '#3BB273' }}
+                onPress={() => Linking.openURL('https://nuti.app/privacy-policy')}
+              >
+                {t('profile.settings.privacyPolicy') || 'Política de Privacidade'}
+              </Text>
+              {'.'}
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -315,6 +343,21 @@ const styles = StyleSheet.create({
   buttonsContainer: {
     width: '100%',
     gap: 16,
+  },
+  videoPlaceholder: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    maxWidth: 500,
+    maxHeight: 500,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  placeholderImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'contain',
   },
   getStartedButton: {
     backgroundColor: '#3BB273',

@@ -281,8 +281,10 @@ export async function notifyBadgeUnlocked(title: string, message?: string): Prom
 export async function bootstrapNotifications(): Promise<void> {
   await configureNotificationChannels();
   registerNotificationHandlers();
-  const granted = await requestNotificationPermission();
-  if (!granted) return;
+  // Don't request permission here; it's handled in onboarding notifications screen
+  // Just set up handlers and load preferences
+  const { status } = await Notifications.getPermissionsAsync();
+  if (status !== 'granted') return;
 
   const mealPref = await loadReminderPreference('meal');
   const waterPref = await loadReminderPreference('water');

@@ -27,6 +27,7 @@ export function PremiumPromoCard({ onPress, variant = 'default', fullWidth = fal
   const { profile } = useUser();
   const { theme } = useTheme();
   const { t } = useLanguage();
+  const accent = theme.colors.primary || '#3BB273';
 
   // Não mostrar se já é premium
   if (profile?.plan === 'premium') {
@@ -42,7 +43,7 @@ export function PremiumPromoCard({ onPress, variant = 'default', fullWidth = fal
       >
         <TouchableOpacity
           onPress={onPress}
-          activeOpacity={0.8}
+          activeOpacity={0.85}
           style={[
             styles.compactCard,
             {
@@ -50,22 +51,27 @@ export function PremiumPromoCard({ onPress, variant = 'default', fullWidth = fal
               borderColor: theme.colors.border || '#E5E7EB',
               marginHorizontal: fullWidth ? 0 : 24,
               width: fullWidth ? '100%' : undefined,
+              shadowColor: accent,
             },
           ]}
         >
+          {/* Removed left accent bar per request */}
           <View style={styles.compactContent}>
-            <View style={[styles.compactIconContainer, { backgroundColor: '#8B5CF6' + '20' }]}>
-              <Text style={styles.compactIconEmoji}>⭐</Text>
+            <View style={[styles.compactIconContainer, { backgroundColor: accent + '22' }]}> 
+              <Ionicons name="sparkles" size={20} color={accent} />
             </View>
             <View style={styles.compactTextContainer}>
               <Text style={[styles.compactTitle, { color: theme.colors.text }]}>
                 {t('premium.promoTitle') || 'Desbloqueia Premium'}
               </Text>
               <Text style={[styles.compactSubtitle, { color: theme.colors.textSecondary || '#9CA3AF' }]}>
-                {t('premium.promoSubtitle') || 'Acesso a todas as funcionalidades'}
+                {t('premium.trialNoCommitment') || 'Experimenta grátis por 3 dias'}
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary || '#9CA3AF'} />
+            <View style={[styles.compactCta, { backgroundColor: accent }]}> 
+              <Text style={styles.compactCtaText}>{t('premium.startTrial') || 'Experimenta agora'}</Text>
+              <Ionicons name="arrow-forward" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
+            </View>
           </View>
         </TouchableOpacity>
       </MotiView>
@@ -225,6 +231,10 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 16,
     borderWidth: 1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
   },
   compactContent: {
     flexDirection: 'row',
@@ -238,9 +248,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
-  compactIconEmoji: {
-    fontSize: 20,
-  },
   compactTextContainer: {
     flex: 1,
   },
@@ -251,6 +258,18 @@ const styles = StyleSheet.create({
   },
   compactSubtitle: {
     fontSize: 12,
+  },
+  compactCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  compactCtaText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
   },
 });
 

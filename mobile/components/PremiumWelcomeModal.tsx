@@ -13,7 +13,7 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -27,6 +27,7 @@ export function PremiumWelcomeModal() {
   const { theme } = useTheme();
   const { t } = useLanguage();
   const [showModal, setShowModal] = useState(false);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     const checkPremiumWelcome = async () => {
@@ -66,6 +67,8 @@ export function PremiumWelcomeModal() {
     return null;
   }
 
+  const closeTop = Math.max(insets.top, 16) + 12;
+
   return (
     <Modal
       visible={showModal}
@@ -73,13 +76,23 @@ export function PremiumWelcomeModal() {
       animationType="fade"
       onRequestClose={handleClose}
     >
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}> 
         {/* Botão Fechar */}
         <TouchableOpacity
           onPress={handleClose}
-          style={styles.closeButton}
+          style={[styles.closeButton, {
+            top: closeTop,
+            backgroundColor: 'rgba(0,0,0,0.08)',
+            borderColor: '#D1D5DB',
+            shadowColor: '#000',
+            shadowOpacity: 0.25,
+            shadowOffset: { width: 0, height: 2 },
+            shadowRadius: 6,
+            elevation: 8,
+          }]}
+          hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
         >
-          <Ionicons name="close" size={28} color={theme.colors.text} />
+          <Ionicons name="close" size={20} color="#111827" />
         </TouchableOpacity>
 
         {/* Conteúdo */}
@@ -147,13 +160,18 @@ const styles = StyleSheet.create({
     flex: 1,
     width: width,
     height: height,
+    position: 'relative',
   },
   closeButton: {
     position: 'absolute',
-    top: 50,
-    right: 24,
+    right: 16,
     zIndex: 10,
-    padding: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
   },
   content: {
     flex: 1,

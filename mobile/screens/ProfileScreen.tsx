@@ -757,7 +757,7 @@ export function ProfileScreen({ navigation }: any) {
         {/* Premium Promo Card */}
         <PremiumPromoCard
           variant="compact"
-          onPress={() => navigation.navigate('Premium')}
+          onPress={() => navigation.navigate('PremiumOnboarding')}
         />
 
         {/* CÓDIGO DE REFERÊNCIA REMOVIDO - A lógica de geração permanece no UserContext */}

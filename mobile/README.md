@@ -75,7 +75,7 @@ mobile/
 │   ├── AddMealScreen.tsx
 │   ├── ChatScreen.tsx
 │   ├── ProfileScreen.tsx
-│   └── PremiumScreen.tsx
+│   └── PremiumOnboardingScreen.tsx
 ├── components/           # Componentes reutilizáveis
 │   ├── MealCard.tsx
 │   ├── BadgeItem.tsx

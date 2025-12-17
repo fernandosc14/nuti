@@ -248,7 +248,7 @@ export function AddMealScreen({ navigation, route }: any) {
       // Redirecionar para modo search
       navigation.setParams({ mode: 'search' });
       // Navegar diretamente para Premium screen
-      navigation.navigate('Premium');
+      navigation.navigate('PremiumOnboarding');
     }
   }, [mode, isPremium]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1122,9 +1122,7 @@ export function AddMealScreen({ navigation, route }: any) {
         refreshProfile(),
       ]).then(() => {
         // Verificar badges após streak e profile atualizados
-        checkAndShowBadges(user.uid).catch(err => {
-          console.error('Error checking badges:', err);
-        });
+        checkAndShowBadges(user.uid).catch(() => {});
       }).catch(err => {
         console.error('Error updating streak/profile:', err);
       });
@@ -1234,9 +1232,7 @@ export function AddMealScreen({ navigation, route }: any) {
         refreshProfile(),
       ]).then(() => {
         // Verificar badges após streak e profile atualizados
-        checkAndShowBadges(user.uid).catch(err => {
-          console.error('Error checking badges:', err);
-        });
+        checkAndShowBadges(user.uid).catch(() => {});
       }).catch(err => {
         console.error('Error updating streak/profile:', err);
       });
@@ -1814,9 +1810,7 @@ export function AddMealScreen({ navigation, route }: any) {
         refreshProfile(),
       ]).then(() => {
         // Verificar badges após streak e profile atualizados
-        checkAndShowBadges(user.uid).catch(err => {
-          console.error('Error checking badges:', err);
-        });
+        checkAndShowBadges(user.uid).catch(() => {});
       }).catch(err => {
         console.error('Error updating streak/profile:', err);
       });

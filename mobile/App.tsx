@@ -38,7 +38,6 @@ import { EditDietScreen } from './screens/EditDietScreen';
 import { EditCaloriesAndMacrosScreen } from './screens/EditCaloriesAndMacrosScreen';
 import { AddExerciseScreen } from './screens/AddExerciseScreen';
 import { UpdateWeightScreen } from './screens/UpdateWeightScreen';
-import { PremiumScreen } from './screens/PremiumScreen';
 import { PremiumOnboardingScreen } from './screens/PremiumOnboardingScreen';
 import { ProgressScreen } from './screens/ProgressScreen';
 import { BMIScreen } from './screens/BMIScreen';
@@ -110,7 +109,7 @@ function AddButton() {
     if (!isPremium && (mode === 'camera' || mode === 'barcode')) {
       // Navegar diretamente para Premium screen (menu já foi fechado)
       requestAnimationFrame(() => {
-        (navigation as any).getParent()?.navigate('Premium');
+        (navigation as any).getParent()?.navigate('PremiumOnboarding');
       });
       return;
     }
@@ -430,7 +429,6 @@ function AppStack() {
       <Stack.Screen name="AddExercise" component={AddExerciseScreen} />
       <Stack.Screen name="UpdateWeight" component={UpdateWeightScreen} />
       <Stack.Screen name="BMI" component={BMIScreen} />
-      <Stack.Screen name="Premium" component={PremiumScreen} />
       <Stack.Screen name="PremiumOnboarding" component={PremiumOnboardingScreen} />
       <Stack.Screen name="Preferences" component={PreferencesScreen} />
     </Stack.Navigator>
@@ -566,7 +564,7 @@ function RootNavigator() {
   
   if (shouldShowLoading) {
     return (
-      <View className="flex-1 bg-white dark:bg-gray-900 items-center justify-center">
+      <View className="flex-1 bg-gray-900 items-center justify-center">
         <ActivityIndicator size="large" color="#3BB273" />
       </View>
     );
@@ -582,8 +580,8 @@ function RootNavigator() {
     if (!OnboardingScreenComponent) {
       // Mostrar loading enquanto importa dinamicamente
       return (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background }}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111827' }}>
+          <ActivityIndicator size="large" color="#3BB273" />
         </View>
       );
     }

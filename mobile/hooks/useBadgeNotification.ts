@@ -14,30 +14,36 @@ export function useBadgeNotification() {
 
   const checkAndShowBadges = useCallback(async (userId: string) => {
     try {
-      console.log('[BadgeNotification] Checking badges for user:', userId);
+      if (!userId) {
+        // Sem utilizador autenticado; ignorar silenciosamente
+        return;
+      }
       // Verificar e atribuir badges
       const newBadgeIds = await checkAndAwardBadges(userId);
-      console.log('[BadgeNotification] New badge IDs:', newBadgeIds);
       
       if (newBadgeIds.length > 0) {
         // Buscar informações das badges ganhas
         const allUserBadges = await getUserBadges(userId);
         const newBadges = allUserBadges.filter(badge => newBadgeIds.includes(badge.id));
-        console.log('[BadgeNotification] New badges found:', newBadges);
         
         // Mostrar a primeira badge ganha (se houver múltiplas, mostrar uma de cada vez)
         if (newBadges.length > 0) {
-          console.log('[BadgeNotification] Showing modal for badge:', newBadges[0].name);
           setEarnedBadge(newBadges[0]);
           setShowModal(true);
           // Disparar uma notificação local para o badge ganho
           await notifyBadgeUnlocked(newBadges[0].name, newBadges[0].description);
         }
       } else {
-        console.log('[BadgeNotification] No new badges awarded');
+        // Sem novas badges; ignorar
       }
-    } catch (error) {
-      console.error('[BadgeNotification] Error checking badges:', error);
+    } catch (error: any) {
+      // Ignorar erros de permissão quando não autenticado
+      const msg = String(error?.message || '').toLowerCase();
+      const code = String(error?.code || '').toLowerCase();
+      if (code === 'permission-denied' || msg.includes('insufficient permissions')) {
+        return;
+      }
+      // Outros erros: silenciar conforme pedido
     }
   }, []);
 

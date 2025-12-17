@@ -344,7 +344,13 @@ export async function checkAndAwardBadges(userId: string): Promise<string[]> {
 
     return newBadges;
   } catch (error) {
-    console.error('Error checking badges:', error);
+    // Ignorar erros de permissão quando não autenticado
+    const msg = String((error as any)?.message || '').toLowerCase();
+    const code = String((error as any)?.code || '').toLowerCase();
+    if (code === 'permission-denied' || msg.includes('insufficient permissions')) {
+      return [];
+    }
+    // Silenciar restantes erros conforme pedido
     return [];
   }
 }
@@ -379,7 +385,13 @@ export async function getUserBadges(userId: string): Promise<Badge[]> {
 
     return badges;
   } catch (error) {
-    console.error('Error getting user badges:', error);
+    // Ignorar erros de permissão quando não autenticado
+    const msg = String((error as any)?.message || '').toLowerCase();
+    const code = String((error as any)?.code || '').toLowerCase();
+    if (code === 'permission-denied' || msg.includes('insufficient permissions')) {
+      return [];
+    }
+    // Silenciar restantes erros conforme pedido
     return [];
   }
 }

@@ -1137,7 +1137,7 @@ export function ProgressScreen({ navigation }: any) {
                 styles.lockUpgradeButton,
                 { backgroundColor: theme.colors.primary || '#3BB273' },
               ]}
-              onPress={() => navigation.navigate('Premium')}
+              onPress={() => navigation.navigate('PremiumOnboarding')}
               activeOpacity={0.8}
             >
               <Text style={styles.lockUpgradeButtonText}>

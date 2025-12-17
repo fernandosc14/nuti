@@ -1455,7 +1455,7 @@ export function DashboardScreen({ navigation }: any) {
           <PremiumPromoCard
             variant="compact"
             fullWidth={true}
-            onPress={() => navigation.navigate('Premium')}
+            onPress={() => navigation.navigate('PremiumOnboarding')}
           />
 
           {/* Ad Banner - Entre Premium Card e Macros */}

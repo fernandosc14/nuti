@@ -72,12 +72,6 @@ export function AdBanner({
         requestOptions={{
           requestNonPersonalizedAdsOnly: true,
         }}
-        onAdLoaded={() => {
-          console.log('Ad loaded successfully');
-        }}
-        onAdFailedToLoad={(error) => {
-          console.error('Ad failed to load:', error);
-        }}
       />
     </View>
   );

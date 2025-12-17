@@ -14,6 +14,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
+import { Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '../context/UserContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -66,6 +67,27 @@ export function RegisterScreen({ navigation }: any) {
             </Text>
             <Text className="text-gray-500 dark:text-gray-400">
               {t('welcome.subtitle')}
+            </Text>
+          </View>
+
+          {/* Consent: Terms & Privacy */}
+          <View className="items-center mb-3 px-4">
+            <Text className="text-xs text-gray-500 dark:text-gray-400 text-center">
+              {(t('auth.byContinuingAgree') as string) || 'Ao continuar, concordas com os '}
+              <Text
+                className="text-xs text-green-600 dark:text-green-400"
+                onPress={() => Linking.openURL('https://nuti.app/terms-and-conditions')}
+              >
+                {t('profile.settings.terms') || 'Termos e Condições'}
+              </Text>
+              {' e '}
+              <Text
+                className="text-xs text-green-600 dark:text-green-400"
+                onPress={() => Linking.openURL('https://nuti.app/privacy-policy')}
+              >
+                {t('profile.settings.privacyPolicy') || 'Política de Privacidade'}
+              </Text>
+              {'.'}
             </Text>
           </View>
 

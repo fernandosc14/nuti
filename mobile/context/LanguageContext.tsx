@@ -90,6 +90,7 @@ const translations: Record<Language, Record<string, string>> = {
     'auth.weakPassword': 'Password should be at least 6 characters',
     'auth.emailInUse': 'This email is already in use',
     'auth.accountNotRegistered': 'This account is not registered. Please sign up first.',
+    'auth.byContinuingAgree': 'By continuing, you agree to the ',
     
     // Onboarding
     'onboarding.gender': 'Gender',
@@ -236,6 +237,11 @@ const translations: Record<Language, Record<string, string>> = {
     'onboarding.createAccount': 'Create Account',
     'onboarding.createAccountTitle': 'Create your account',
     'onboarding.createAccountDescription': 'Choose how you want to create your account',
+    'onboarding.createAccountCta': 'Create your account in seconds',
+    'onboarding.ready': 'Ready to start',
+    'onboarding.secureGoogle': 'Sign in with Google in seconds',
+    'onboarding.privacy': 'We never post without permission.',
+    'onboarding.googleSecure': 'Safe Google login. No password.',
     'onboarding.metric': 'Metric',
     'onboarding.imperial': 'Imperial',
     'onboarding.metricCm': 'Metric (cm)',
@@ -798,7 +804,7 @@ const translations: Record<Language, Record<string, string>> = {
     'premium.bestValue': 'BEST VALUE',
     'premium.freeTrialDays': '3 days free',
     'premium.noPaymentNow': 'No payment now',
-    'premium.startTrial': 'Start 3-Day Free Trial',
+    'premium.startTrial': 'Try Now',
     'premium.skip': 'Maybe later',
     'premium.billingNotice': 'No charge today. After 3 days, 39.99€/year (~3.33€/month) or 7.99€/month. Cancel anytime.',
     
@@ -935,6 +941,7 @@ const translations: Record<Language, Record<string, string>> = {
     'auth.weakPassword': 'A palavra-passe deve ter pelo menos 6 caracteres',
     'auth.emailInUse': 'Este email já está em uso',
     'auth.accountNotRegistered': 'Esta conta não está registada. Por favor, cria uma conta primeiro.',
+    'auth.byContinuingAgree': 'Ao continuar, concordas com os ',
     
     // Onboarding
     'onboarding.gender': 'Género',
@@ -1081,6 +1088,11 @@ const translations: Record<Language, Record<string, string>> = {
     'onboarding.createAccount': 'Criar Conta',
     'onboarding.createAccountTitle': 'Cria a tua conta',
     'onboarding.createAccountDescription': 'Escolhe como queres criar a tua conta',
+    'onboarding.createAccountCta': 'Cria a tua conta em segundos',
+    'onboarding.ready': 'Pronto para começar',
+    'onboarding.secureGoogle': 'Entra com Google em segundos',
+    'onboarding.privacy': 'Nunca publicamos sem tua autorização.',
+    'onboarding.googleSecure': 'Login seguro pelo Google. Sem senha.',
     'onboarding.metric': 'Métrico',
     'onboarding.imperial': 'Imperial',
     'onboarding.metricCm': 'Métrico (cm)',
@@ -1643,7 +1655,7 @@ const translations: Record<Language, Record<string, string>> = {
     'premium.bestValue': 'MAIS POUPADO',
     'premium.freeTrialDays': '3 dias grátis',
     'premium.noPaymentNow': 'Sem pagamento agora',
-    'premium.startTrial': 'Começar Trial de 3 Dias',
+    'premium.startTrial': 'Experimenta agora',
     'premium.skip': 'Talvez mais tarde',
     'premium.billingNotice': 'Não é cobrado hoje. Depois dos 3 dias, 39,99€/ano (~3,33€/mês) ou 7,99€/mês. Cancela quando quiseres.',
     
@@ -1780,6 +1792,7 @@ const translations: Record<Language, Record<string, string>> = {
     'auth.weakPassword': 'La contraseña debe tener al menos 6 caracteres',
     'auth.emailInUse': 'Este correo ya está en uso',
     'auth.accountNotRegistered': 'Esta cuenta no está registrada. Por favor, crea una cuenta primero.',
+    'auth.byContinuingAgree': 'Al continuar, aceptas los ',
     
     // Onboarding
     'onboarding.gender': 'Género',
@@ -1926,6 +1939,11 @@ const translations: Record<Language, Record<string, string>> = {
     'onboarding.createAccount': 'Crear Cuenta',
     'onboarding.createAccountTitle': 'Crea tu cuenta',
     'onboarding.createAccountDescription': 'Elige cómo quieres crear tu cuenta',
+    'onboarding.createAccountCta': 'Crea tu cuenta en segundos',
+    'onboarding.ready': 'Listo para empezar',
+    'onboarding.secureGoogle': 'Entra con Google en segundos',
+    'onboarding.privacy': 'Nunca publicamos sin tu permiso.',
+    'onboarding.googleSecure': 'Acceso seguro con Google. Sin contraseña.',
     'onboarding.metric': 'Métrico',
     'onboarding.imperial': 'Imperial',
     'onboarding.metricCm': 'Métrico (cm)',
@@ -2452,7 +2470,7 @@ const translations: Record<Language, Record<string, string>> = {
     'premium.bestValue': 'MEJOR VALOR',
     'premium.freeTrialDays': '3 días gratis',
     'premium.noPaymentNow': 'Sin pago ahora',
-    'premium.startTrial': 'Comenzar Prueba de 3 Días',
+    'premium.startTrial': 'Probar ahora',
     'premium.billingNotice': 'No se cobra hoy. Después de 3 días, 39,99€/año (~3,33€/mes) o 7,99€/mes. Cancela cuando quieras.',
     
     // Premium Promo
@@ -2604,6 +2622,7 @@ const translations: Record<Language, Record<string, string>> = {
     'auth.weakPassword': 'Le mot de passe doit contenir au moins 6 caractères',
     'auth.emailInUse': 'Cet email est déjà utilisé',
     'auth.accountNotRegistered': 'Ce compte n\'est pas enregistré. Veuillez créer un compte d\'abord.',
+    'auth.byContinuingAgree': 'En continuant, vous acceptez les ',
     
     // Onboarding
     'onboarding.gender': 'Genre',
@@ -2750,6 +2769,11 @@ const translations: Record<Language, Record<string, string>> = {
     'onboarding.createAccount': 'Créer un Compte',
     'onboarding.createAccountTitle': 'Créez votre compte',
     'onboarding.createAccountDescription': 'Choisissez comment vous voulez créer votre compte',
+    'onboarding.createAccountCta': 'Crée ton compte en quelques secondes',
+    'onboarding.ready': 'Prêt à commencer',
+    'onboarding.secureGoogle': 'Connecte-toi avec Google en quelques secondes',
+    'onboarding.privacy': 'On ne publie jamais sans ton accord.',
+    'onboarding.googleSecure': 'Connexion Google sécurisée. Pas de mot de passe.',
     'onboarding.metric': 'Métrique',
     'onboarding.imperial': 'Impérial',
     'onboarding.metricCm': 'Métrique (cm)',
@@ -3276,7 +3300,7 @@ const translations: Record<Language, Record<string, string>> = {
     'premium.bestValue': 'MEILLEUR RAPPORT',
     'premium.freeTrialDays': '3 jours gratuits',
     'premium.noPaymentNow': 'Aucun paiement maintenant',
-    'premium.startTrial': 'Commencer l\'essai de 3 jours',
+    'premium.startTrial': 'Essayer maintenant',
     'premium.billingNotice': 'Aucun frais aujourd\'hui. Après 3 jours, 39,99€/an (~3,33€/mois) ou 7,99€/mois. Annulez à tout moment.',
     
     // Premium Promo
@@ -3428,6 +3452,7 @@ const translations: Record<Language, Record<string, string>> = {
     'auth.weakPassword': 'Das Passwort muss mindestens 6 Zeichen lang sein',
     'auth.emailInUse': 'Diese E-Mail wird bereits verwendet',
     'auth.accountNotRegistered': 'Dieses Konto ist nicht registriert. Bitte erstelle zuerst ein Konto.',
+    'auth.byContinuingAgree': 'Wenn du fortfährst, stimmst du den ',
     
     // Onboarding
     'onboarding.gender': 'Geschlecht',
@@ -3574,6 +3599,11 @@ const translations: Record<Language, Record<string, string>> = {
     'onboarding.createAccount': 'Konto Erstellen',
     'onboarding.createAccountTitle': 'Erstellen Sie Ihr Konto',
     'onboarding.createAccountDescription': 'Wählen Sie, wie Sie Ihr Konto erstellen möchten',
+    'onboarding.createAccountCta': 'Erstellen Sie Ihr Konto in Sekunden',
+    'onboarding.ready': 'Bereit zu starten',
+    'onboarding.secureGoogle': 'Mit Google in Sekunden anmelden',
+    'onboarding.privacy': 'Wir posten nie ohne Ihre Zustimmung.',
+    'onboarding.googleSecure': 'Sicherer Google-Login. Kein Passwort.',
     'onboarding.metric': 'Metrisch',
     'onboarding.imperial': 'Imperial',
     'onboarding.metricCm': 'Metrisch (cm)',
@@ -4072,7 +4102,7 @@ const translations: Record<Language, Record<string, string>> = {
     'premium.bestValue': 'BESTER WERT',
     'premium.freeTrialDays': '3 Tage kostenlos',
     'premium.noPaymentNow': 'Keine Zahlung jetzt',
-    'premium.startTrial': '3-Tage-Testversion starten',
+    'premium.startTrial': 'Jetzt testen',
     'premium.billingNotice': 'Heute keine Gebühr. Nach 3 Tagen 39,99€/Jahr (~3,33€/Monat) oder 7,99€/Monat. Jederzeit kündbar.',
     'premium.choosePlan': 'Wähle deinen Plan',
     'premium.yearly': 'Jährlich',
@@ -4081,7 +4111,7 @@ const translations: Record<Language, Record<string, string>> = {
     'premium.bestValue': 'BESTER WERT',
     'premium.freeTrialDays': '3 Tage kostenlos',
     'premium.noPaymentNow': 'Keine Zahlung jetzt',
-    'premium.startTrial': '3-Tage-Testversion starten',
+    'premium.startTrial': 'Jetzt testen',
     'premium.billingNotice': 'Heute keine Gebühr. Nach 3 Tagen 39,99€/Jahr (~3,33€/Monat) oder 7,99€/Monat. Jederzeit kündbar.',
     
     // Premium Promo
@@ -4233,6 +4263,7 @@ const translations: Record<Language, Record<string, string>> = {
     'auth.weakPassword': 'La password deve contenere almeno 6 caratteri',
     'auth.emailInUse': 'Questa email è già in uso',
     'auth.accountNotRegistered': 'Questo account non è registrato. Si prega di creare un account prima.',
+    'auth.byContinuingAgree': 'Continuando, accetti i ',
     
     // Onboarding
     'onboarding.gender': 'Genere',
@@ -4379,6 +4410,11 @@ const translations: Record<Language, Record<string, string>> = {
     'onboarding.createAccount': 'Crea Account',
     'onboarding.createAccountTitle': 'Crea il tuo account',
     'onboarding.createAccountDescription': 'Scegli come vuoi creare il tuo account',
+    'onboarding.createAccountCta': 'Crea il tuo account in pochi secondi',
+    'onboarding.ready': 'Pronto per iniziare',
+    'onboarding.secureGoogle': 'Accedi con Google in pochi secondi',
+    'onboarding.privacy': 'Non pubblichiamo mai senza il tuo permesso.',
+    'onboarding.googleSecure': 'Accesso sicuro con Google. Nessuna password.',
     'onboarding.metric': 'Metrico',
     'onboarding.imperial': 'Imperiale',
     'onboarding.metricCm': 'Metrico (cm)',
@@ -4905,7 +4941,7 @@ const translations: Record<Language, Record<string, string>> = {
     'premium.bestValue': 'MIGLIOR VALORE',
     'premium.freeTrialDays': '3 giorni gratis',
     'premium.noPaymentNow': 'Nessun pagamento ora',
-    'premium.startTrial': 'Inizia prova di 3 giorni',
+    'premium.startTrial': 'Prova ora',
     'premium.billingNotice': 'Nessun addebito oggi. Dopo 3 giorni, 39,99€/anno (~3,33€/mese) o 7,99€/mese. Cancella in qualsiasi momento.',
     
     // Premium Promo

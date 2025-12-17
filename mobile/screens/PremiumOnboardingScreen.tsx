@@ -27,6 +27,12 @@ export function PremiumOnboardingScreen({ navigation }: { navigation: any }) {
   const [selectedPlan, setSelectedPlan] = useState<'yearly' | 'monthly'>('yearly');
   const [loading, setLoading] = useState(false);
 
+  // Fechar a screen de premium (mesmo comportamento do "Maybe later")
+  const handleClose = async () => {
+    if (loading) return;
+    await handleSkip();
+  };
+
   const handleStartTrial = async () => {
     // TODO: implementar compra premium
     try {
@@ -107,6 +113,40 @@ export function PremiumOnboardingScreen({ navigation }: { navigation: any }) {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top']}>
       <View style={{ flex: 1 }}>
+        {/* Botão Close (X) no topo-direito */}
+        <View
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: 12,
+            zIndex: 50,
+          }}
+        >
+          <TouchableOpacity
+            onPress={handleClose}
+            disabled={loading}
+            accessibilityRole="button"
+            accessibilityLabel={t('premium.close') || 'Close'}
+            activeOpacity={0.8}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: theme.isDark ? 'rgba(17,24,39,0.85)' : 'rgba(255,255,255,0.9)',
+              borderWidth: 1,
+              borderColor: theme.colors.border || '#E5E7EB',
+              shadowColor: '#000000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.2,
+              shadowRadius: 3,
+              elevation: 4,
+            }}
+          >
+            <Ionicons name="close" size={20} color={theme.isDark ? '#FFFFFF' : '#111827'} />
+          </TouchableOpacity>
+        </View>
         <ScrollView
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
@@ -258,7 +298,7 @@ export function PremiumOnboardingScreen({ navigation }: { navigation: any }) {
                 fontSize: 18,
                 fontWeight: '700',
               }}>
-                {t('premium.startTrial') || 'Start 3-Day Free Trial'}
+                {t('premium.startTrial') || 'Try Now'}
               </Text>
             </LinearGradient>
           </TouchableOpacity>

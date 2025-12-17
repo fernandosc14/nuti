@@ -104,11 +104,6 @@ export function PreferencesScreen({ navigation }: any) {
       if (value) {
         const granted = await requestNotificationPermission();
         if (!granted) {
-          Alert.alert(
-            t('notifications.permission_title') || 'Permissão necessária',
-            t('notifications.permission_body') || 'Ativa as notificações nas definições para receber lembretes.',
-          );
-          // Terminar processamento
           if (type === 'meal') setIsProcessingMeal(false);
           if (type === 'water') setIsProcessingWater(false);
           return;

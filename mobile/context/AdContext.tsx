@@ -41,9 +41,8 @@ export function AdProvider({ children }: { children: React.ReactNode }) {
       try {
         await mobileAds().initialize();
         setIsInitialized(true);
-        console.log('AdMob initialized');
       } catch (error) {
-        console.error('Error initializing AdMob:', error);
+        // Silence AdMob initialization errors (no logs requested)
       }
     };
 
