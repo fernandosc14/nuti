@@ -58,31 +58,29 @@ const calculateHealthScoreAndSuggestions = (
   }
 
   const suggestions: string[] = [];
-  let score = 5; // Base score
+  let score = 5.5; // Base score ligeiramente mais alto
   
   // Calcular valores por 100g se o peso estiver disponível
   const weightFor100g = weight || 400; // Usar peso fornecido ou estimativa de 400g
   const caloriesPer100g = (calories / weightFor100g) * 100;
 
-  // PENALIZAÇÃO POR CALORIAS ABSOLUTAS (muito importante!)
-  // Uma refeição saudável geralmente tem 400-800 kcal
-  // 800-1200 kcal é aceitável mas alto
-  // >1200 kcal é excessivo para uma única refeição
-  if (calories > 2000) {
-    score -= 3.5; // Penalização severa para refeições muito grandes
+  // PENALIZAÇÃO POR CALORIAS ABSOLUTAS - Mais flexível e contextual
+  // Faixas ajustadas para permitir refeições maiores sem penalização excessiva
+  if (calories > 2500) {
+    score -= 3; // Penalização severa para refeições extremamente grandes
     suggestions.push('addMeal.suggestion.portionTooLarge');
-  } else if (calories > 1500) {
-    score -= 2.5;
+  } else if (calories > 1800) {
+    score -= 2; // Refeição muito grande mas aceitável para algumas pessoas
     suggestions.push('addMeal.suggestion.portionLarge');
-  } else if (calories > 1200) {
-    score -= 1.5;
+  } else if (calories > 1400) {
+    score -= 1; // Leve penalização, pode ser refeição principal
     suggestions.push('addMeal.suggestion.portionHigh');
-  } else if (calories > 800) {
-    score -= 0.5; // Leve penalização
-  } else if (calories >= 400 && calories <= 800) {
-    score += 0.5; // Bonus para refeições de tamanho ideal
-  } else if (calories < 200) {
-    score -= 0.5; // Muito pequeno pode não ser suficiente
+  } else if (calories > 1000) {
+    score -= 0.3; // Muito leve, aceitável
+  } else if (calories >= 350 && calories <= 850) {
+    score += 0.8; // Bonus para refeições de tamanho ideal
+  } else if (calories < 250) {
+    score -= 0.4; // Muito pequeno pode não ser suficiente
   }
 
   // Calcular percentuais de cada macro
@@ -95,136 +93,237 @@ const calculateHealthScoreAndSuggestions = (
   const carbsPercent = totalMacroCalories > 0 ? (carbsCalories / calories) * 100 : 0;
   const fatPercent = totalMacroCalories > 0 ? (fatCalories / calories) * 100 : 0;
 
-  // Avaliar Proteína (ideal: 20-35% das calorias)
-  if (proteinPercent >= 20 && proteinPercent <= 35) {
-    score += 2;
-  } else if (proteinPercent >= 15 && proteinPercent < 20) {
-    score += 1;
+  // Avaliar Proteína (ideal: 15-35% das calorias, flexível)
+  // Proteína é essencial para saciedade e manutenção muscular
+  if (proteinPercent >= 25 && proteinPercent <= 35) {
+    score += 2.5; // Faixa ótima
+  } else if (proteinPercent >= 18 && proteinPercent < 25) {
+    score += 2; // Muito bom
+  } else if (proteinPercent >= 15 && proteinPercent < 18) {
+    score += 1.2; // Bom
+  } else if (proteinPercent > 35 && proteinPercent <= 40) {
+    score += 1.8; // Alto mas aceitável (dieta hiperproteica)
+  } else if (proteinPercent > 40) {
+    score += 1; // Muito alto, pode não ser sustentável
+  } else if (proteinPercent >= 10 && proteinPercent < 15) {
+    score -= 0.8; // Baixo
     suggestions.push('addMeal.suggestion.addProtein');
-  } else if (proteinPercent > 35) {
-    score += 1.5;
-  } else if (proteinPercent < 15) {
-    score -= 1.5;
+  } else if (proteinPercent < 10) {
+    score -= 1.8; // Muito baixo
     suggestions.push('addMeal.suggestion.addMoreProtein');
   }
 
-  // Avaliar Carboidratos (ideal: 45-65% das calorias)
-  if (carbsPercent >= 45 && carbsPercent <= 65) {
-    score += 1.5;
-  } else if (carbsPercent > 70) {
-    score -= 1;
+  // Avaliar Carboidratos (ideal: 40-60%, mas aceitar low-carb)
+  // Contexto importa: low-carb válida se gorduras/proteínas compensam
+  if (carbsPercent >= 45 && carbsPercent <= 60) {
+    score += 1.8; // Faixa equilibrada padrão
+  } else if (carbsPercent >= 35 && carbsPercent < 45) {
+    score += 1.5; // Moderado
+  } else if (carbsPercent >= 60 && carbsPercent <= 70) {
+    score += 1; // Alto mas aceitável
+  } else if (carbsPercent > 75) {
+    score -= 1.5; // Muito alto, risco glicêmico
     suggestions.push('addMeal.suggestion.reduceCarbs');
-  } else if (carbsPercent < 30) {
-    score -= 0.5;
-    if (proteinPercent < 20) {
+  } else if (carbsPercent < 25) {
+    // Low-carb: avaliar se compensado por proteína/gordura saudável
+    if (proteinPercent >= 25 || fatPercent >= 35) {
+      score += 1.2; // Low-carb bem estruturada
+    } else {
+      score -= 0.6; // Desbalanceado
       suggestions.push('addMeal.suggestion.balanceMacros');
     }
+  } else if (carbsPercent >= 25 && carbsPercent < 35) {
+    score += 1; // Low-carb moderado
   }
 
-  // Avaliar Gordura (ideal: 20-35% das calorias)
-  if (fatPercent >= 20 && fatPercent <= 35) {
-    score += 1;
-  } else if (fatPercent > 40) {
-    score -= 1.5;
+  // Avaliar Gordura (ideal: 20-40% das calorias, aceitar dietas altas em gordura)
+  // Gorduras saudáveis são essenciais; avaliar qualidade depois
+  if (fatPercent >= 25 && fatPercent <= 35) {
+    score += 1.5; // Faixa ótima
+  } else if (fatPercent >= 20 && fatPercent < 25) {
+    score += 1.2; // Bom
+  } else if (fatPercent >= 35 && fatPercent <= 45) {
+    // Alto, mas aceitável se gorduras saudáveis (checado depois via sat. fat)
+    score += 0.8;
+  } else if (fatPercent > 50) {
+    // Muito alto, provável excesso de gordura saturada
+    score -= 1.2;
     suggestions.push('addMeal.suggestion.reduceFat');
   } else if (fatPercent < 15) {
-    score -= 0.5;
+    score -= 0.7; // Muito baixo, pode faltar ácidos graxos essenciais
     suggestions.push('addMeal.suggestion.addHealthyFats');
+  } else if (fatPercent >= 15 && fatPercent < 20) {
+    score += 0.5; // Aceitável mas no limite inferior
   }
 
   // Avaliar densidade calórica (calorias por 100g)
-  if (caloriesPer100g > 400) {
-    score -= 2; // Penalização maior para densidade muito alta
+  // Densidade < 150 kcal/100g: baixa (vegetais, frutas)
+  // 150-250: moderada (carnes magras, grãos cozidos)
+  // 250-400: alta (queijos, carnes gordas, massas)
+  // > 400: muito alta (processados, fritos, doces)
+  if (caloriesPer100g > 450) {
+    score -= 2.2; // Extremamente denso, provável processado
     if (!suggestions.includes('addMeal.suggestion.addVegetables')) {
       suggestions.push('addMeal.suggestion.addVegetables');
     }
-  } else if (caloriesPer100g > 300) {
-    score -= 1.5; // Penalização aumentada
+  } else if (caloriesPer100g > 350) {
+    score -= 1.5; // Muito denso
     if (!suggestions.includes('addMeal.suggestion.addVegetables')) {
       suggestions.push('addMeal.suggestion.addVegetables');
     }
-  } else if (caloriesPer100g < 100) {
-    score += 0.5;
+  } else if (caloriesPer100g > 250) {
+    score -= 0.7; // Denso mas aceitável
+  } else if (caloriesPer100g >= 100 && caloriesPer100g <= 200) {
+    score += 1; // Densidade ideal (alimentos integrais/naturais)
+  } else if (caloriesPer100g < 80) {
+    score += 0.8; // Baixa densidade (vegetais, sopas)
   }
 
   // AVALIAR AÇÚCARES (se disponível)
-  // OMS recomenda <10% das calorias de açúcares livres (ideal <5%)
+  // OMS: <10% das calorias de açúcares livres (ideal <5%)
+  // Distinguir açúcares naturais (frutas) vs adicionados (processados)
   if (sugars !== undefined && sugars > 0) {
     const sugarsCalories = sugars * 4; // 1g açúcar = 4 kcal
     const sugarsPercent = (sugarsCalories / calories) * 100;
+    const sugarsPer100g = (sugars / weightFor100g) * 100;
     
-    if (sugarsPercent > 20) {
-      score -= 2; // Penalização severa para muito açúcar
+    if (sugarsPercent > 25) {
+      score -= 2.5; // Penalização severa (doces, refrigerantes)
       suggestions.push('addMeal.suggestion.highSugar');
-    } else if (sugarsPercent > 15) {
-      score -= 1.5;
+    } else if (sugarsPercent > 18) {
+      score -= 2;
       suggestions.push('addMeal.suggestion.reduceSugar');
-    } else if (sugarsPercent > 10) {
-      score -= 1;
+    } else if (sugarsPercent > 12) {
+      score -= 1.2;
+      suggestions.push('addMeal.suggestion.reduceSugar');
+    } else if (sugarsPercent > 8) {
+      score -= 0.6; // Aceitável se de fonte natural
     } else if (sugarsPercent <= 5) {
-      score += 0.5; // Bonus para baixo açúcar
+      score += 0.8; // Bonus para baixo açúcar
+    } else if (sugarsPercent <= 8) {
+      score += 0.3; // Leve bonus
+    }
+    
+    // Bonus adicional se densidade de açúcar é muito baixa (natural)
+    if (sugarsPer100g < 8 && sugarsPercent <= 10) {
+      score += 0.4; // Provavelmente de frutas/vegetais
     }
   }
 
   // AVALIAR FIBRA (se disponível)
-  // Recomendação: 25-30g por dia, ideal ~5-8g por refeição
+  // Recomendação: 25-35g/dia, ~8-12g por refeição principal
+  // Fibra indica alimentos integrais e naturais
   if (fiber !== undefined && fiber > 0) {
     const fiberPer100g = (fiber / weightFor100g) * 100;
+    const fiberTotal = fiber;
     
-    if (fiberPer100g >= 5) {
-      score += 1.5; // Bonus significativo para alta fibra
-    } else if (fiberPer100g >= 3) {
-      score += 1;
+    if (fiberPer100g >= 6) {
+      score += 2; // Excelente (grãos integrais, legumes)
+    } else if (fiberPer100g >= 4) {
+      score += 1.5; // Muito bom
+    } else if (fiberPer100g >= 2.5) {
+      score += 1; // Bom
+    } else if (fiberPer100g >= 1.5) {
+      score += 0.5; // Aceitável
     } else if (fiberPer100g < 1) {
-      score -= 0.5; // Penalização para baixa fibra
+      score -= 0.8; // Baixo, provável processado/refinado
       if (!suggestions.includes('addMeal.suggestion.addFiber')) {
         suggestions.push('addMeal.suggestion.addFiber');
       }
     }
+    
+    // Bonus extra se quantidade absoluta for alta
+    if (fiberTotal >= 10) {
+      score += 0.5; // Refeição rica em fibras
+    }
+  } else {
+    // Penalização leve se fibra não informada (pode ser processado)
+    if (caloriesPer100g > 250) {
+      score -= 0.3;
+    }
   }
 
   // AVALIAR SÓDIO (se disponível)
-  // OMS recomenda <2g sódio/dia (<5g sal/dia), ideal <400mg por refeição
+  // OMS: <2000mg/dia (ideal <1500mg/dia), ~400-600mg por refeição
+  // Alto sódio indica processamento industrial
   if (sodium !== undefined && sodium > 0) {
     const sodiumPer100g = (sodium / weightFor100g) * 100;
-    const sodiumPerMeal = (sodium / weightFor100g) * weightFor100g;
+    const sodiumTotal = sodium;
     
-    if (sodiumPerMeal > 1000) { // >1g sódio por refeição
-      score -= 2; // Penalização severa
+    if (sodiumTotal > 1500) { // Muito alto (processados, fast-food)
+      score -= 2.5;
       suggestions.push('addMeal.suggestion.highSodium');
-    } else if (sodiumPerMeal > 600) {
-      score -= 1.5;
+    } else if (sodiumTotal > 1000) {
+      score -= 2;
+      suggestions.push('addMeal.suggestion.highSodium');
+    } else if (sodiumTotal > 700) {
+      score -= 1.3;
       suggestions.push('addMeal.suggestion.reduceSodium');
-    } else if (sodiumPerMeal < 200) {
-      score += 0.5; // Bonus para baixo sódio
+    } else if (sodiumTotal > 500) {
+      score -= 0.6; // Aceitável mas no limite
+    } else if (sodiumTotal <= 300) {
+      score += 0.8; // Excelente (alimento natural)
+    } else if (sodiumTotal <= 500) {
+      score += 0.4; // Bom
+    }
+    
+    // Penalização extra por densidade muito alta (salgadinhos, embutidos)
+    if (sodiumPer100g > 600) {
+      score -= 0.8;
     }
   }
 
   // AVALIAR GORDURA SATURADA (se disponível)
-  // OMS recomenda <10% das calorias de gordura saturada
+  // Diretrizes: <10% das calorias (ideal <7%)
+  // Gordura saturada alta indica carnes gordas, laticínios integrais, processados
   if (saturatedFat !== undefined && saturatedFat > 0) {
     const saturatedFatCalories = saturatedFat * 9; // 1g gordura = 9 kcal
     const saturatedFatPercent = (saturatedFatCalories / calories) * 100;
     
-    if (saturatedFatPercent > 15) {
-      score -= 2; // Penalização severa
+    if (saturatedFatPercent > 18) {
+      score -= 2.5; // Muito alto (fast-food, frituras)
       suggestions.push('addMeal.suggestion.highSaturatedFat');
-    } else if (saturatedFatPercent > 10) {
-      score -= 1.5;
+    } else if (saturatedFatPercent > 12) {
+      score -= 2;
+      suggestions.push('addMeal.suggestion.highSaturatedFat');
+    } else if (saturatedFatPercent > 8) {
+      score -= 1.2;
       suggestions.push('addMeal.suggestion.reduceSaturatedFat');
+    } else if (saturatedFatPercent > 5) {
+      score -= 0.5; // Leve penalização
+    } else if (saturatedFatPercent <= 4) {
+      score += 0.8; // Excelente (gorduras saudáveis)
     } else if (saturatedFatPercent <= 5) {
-      score += 0.5; // Bonus para baixa gordura saturada
+      score += 0.4; // Bom
     }
   }
 
   // AVALIAR GORDURA TRANS (se disponível)
-  // Qualquer quantidade de gordura trans é prejudicial
+  // Qualquer quantidade de gordura trans é prejudicial (processados industriais)
   if (transFat !== undefined && transFat > 0) {
-    score -= 3; // Penalização muito severa
+    if (transFat > 0.5) {
+      score -= 3.5; // Penalização extrema
+    } else {
+      score -= 2.5; // Penalização severa mesmo para traços
+    }
     suggestions.push('addMeal.suggestion.containsTransFat');
   }
 
-  // Normalizar para 0-10
+  // BÔNUS FINAL: Refeição completa e balanceada
+  // Se todos os macros estão dentro de faixas saudáveis E dados adicionais são bons
+  if (
+    proteinPercent >= 18 && proteinPercent <= 35 &&
+    carbsPercent >= 35 && carbsPercent <= 65 &&
+    fatPercent >= 20 && fatPercent <= 40 &&
+    (sugars === undefined || (sugars / calories * 400) <= 10) &&
+    (fiber === undefined || fiber >= 5) &&
+    (sodium === undefined || sodium <= 600) &&
+    (saturatedFat === undefined || (saturatedFat * 9 / calories * 100) <= 8)
+  ) {
+    score += 0.5; // Bonus por refeição bem equilibrada
+  }
+
+  // Normalizar para 0-10 com arredondamento de 1 casa decimal
   score = Math.max(0, Math.min(10, Math.round(score * 10) / 10));
 
   return { score, suggestions };
@@ -349,6 +448,22 @@ export function AddMealScreen({ navigation, route }: any) {
   const [addingMeal, setAddingMeal] = useState(false);
   const isCameraActiveRef = useRef(false); // Ref para rastrear se a câmera está ativa (não causa re-render)
   const isProcessingRef = useRef(false); // Ref para rastrear se está processando (não causa re-render)
+  const cameraAutoTriggeredRef = useRef(false); // Ref para rastrear se a câmera já foi aberta automaticamente
+  // Estabilizar Health Score para o mesmo prato (mesma composição)
+  const lastPlateSignatureRef = useRef<string | null>(null);
+  const lastHealthDataRef = useRef<{ score: number; suggestions: any[] } | null>(null);
+
+  const buildPlateSignature = (foods: Array<{ name: string }>) => {
+    try {
+      return foods
+        .map(f => (f.name || '').trim().toLowerCase())
+        .filter(Boolean)
+        .sort()
+        .join('|');
+    } catch {
+      return '';
+    }
+  };
   const [selectedFoods, setSelectedFoods] = useState<Array<{
     id: string;
     name: string;
@@ -464,9 +579,10 @@ export function AddMealScreen({ navigation, route }: any) {
       return;
     }
     
-    if (mode === 'camera' && isPremium) {
+    if (mode === 'camera' && isPremium && !cameraAutoTriggeredRef.current) {
       // Setar flag ANTES de abrir a câmera para prevenir cleanup prematuro
       isCameraActiveRef.current = true;
+      cameraAutoTriggeredRef.current = true; // Marcar que câmera foi aberta automaticamente
       // Pequeno delay para garantir que a flag foi setada antes de qualquer cleanup
       setTimeout(() => {
       handleTakePhoto();
@@ -521,7 +637,7 @@ export function AddMealScreen({ navigation, route }: any) {
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
@@ -965,7 +1081,12 @@ export function AddMealScreen({ navigation, route }: any) {
   const getHealthScoreData = () => {
     if (plateFoods.length > 0) {
       const totals = calculatePlateFoodsTotals();
-      return calculateHealthScoreAndSuggestions(
+      // Construir assinatura do prato baseada nos nomes para estabilizar o score
+      const signature = `${buildPlateSignature(plateFoods as Array<{ name: string }>)}::q=${quantity}`;
+      if (lastPlateSignatureRef.current && lastPlateSignatureRef.current === signature && lastHealthDataRef.current) {
+        return lastHealthDataRef.current;
+      }
+      const data = calculateHealthScoreAndSuggestions(
         totals.calories * quantity,
         totals.protein * quantity,
         totals.carbs * quantity,
@@ -977,6 +1098,9 @@ export function AddMealScreen({ navigation, route }: any) {
         totals.transFat > 0 ? totals.transFat * quantity : undefined,
         totals.totalWeight > 0 ? totals.totalWeight * quantity : undefined
       );
+      lastPlateSignatureRef.current = signature;
+      lastHealthDataRef.current = data;
+      return data;
     }
     // Caso contrário, usar dados básicos do editingFood
     if (!editingFood) {
@@ -1174,18 +1298,8 @@ export function AddMealScreen({ navigation, route }: any) {
       // Sempre salvar também a data de quando foi adicionada (hoje)
       const addedAt = new Date();
       
-      // Calcular Health Score com dados adicionais se disponíveis
-      const healthScore = calculateHealthScoreAndSuggestions(
-        Math.round(food.calories * quantity),
-        parseFloat((food.protein * quantity).toFixed(1)),
-        parseFloat((food.carbs * quantity).toFixed(1)),
-        parseFloat((food.fat * quantity).toFixed(1)),
-        food.sugars ? food.sugars * quantity : undefined,
-        food.fiber ? food.fiber * quantity : undefined,
-        food.sodium ? food.sodium * quantity : undefined,
-        food.saturatedFat ? food.saturatedFat * quantity : undefined,
-        food.transFat ? food.transFat * quantity : undefined
-      ).score;
+      // Calcular Health Score usando a mesma lógica/caching da UI
+      const healthScore = getHealthScoreData().score;
 
       // Preparar lista de alimentos para salvar (foto - apenas um alimento)
       const foodsToSave = [{
@@ -1931,131 +2045,7 @@ export function AddMealScreen({ navigation, route }: any) {
             </View>
           )}
 
-          {/* Tipo de Refeição - Select Melhorado */}
-          <View style={{ marginBottom: 24 }}>
-            <Text style={{
-              fontSize: 16,
-              fontWeight: '600',
-              color: theme.colors.text,
-              marginBottom: 12,
-            }}>
-              {t('addMeal.mealType')}
-            </Text>
-            <TouchableOpacity
-              onPress={() => setShowMealTypeModal(true)}
-              style={{
-                backgroundColor: theme.colors.card,
-                borderRadius: 12,
-                padding: 16,
-                borderWidth: 1,
-                borderColor: theme.colors.border || '#E5E7EB',
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                <Text style={{ fontSize: 20, marginRight: 12 }}>
-                  {mealTypes.find(t => t.value === selectedMealType)?.icon}
-                </Text>
-                <Text style={{
-                  fontSize: 16,
-                  fontWeight: '600',
-                  color: theme.colors.text,
-                }}>
-                  {mealTypes.find(t => t.value === selectedMealType)?.label}
-                </Text>
-              </View>
-              <Ionicons name="chevron-down" size={20} color={theme.colors.textSecondary || '#9CA3AF'} />
-            </TouchableOpacity>
-
-            {/* Modal de Seleção */}
-            <Modal
-              visible={showMealTypeModal}
-              transparent={true}
-              animationType="slide"
-              onRequestClose={() => setShowMealTypeModal(false)}
-            >
-              <TouchableOpacity
-                style={{
-                  flex: 1,
-                  backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                  justifyContent: 'flex-end',
-                }}
-                activeOpacity={1}
-                onPress={() => setShowMealTypeModal(false)}
-              >
-                <View
-                  style={{
-                    backgroundColor: theme.colors.background,
-                    borderTopLeftRadius: 20,
-                    borderTopRightRadius: 20,
-                    paddingTop: 20,
-                    paddingBottom: 40,
-                    paddingHorizontal: 24,
-                  }}
-                  onStartShouldSetResponder={() => true}
-                >
-                  {/* Handle Bar */}
-                  <View style={{
-                    width: 40,
-                    height: 4,
-                    backgroundColor: theme.colors.border || '#E5E7EB',
-                    borderRadius: 2,
-                    alignSelf: 'center',
-                    marginBottom: 20,
-                  }} />
-
-                  <Text style={{
-                    fontSize: 18,
-                    fontWeight: '700',
-                    color: theme.colors.text,
-                    marginBottom: 20,
-                  }}>
-                    {t('addMeal.selectMealType') || 'Selecionar Tipo de Refeição'}
-                  </Text>
-
-                  {mealTypes.map((type) => (
-                    <TouchableOpacity
-                      key={type.value}
-                      onPress={() => {
-                        setSelectedMealType(type.value);
-                        setShowMealTypeModal(false);
-                      }}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        paddingVertical: 16,
-                        paddingHorizontal: 16,
-                        borderRadius: 12,
-                        backgroundColor: selectedMealType === type.value
-                          ? theme.colors.primary + '20'
-                          : 'transparent',
-                        marginBottom: 8,
-                        borderWidth: selectedMealType === type.value ? 2 : 0,
-                        borderColor: theme.colors.primary || '#3BB273',
-                      }}
-                    >
-                      <Text style={{ fontSize: 24, marginRight: 16 }}>
-                        {type.icon}
-                      </Text>
-                      <Text style={{
-                        fontSize: 16,
-                        fontWeight: selectedMealType === type.value ? '700' : '500',
-                        color: theme.colors.text,
-                        flex: 1,
-                      }}>
-                        {type.label}
-                      </Text>
-                      {selectedMealType === type.value && (
-                        <Ionicons name="checkmark-circle" size={24} color={theme.colors.primary || '#3BB273'} />
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </TouchableOpacity>
-            </Modal>
-          </View>
+          {/* Tipo de Refeição - (removido duplicado; usar seletor abaixo do nome) */}
 
           {/* Formulário Editável - Aparece quando está editando um alimento */}
           {editingFood && (
@@ -2236,6 +2226,9 @@ export function AddMealScreen({ navigation, route }: any) {
                           const updatedFoods = [...plateFoods];
                           updatedFoods[index] = { ...food, weight: weightInGrams };
                           setPlateFoods(updatedFoods);
+                          // Invalidate cached health score when user edits weights
+                          lastPlateSignatureRef.current = null;
+                          lastHealthDataRef.current = null;
                           
                           // Recalcular totais
                           const totals = updatedFoods.reduce((acc, f) => {

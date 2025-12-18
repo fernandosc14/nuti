@@ -2354,62 +2354,85 @@ async function analyzeWithGemini(imageUri: string, apiKey: string, language: str
             contents: [{
               parts: [
                 {
-                  text: `Analyze this image and determine if it contains FOOD. 
+                  text: `Analyze this image and determine if it contains FOOD.
 
-IMPORTANT: 
-- If the image does NOT contain food (e.g., person, animal, object, text, etc.), respond with: {"error": "This image does not contain food. Please upload an image of food."}
-- If the image contains food, identify ALL food items on the plate and respond in JSON format:
+### IDENTITY & GOAL:
+You are the Nuti AI Vision Engine. Your goal is to identify food items and provide highly accurate nutritional estimates based on standard serving sizes and visual density.
+
+### STEP 1: VALIDATION
+- If the image does NOT contain food (e.g., person, object, text, blurry mess), respond ONLY with: {"error": "This image does not contain food. Please upload a clear photo of your meal."}
+
+### STEP 2: NUTRITIONAL ANALYSIS RULES
+- LANGUAGE: Provide "plateName" and "name" in ${language === 'pt' ? 'Portuguese' : language === 'es' ? 'Spanish' : language === 'fr' ? 'French' : language === 'de' ? 'German' : language === 'it' ? 'Italian' : 'English'}.
+- CONSERVATIVE ESTIMATION: When in doubt, use standard portions. Do not overestimate.
+- SCALE & CROPPING: If the image is cropped or lacks a reference (like cutlery), assume a standard 26cm dinner plate and apply "Standard Adult Servings":
+    * Proteins (meat/fish/eggs): 120g-150g
+    * Carbs (rice/pasta/bread): 150g-200g
+    * Beans/legumes: 100g-130g
+    * Vegetables/salad: 50g-80g
+    * Sauces/condiments: 20g-30g
+- HIDDEN FATS: If food looks shiny, fried, or has visible oil, increase "fatPer100g" to account for cooking oils/butter/dressing.
+- PRECISION ANCHORS (Reference values per 100g cooked, unless specified):
+    * Arroz Branco (white rice): 130 kcal, 2.7g protein, 28g carbs, 0.3g fat, 0.4g fiber
+    * Frango Grelhado (grilled chicken): 165 kcal, 31g protein, 0g carbs, 3.6g fat, 0g fiber
+    * Frango Frito (fried chicken): 239 kcal, 25g protein, 8g carbs, 13g fat, 0g fiber
+    * Feijão Preto (black beans): 132 kcal, 8.9g protein, 24g carbs, 0.5g fat, 7.5g fiber
+    * Carne Bovina Magra (lean beef): 250 kcal, 26g protein, 0g carbs, 15g fat, 0g fiber
+    * Carne Bovina Gorda (fatty beef): 291 kcal, 26g protein, 0g carbs, 20g fat, 0g fiber
+    * Massa Cozida (cooked pasta): 131 kcal, 5g protein, 25g carbs, 1.1g fat, 1.8g fiber
+    * Batata Frita (french fries): 312 kcal, 3.4g protein, 41g carbs, 15g fat, 3.8g fiber
+    * Ovo Frito (fried egg): 196 kcal, 13.6g protein, 1.1g carbs, 14.8g fat, 0g fiber
+    * Ovo Cozido (boiled egg): 155 kcal, 13g protein, 1.1g carbs, 11g fat, 0g fiber
+    * Tomate Cru (raw tomato): 18 kcal, 0.9g protein, 3.9g carbs, 0.2g fat, 1.2g fiber
+    * Alface (lettuce): 15 kcal, 1.4g protein, 2.9g carbs, 0.2g fat, 1.3g fiber
+    * Batata Cozida (boiled potato): 87 kcal, 2g protein, 20g carbs, 0.1g fat, 1.8g fiber
+    * Pão Branco (white bread): 265 kcal, 9g protein, 49g carbs, 3.2g fat, 2.7g fiber
+- For vegetables and salads, use LOW calorie values (15-30 kcal per 100g typically).
+- For other foods not listed, use scientifically accurate values from USDA or TACO food composition databases.
+
+### STEP 3: WEIGHT ESTIMATION RULES
+- Estimate weight REALISTICALLY and INDIVIDUALLY for each food based on what you ACTUALLY SEE:
+  * Small portion of rice: 80-100g | Normal: 150-180g | Large: 200-250g
+  * Small piece of meat: 80-100g | Normal: 120-150g | Large: 180-250g
+  * Vegetables/salad: Usually 50-100g depending on volume
+  * DO NOT use the same weight for all items - vary based on VISUAL SIZE
+  * If image is cropped tight or lacks reference, assume standard servings (see Step 2)
+  * CONSERVATIVE BIAS: When in doubt, use SMALLER weights to avoid overestimating calories
+
+### STEP 4: OUTPUT FORMAT
+Respond ONLY with valid JSON (no markdown blocks, no extra text):
 
 {
-  "plateName": "complete plate name in ${language === 'pt' ? 'Portuguese' : language === 'es' ? 'Spanish' : language === 'fr' ? 'French' : language === 'de' ? 'German' : language === 'it' ? 'Italian' : 'English'}",
+  "plateName": "Nome descritivo completo do prato",
+  "totalEstimatedCalories": total_sum_of_all_foods,
   "foods": [
     {
-      "name": "individual food name in ${language === 'pt' ? 'Portuguese' : language === 'es' ? 'Spanish' : language === 'fr' ? 'French' : language === 'de' ? 'German' : language === 'it' ? 'Italian' : 'English'}",
-      "estimatedWeight": estimated_weight_in_grams,
-      "caloriesPer100g": calories_per_100g,
-      "proteinPer100g": protein_grams_per_100g,
-      "carbsPer100g": carbs_grams_per_100g,
-      "fatPer100g": fat_grams_per_100g,
-      "sugarsPer100g": sugars_grams_per_100g (optional, 0 if not applicable),
-      "fiberPer100g": fiber_grams_per_100g (optional, 0 if not applicable),
-      "sodiumPer100g": sodium_mg_per_100g (optional, 0 if not applicable),
-      "saturatedFatPer100g": saturated_fat_grams_per_100g (optional, 0 if not applicable),
-      "transFatPer100g": trans_fat_grams_per_100g (optional, 0 if not applicable)
+      "name": "Nome do alimento individual",
+      "estimatedWeight": weight_in_grams,
+      "caloriesPer100g": kcal,
+      "proteinPer100g": g,
+      "carbsPer100g": g,
+      "fatPer100g": g,
+      "fiberPer100g": g,
+      "sugarsPer100g": g (optional, 0 if not applicable),
+      "sodiumPer100g": mg (optional, 0 if not applicable),
+      "saturatedFatPer100g": g (optional, 0 if not applicable),
+      "transFatPer100g": g (optional, 0 if not applicable),
+      "confidenceLevel": "high/medium/low"
     }
   ]
 }
 
-CRITICAL NUTRITIONAL ACCURACY RULES - BE CONSERVATIVE WITH CALORIES:
-- Use REALISTIC and ACCURATE nutritional values from official food composition databases (USDA, TACO, etc.)
-- DO NOT overestimate calories - be conservative and accurate
-- For common foods, use these PRECISE reference values per 100g (cooked, unless specified):
-  * Cooked white rice: 130 kcal, 2.7g protein, 28g carbs, 0.3g fat
-  * Grilled chicken breast (skinless): 165 kcal, 31g protein, 0g carbs, 3.6g fat
-  * Fried chicken (breaded): 239 kcal, 25g protein, 0g carbs, 13g fat
-  * Cooked black beans: 132 kcal, 8.9g protein, 24g carbs, 0.5g fat
-  * Cooked beef steak (lean): 250 kcal, 26g protein, 0g carbs, 15g fat
-  * Cooked pasta (plain): 131 kcal, 5g protein, 25g carbs, 1.1g fat
-  * French fries (homemade): 312 kcal, 3.4g protein, 41g carbs, 15g fat
-  * Fried egg: 196 kcal, 13.6g protein, 1.1g carbs, 14.8g fat
-  * Boiled egg: 155 kcal, 13g protein, 1.1g carbs, 11g fat
-  * Raw tomato: 18 kcal, 0.9g protein, 3.9g carbs, 0.2g fat
-  * Lettuce: 15 kcal, 1.4g protein, 2.9g carbs, 0.2g fat
-  * Cooked potato (boiled): 87 kcal, 2g protein, 20g carbs, 0.1g fat
-  * Bread (white): 265 kcal, 9g protein, 49g carbs, 3.2g fat
-- For vegetables and salads, use LOW calorie values (15-30 kcal per 100g typically)
-- For other foods, use scientifically accurate values from food composition databases
-- "plateName" should be a descriptive name for the complete plate/meal
-- Identify ALL separate food items on the plate (including side dishes like tomatoes, lettuce, onions, etc.)
-- Each food item must have accurate nutritional values per 100g
-- Estimate weight REALISTICALLY and DIFFERENTLY for each food based on what you ACTUALLY SEE in the image:
-  * Look at the actual size/portion of each food item in the image
-  * A small piece of steak might be 80g, a medium one 150g, a large one 250g
-  * A small portion of rice might be 80g, a normal one 150g, a large one 200g
-  * Estimate based on the VISUAL SIZE you see, not fixed values
-  * DO NOT use the same weight for all foods - estimate each one individually based on its actual visual size in the image
-  * Be realistic: if you see a small piece, estimate a small weight; if you see a large portion, estimate a large weight
-  * IMPORTANT: When in doubt, use SMALLER weights to avoid overestimating calories
-- Only respond with valid JSON, no additional text before or after.`
+### CRITICAL CONSTRAINTS:
+1. NO markdown code blocks - return raw JSON only (no triple backticks).
+2. Every separate item (rice, steak, tomato, sauce, etc.) must be its own object in the "foods" array.
+3. If an item is a complex mix, break it down into components OR use verified average values for that specific dish.
+4. "confidenceLevel" should be:
+   - "high": Clear image, standard portions, recognizable foods
+   - "medium": Slightly blurry or cropped, but identifiable
+   - "low": Very cropped, blurry, unusual angle, or hard to identify
+5. "totalEstimatedCalories" = sum of (estimatedWeight × caloriesPer100g ÷ 100) for all foods.
+6. Only respond with valid JSON, no additional text before or after.`
                 },
                 {
                   inline_data: {
