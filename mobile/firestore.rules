@@ -7,10 +7,16 @@ service cloud.firestore {
       allow write: if request.auth != null && request.auth.uid == userId;
     }
     
-    // Regras para meals
+    // Regras para meals - com validação de dados
     match /meals/{mealId} {
       allow read: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow create: if request.auth != null && 
+                    request.auth.uid == request.resource.data.userId &&
+                    request.resource.data.calories is number &&
+                    request.resource.data.calories >= 0 &&
+                    request.resource.data.name is string &&
+                    request.resource.data.name.size() > 0 &&
+                    request.resource.data.date is timestamp;
       allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
     
@@ -32,9 +38,9 @@ service cloud.firestore {
     // Regras para badges (apenas leitura para utilizadores autenticados)
     match /badges/{badgeId} {
       allow read: if request.auth != null;
-      // Temporariamente permitir criação para desenvolvimento
-      // TODO: Mudar para "allow write: if false;" antes de produção
-      allow write: if request.auth != null; // Temporário - permite criar badges durante desenvolvimento
+      // APENAS para desenvolvimento local - remover antes de produção!
+      // allow write: if request.auth.token.admin == true;
+      allow write: if false; // Desabilitado em produção - badges apenas para admins
     }
     
     // Regras para water (água bebida)
@@ -64,17 +70,26 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
     
-    // Regras para exercises (exercícios físicos)
+    // Regras para exercises - com validação de dados
     match /exercises/{exerciseId} {
       allow read: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow create: if request.auth != null && 
+                    request.auth.uid == request.resource.data.userId &&
+                    request.resource.data.type in ['running', 'walking', 'cycling', 'swimming', 'gym', 'yoga', 'pilates', 'dance', 'hiking', 'tennis', 'football', 'basketball', 'other'] &&
+                    request.resource.data.duration is number &&
+                    request.resource.data.duration > 0 &&
+                    request.resource.data.date is timestamp;
       allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
     
-    // Regras para savedMeals (refeições guardadas)
+    // Regras para savedMeals - com validação de dados
     match /savedMeals/{savedMealId} {
       allow read: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow create: if request.auth != null && 
+                    request.auth.uid == request.resource.data.userId &&
+                    request.resource.data.name is string &&
+                    request.resource.data.name.size() > 0 &&
+                    request.resource.data.foods is list;
       allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
     

@@ -49,6 +49,9 @@ import './global.css';
 import { initializeBadges } from './services/gamification';
 import { bootstrapNotifications } from './services/notifications';
 
+// Suprimir warning de SafeAreaView deprecated de dependências internas
+LogBox.ignoreLogs(['SafeAreaView has been deprecated']);
+
 // Garantir que o OAuth flow pode completar (importante para deep linking)
 WebBrowser.maybeCompleteAuthSession();
 

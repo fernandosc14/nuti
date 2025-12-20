@@ -13,6 +13,8 @@ import { db } from './firebase';
 import { collection, query, where, getDocs, Timestamp, addDoc, orderBy } from 'firebase/firestore';
 import type { UserProfile } from '../context/UserContext';
 import { getAgeFromDate } from '../utils/nutritionUtils';
+import { functions } from './firebase';
+import { httpsCallable } from 'firebase/functions';
 
 /**
  * Interface para itens de comida
@@ -61,6 +63,22 @@ export interface PlateAnalysis {
   totalProtein: number;
   totalCarbs: number;
   totalFat: number;
+}
+
+/**
+ * Verifica rate limit antes de operações pesadas (image analysis, barcode lookup)
+ * Retorna { allowed: boolean, remaining: number, blockedUntil?: number }
+ */
+export async function checkRateLimitBeforeAnalysis(): Promise<{ allowed: boolean; remaining: number; blockedUntil?: number }> {
+  try {
+    const checkRateLimit = httpsCallable(functions, 'checkRateLimit');
+    const response = await checkRateLimit({});
+    return response.data as { allowed: boolean; remaining: number; blockedUntil?: number };
+  } catch (error: any) {
+    console.warn('Rate limit check failed (will allow operation):', error.message);
+    // Em caso de erro, permitir operação (fail-open para melhor UX)
+    return { allowed: true, remaining: 100 };
+  }
 }
 
 /**
@@ -733,7 +751,6 @@ function isFoodProduct(productName: string, category?: string): boolean {
   
   // Se contém palavras que indicam que NÃO é alimento, retornar false
   if (nonFoodKeywords.some(keyword => nameLower.includes(keyword) || categoryLower.includes(keyword))) {
-    console.log('[Barcode] Produto identificado como não-alimento:', productName);
     return false;
   }
   
@@ -764,7 +781,7 @@ async function getFoodFromUPCitemdb(barcode: string): Promise<FoodItem | null> {
       return null;
     }
 
-    console.log('[Barcode] Tentando UPCitemdb para código:', cleanBarcode);
+
     const response = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${cleanBarcode}`, {
       headers: {
         'User-Agent': 'Nuti/1.0',
@@ -790,11 +807,8 @@ async function getFoodFromUPCitemdb(barcode: string): Promise<FoodItem | null> {
 
     // Verificar se é realmente um alimento
     if (!isFoodProduct(productName, item.category)) {
-      console.log('[Barcode] Produto não é alimento (UPCitemdb):', productName);
       return null;
     }
-
-    console.log('[Barcode] Produto encontrado no UPCitemdb:', productName);
 
     // UPCitemdb não fornece valores nutricionais diretamente
     // Para código de barras, usar o nome original completo (sem normalização)
@@ -808,7 +822,7 @@ async function getFoodFromUPCitemdb(barcode: string): Promise<FoodItem | null> {
       image: item.images?.[0] || undefined,
     };
   } catch (error) {
-    console.log('[Barcode] Erro ao buscar no UPCitemdb:', error);
+
     return null;
   }
 }
@@ -826,13 +840,13 @@ async function getFoodFromAlternativeAPI(barcode: string): Promise<FoodItem | nu
 
     // Tentar buscar em uma API alternativa simples
     // Nota: Esta é uma tentativa genérica, pode não funcionar para todos os códigos
-    console.log('[Barcode] Tentando API alternativa para código:', cleanBarcode);
+
     
     // Por enquanto, retornamos null - pode ser expandido no futuro
     // com outras APIs que não exigem chave ou com chaves configuráveis
     return null;
   } catch (error) {
-    console.log('[Barcode] Erro ao buscar em API alternativa:', error);
+
     return null;
   }
 }
@@ -845,13 +859,11 @@ async function getFoodFromOpenFoodFacts(barcode: string): Promise<FoodItem | nul
     const cleanBarcode = barcode.trim().replace(/\D/g, ''); // Remove caracteres não numéricos
     
     if (!cleanBarcode || cleanBarcode.length < 8) {
-      console.log('[Barcode] Código de barras inválido:', barcode, '->', cleanBarcode);
+
       return null;
     }
 
-    console.log('[Barcode] Buscando produto com código:', cleanBarcode);
     const url = `https://world.openfoodfacts.org/api/v0/product/${cleanBarcode}.json`;
-    console.log('[Barcode] URL:', url);
 
     const response = await fetch(url, {
       headers: {
@@ -860,20 +872,20 @@ async function getFoodFromOpenFoodFacts(barcode: string): Promise<FoodItem | nul
     });
     
     if (!response.ok) {
-      console.log('[Barcode] Erro na resposta HTTP:', response.status, response.statusText);
+
       return null;
     }
 
     const data = await response.json();
-    console.log('[Barcode] Status da API:', data.status);
+
     
     if (data.status !== 1 || !data.product) {
-      console.log('[Barcode] Produto não encontrado na base de dados do Open Food Facts');
+
       return null;
     }
 
     const product = data.product;
-    console.log('[Barcode] Produto encontrado:', product.product_name || 'Sem nome');
+
     
     // Para código de barras, usar o nome COMPLETO sem normalização
     // Priorizar product_name completo (pode conter marca, tamanho, etc.)
@@ -912,18 +924,18 @@ async function getFoodFromOpenFoodFacts(barcode: string): Promise<FoodItem | nul
     productName = productName.trim();
     
     if (!productName || productName.length === 0) {
-      console.log('[Barcode] Produto sem nome');
+
       return null;
     }
     
-    console.log('[Barcode] Nome do produto (sem normalização):', productName);
+
 
     // Verificar se é realmente um alimento (Open Food Facts já filtra, mas vamos garantir)
     const categories = product.categories || product.categories_tags || [];
     const categoryString = Array.isArray(categories) ? categories.join(' ') : String(categories);
     
     if (!isFoodProduct(productName, categoryString)) {
-      console.log('[Barcode] Produto não é alimento (Open Food Facts):', productName);
+
       return null;
     }
 
@@ -962,11 +974,11 @@ async function getFoodFromOpenFoodFacts(barcode: string): Promise<FoodItem | nul
     const saturatedFat = parseFloat((nutriments['saturated-fat_100g'] || nutriments['saturated-fat'] || nutriments.saturated_fat_100g || 0).toFixed(1));
     const transFat = parseFloat((nutriments['trans-fat_100g'] || nutriments['trans-fat'] || nutriments.trans_fat_100g || 0).toFixed(1));
     
-    console.log('[Barcode] Valores nutricionais:', { calories, protein, carbs, fat, sugars, fiber, sodium, saturatedFat, transFat });
+
     
     // Se não tiver valores nutricionais, tentar buscar na base local pelo nome
     if (calories === 0 && protein === 0 && carbs === 0 && fat === 0) {
-      console.log('[Barcode] Produto sem valores nutricionais, tentando base local...');
+
       
       const nameLower = productName.toLowerCase();
       
@@ -1025,8 +1037,16 @@ async function getFoodFromOpenFoodFacts(barcode: string): Promise<FoodItem | nul
  * Tenta Open Food Facts primeiro, depois UPCitemdb, depois Barcode Lookup
  */
 export async function getFoodByBarcode(barcode: string): Promise<FoodItem | null> {
-  const cleanBarcode = barcode.trim().replace(/\D/g, '');
-  
+  try {
+    // Verificar rate limit antes de operação pesada
+    const rateLimitCheck = await checkRateLimitBeforeAnalysis();
+    if (!rateLimitCheck.allowed) {
+      const blockedMinutes = rateLimitCheck.blockedUntil ? Math.ceil((rateLimitCheck.blockedUntil - Date.now()) / 60000) : 5;
+      throw new Error(`Rate limit exceeded. Please try again in ${blockedMinutes} minutes.`);
+    }
+
+    const cleanBarcode = barcode.trim().replace(/\D/g, '');
+    
   if (!cleanBarcode || cleanBarcode.length < 8) {
     console.log('[Barcode] Código de barras inválido:', barcode, '->', cleanBarcode);
     return null;
@@ -1110,6 +1130,11 @@ export async function getFoodByBarcode(barcode: string): Promise<FoodItem | null
 
   console.log('[Barcode] Produto não encontrado em nenhuma API');
   return null;
+} catch (error: any) {
+  console.error('[Barcode] Erro em getFoodByBarcode:', error);
+  return null;
+}
+
 }
 
 /**
@@ -2277,6 +2302,13 @@ export async function transcribeAudio(audioUri: string): Promise<string> {
  */
 export async function analyzeFoodImage(imageUri: string, language: string = 'en'): Promise<FoodItem> {
   try {
+    // Verificar rate limit antes de operação pesada
+    const rateLimitCheck = await checkRateLimitBeforeAnalysis();
+    if (!rateLimitCheck.allowed) {
+      const blockedMinutes = rateLimitCheck.blockedUntil ? Math.ceil((rateLimitCheck.blockedUntil - Date.now()) / 60000) : 5;
+      throw new Error(`Rate limit exceeded. Please try again in ${blockedMinutes} minutes. (${rateLimitCheck.remaining} operations remaining)`);
+    }
+    
     // Tentar usar Google Gemini primeiro (suporta vision)
     const geminiApiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
     

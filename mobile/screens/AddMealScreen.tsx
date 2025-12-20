@@ -539,13 +539,11 @@ export function AddMealScreen({ navigation, route }: any) {
         // porque quando a câmera nativa abre, o componente pode perder o foco
         // e os estados podem não estar atualizados ainda
         if (isCameraActiveRef.current || isProcessingRef.current) {
-          console.log('[AddMeal] Cleanup bloqueado: câmera ativa ou processando');
           return;
         }
         
         // Verificar estados também (mas refs têm prioridade)
         if (loading || capturedImage || editingFood) {
-          console.log('[AddMeal] Cleanup bloqueado: loading, capturedImage ou editingFood');
           return;
         }
         
@@ -652,9 +650,7 @@ export function AddMealScreen({ navigation, route }: any) {
 
         try {
           // Analisar imagem com IA
-          console.log('Starting food image analysis, URI:', imageUri);
           const analyzed = await analyzeFoodImage(imageUri, language);
-          console.log('Food image analysis completed');
           setAnalyzedFood(analyzed);
           
           if (analyzed.plateFoods && analyzed.plateFoods.length > 0) {
@@ -749,8 +745,7 @@ export function AddMealScreen({ navigation, route }: any) {
             }
           }
         } catch (error: any) {
-          console.error('Error analyzing food image:', error);
-          console.error('Error details:', error.message);
+
           
           // Verificar se é erro de "não é comida" e usar tradução
           let errorMessage = error.message || t('addMeal.errorProcessing') || 'Erro ao processar imagem';
@@ -775,8 +770,7 @@ export function AddMealScreen({ navigation, route }: any) {
         isCameraActiveRef.current = false;
       }
     } catch (error: any) {
-      console.error('Error taking photo:', error);
-      console.error('Error details:', error.message);
+
       
       isCameraActiveRef.current = false; // Resetar flag em caso de erro
       isProcessingRef.current = false; // Resetar flag de processamento
@@ -796,7 +790,7 @@ export function AddMealScreen({ navigation, route }: any) {
     }
 
     const cleanBarcode = barcode.trim();
-    console.log('[AddMeal] Processando código de barras:', cleanBarcode);
+
 
     setLoading(true);
     setIsSearching(false); // Não é pesquisa, é código de barras
@@ -861,7 +855,7 @@ export function AddMealScreen({ navigation, route }: any) {
         text2: `${food.name} ${t('addMeal.addedToList') || 'adicionado à lista'}`,
       });
     } catch (error: any) {
-      console.error('Error searching barcode:', error);
+
       Toast.show({
         type: 'error',
         text1: t('common.error') || 'Erro',
@@ -958,7 +952,7 @@ export function AddMealScreen({ navigation, route }: any) {
       const base64String = await uriToBase64(imageUri);
       return base64String;
     } catch (error: any) {
-      console.error('Error converting image to base64:', error);
+
       return null;
     }
   };
@@ -1272,7 +1266,7 @@ export function AddMealScreen({ navigation, route }: any) {
       if (food.image && food.image.startsWith('file://')) {
         imageUrl = await convertImageToBase64(food.image);
         if (!imageUrl) {
-          console.warn('Failed to convert image to base64, continuing without image');
+
         }
       }
 

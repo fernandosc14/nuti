@@ -8,6 +8,11 @@ import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import { Resend } from "resend";
 
+// Import new modules
+import { checkRateLimit, cleanupRateLimits, monitorRateLimits } from "./rateLimit";
+import { cleanupOldData, deleteUserData, exportUserData, cleanupOldMessages } from "./dataRetention";
+import { performanceMonitor, dailySummary, healthCheck, logEvent, withLogging } from "./monitoring";
+
 // Initialize Firebase Admin
 admin.initializeApp();
 
@@ -164,4 +169,21 @@ For support, contact us at support@nuti.app
       }
     }
 );
+
+/**
+ * Export all Cloud Functions
+ */
+
+// Rate Limiting functions
+export { cleanupRateLimits, monitorRateLimits };
+
+// Data Retention & GDPR functions  
+export { cleanupOldData, deleteUserData, exportUserData, cleanupOldMessages };
+
+// Monitoring & Logging functions
+export { performanceMonitor, dailySummary, healthCheck };
+
+// Utility exports
+export { logEvent, withLogging, checkRateLimit };
+
 
