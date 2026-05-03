@@ -1,7 +1,7 @@
 /**
  * PremiumPromoCard
  * 
- * Card promocional para promover o upgrade para Premium
+ * Promotional card to promote the Premium upgrade.
  */
 
 import React from 'react';
@@ -29,7 +29,7 @@ export function PremiumPromoCard({ onPress, variant = 'default', fullWidth = fal
   const { t } = useLanguage();
   const accent = theme.colors.primary || '#3BB273';
 
-  // Não mostrar se já é premium
+  // Don't show if already premium
   if (profile?.plan === 'premium') {
     return null;
   }
@@ -95,16 +95,16 @@ export function PremiumPromoCard({ onPress, variant = 'default', fullWidth = fal
           },
         ]}
       >
-        {/* Gradiente de fundo sutil */}
+        {/* Subtle background gradient */}
         <View style={[styles.gradientOverlay, { backgroundColor: '#8B5CF6' + '10' }]} />
         
         <View style={styles.content}>
-          {/* Ícone Premium */}
+          {/* Premium icon */}
           <View style={[styles.iconContainer, { backgroundColor: '#8B5CF6' + '20' }]}>
             <Text style={styles.iconEmoji}>⭐</Text>
           </View>
 
-          {/* Texto */}
+          {/* Text */}
           <View style={styles.textContainer}>
             <Text style={[styles.title, { color: theme.colors.text }]}>
               {t('premium.promoTitle') || 'Desbloqueia Premium'}
@@ -114,7 +114,7 @@ export function PremiumPromoCard({ onPress, variant = 'default', fullWidth = fal
             </Text>
           </View>
 
-          {/* Features rápidas */}
+          {/* Amazing features */}
           <View style={styles.featuresContainer}>
             <View style={styles.feature}>
               <Ionicons name="checkmark-circle" size={16} color="#8B5CF6" />
@@ -130,7 +130,7 @@ export function PremiumPromoCard({ onPress, variant = 'default', fullWidth = fal
             </View>
           </View>
 
-          {/* Botão */}
+          {/* Button */}
           <View style={[styles.button, { backgroundColor: '#8B5CF6' }]}>
             <Text style={styles.buttonText}>
               {t('premium.upgradeButton') || 'Atualizar Agora'}

@@ -42,8 +42,8 @@ export function EditNameScreen({ navigation }: any) {
     if (!age || age === '') return null;
     const ageNum = parseInt(age);
     if (isNaN(ageNum)) return null;
-    if (ageNum < 18) return t('profile.ageTooYoung') || 'Idade mínima é 18 anos';
-    if (ageNum > 120) return t('profile.ageTooOld') || 'Idade máxima é 120 anos';
+    if (ageNum < 18) return t('profile.ageTooYoung') || 'Minimum age is 18';
+    if (ageNum > 120) return t('profile.ageTooOld') || 'Maximum age is 120';
     return null;
   };
 
@@ -77,8 +77,8 @@ export function EditNameScreen({ navigation }: any) {
     if (!name.trim()) {
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: t('profile.nameRequired') || 'Por favor, insira um nome',
+        text1: t('common.error') || 'Error',
+        text2: t('profile.nameRequired') || 'Please enter a name',
       });
       return;
     }
@@ -87,8 +87,8 @@ export function EditNameScreen({ navigation }: any) {
     if (!isAgeValid()) {
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: ageError() || t('profile.invalidAge') || 'Por favor, insira uma idade válida (18-120)',
+        text1: t('common.error') || 'Error',
+        text2: ageError() || t('profile.invalidAge') || 'Please enter a valid age (18-120)',
       });
       return;
     }
@@ -114,8 +114,8 @@ export function EditNameScreen({ navigation }: any) {
       
       Toast.show({
         type: 'success',
-        text1: t('profile.updateSuccess') || 'Sucesso',
-        text2: t('profile.nameUpdated') || 'Nome atualizado com sucesso',
+        text1: t('profile.updateSuccess') || 'Success',
+        text2: t('profile.nameUpdated') || 'Name updated successfully',
       });
       
       // Navegar após um pequeno delay para o Toast aparecer
@@ -126,8 +126,8 @@ export function EditNameScreen({ navigation }: any) {
       setLoading(false);
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: error.message || t('profile.updateError') || 'Erro ao atualizar nome',
+        text1: t('common.error') || 'Error',
+        text2: error.message || t('profile.updateError') || 'Error updating name',
       });
     }
   };
@@ -168,7 +168,7 @@ export function EditNameScreen({ navigation }: any) {
             textAlign: 'center',
             marginRight: 40,
           }}>
-            {t('profile.editName') || 'Editar nome'}
+            {t('profile.editName') || 'Edit name'}
           </Text>
         </View>
 
@@ -186,7 +186,7 @@ export function EditNameScreen({ navigation }: any) {
               color: theme.colors.text,
               marginBottom: 8,
             }}>
-              {t('profile.name') || 'Nome'}
+              {t('profile.name') || 'Name'}
             </Text>
             <TextInput
               style={{
@@ -201,7 +201,7 @@ export function EditNameScreen({ navigation }: any) {
               }}
               value={name}
               onChangeText={setName}
-              placeholder={t('profile.namePlaceholder') || 'Insira o nome aqui'}
+              placeholder={t('profile.namePlaceholder') || 'Enter your name here'}
               placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
               autoFocus={true}
               maxLength={50}
@@ -216,7 +216,7 @@ export function EditNameScreen({ navigation }: any) {
               color: theme.colors.text,
               marginBottom: 8,
             }}>
-              {t('profile.age') || 'Idade'}
+              {t('profile.age') || 'Age'}
             </Text>
             <TextInput
               style={{
@@ -238,7 +238,7 @@ export function EditNameScreen({ navigation }: any) {
                   setAge(numericValue);
                 }
               }}
-              placeholder={t('profile.agePlaceholder') || 'Insira a idade'}
+              placeholder={t('profile.agePlaceholder') || 'Enter your age'}
               placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
               keyboardType="numeric"
               maxLength={3}
@@ -287,7 +287,7 @@ export function EditNameScreen({ navigation }: any) {
                   ? theme.colors.textSecondary || '#9CA3AF'
                   : '#FFFFFF',
               }}>
-                {t('profile.save') || 'Salvar'}
+                {t('profile.save') || 'Save'}
               </Text>
             )}
           </TouchableOpacity>

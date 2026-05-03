@@ -630,7 +630,7 @@ export function AddMealScreen({ navigation, route }: any) {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
         isCameraActiveRef.current = false;
-        Alert.alert('Permissão necessária', 'Precisas de permitir acesso à câmera');
+        Alert.alert('Permission required', 'You need to allow access to the camera.');
         return;
       }
 
@@ -748,16 +748,16 @@ export function AddMealScreen({ navigation, route }: any) {
 
           
           // Verificar se é erro de "não é comida" e usar tradução
-          let errorMessage = error.message || t('addMeal.errorProcessing') || 'Erro ao processar imagem';
+          let errorMessage = error.message || t('addMeal.errorProcessing') || 'Error processing image';
           if (error.message?.includes('does not contain food')) {
-            errorMessage = t('addMeal.errorNotFood') || 'Esta imagem não contém comida. Por favor, tire uma foto de comida.';
+            errorMessage = t('addMeal.errorNotFood') || 'This image does not contain food. Please take a photo of food.';
           } else if (error.message?.includes('Nenhuma API')) {
-            errorMessage = 'API de análise de imagem não configurada. Configure EXPO_PUBLIC_GEMINI_API_KEY ou EXPO_PUBLIC_OPENAI_API_KEY no .env';
+            errorMessage = 'Image analysis is unavailable. Please try again later.';
           }
           
           Toast.show({
             type: 'error',
-            text1: t('addMeal.error') || 'Erro',
+            text1: t('addMeal.error') || 'Error',
             text2: errorMessage,
           });
         } finally {
@@ -803,8 +803,8 @@ export function AddMealScreen({ navigation, route }: any) {
       if (!food) {
         Toast.show({
           type: 'error',
-          text1: t('common.error') || 'Erro',
-          text2: t('addMeal.barcodeNotFound') || `Produto não encontrado na base de dados.\nCódigo: ${cleanBarcode}\nTente pesquisar pelo nome do produto.`,
+          text1: t('common.error') || 'Error',
+          text2: t('addMeal.barcodeNotFound') || `Product not found in the database.\nCode: ${cleanBarcode}\nTry searching by product name.`,
           visibilityTime: 5000,
         });
         setLoading(false);
@@ -817,8 +817,8 @@ export function AddMealScreen({ navigation, route }: any) {
       if (selectedFoods.length >= 5) {
         Toast.show({
           type: 'info',
-          text1: t('addMeal.maxFoodsReached') || 'Limite atingido',
-          text2: t('addMeal.maxFoodsMessage') || 'Podes adicionar no máximo 5 alimentos por refeição',
+          text1: t('addMeal.maxFoodsReached') || 'Limit reached',
+          text2: t('addMeal.maxFoodsMessage') || 'You can add up to 5 foods per meal',
         });
         setLoading(false);
         setScanned(false);
@@ -851,15 +851,15 @@ export function AddMealScreen({ navigation, route }: any) {
       
       Toast.show({
         type: 'success',
-        text1: t('addMeal.productFound') || 'Produto encontrado',
-        text2: `${food.name} ${t('addMeal.addedToList') || 'adicionado à lista'}`,
+        text1: t('addMeal.productFound') || 'Product found',
+        text2: `${food.name} ${t('addMeal.addedToList') || 'added to the list'}`,
       });
     } catch (error: any) {
 
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: error.message || t('addMeal.barcodeError') || 'Erro ao buscar produto',
+        text1: t('common.error') || 'Error',
+        text2: error.message || t('addMeal.barcodeError') || 'Error fetching product',
       });
       // Permitir escanear novamente
       setScanned(false);
@@ -873,8 +873,8 @@ export function AddMealScreen({ navigation, route }: any) {
     if (!barcodeInput.trim()) {
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: t('addMeal.barcodeEmpty') || 'Por favor, insira um código de barras',
+        text1: t('common.error') || 'Error',
+        text2: t('addMeal.barcodeEmpty') || 'Please enter a barcode',
       });
       return;
     }
@@ -904,27 +904,27 @@ export function AddMealScreen({ navigation, route }: any) {
               if (base64String) {
                 resolve(base64String);
               } else {
-                reject(new Error('Falha ao converter blob para base64'));
+                reject(new Error('Error! Please try again later.'));
               }
             };
             reader.onerror = () => {
-              reject(new Error('Erro ao ler o blob'));
+              reject(new Error('Error! Please try again later.'));
             };
             reader.readAsDataURL(xhr.response);
           } catch (readError: any) {
-            reject(new Error('Erro ao processar resposta: ' + readError.message));
+            reject(new Error('Error processing response'));
           }
         } else {
-          reject(new Error(`Falha ao carregar imagem: status ${xhr.status}`));
+          reject(new Error(`Failed to load image`));
         }
       };
       
       xhr.onerror = function () {
-        reject(new Error('Erro de rede ao carregar imagem'));
+        reject(new Error('Error! Please try again later.'));
       };
       
       xhr.onabort = function () {
-        reject(new Error('Carregamento da imagem cancelado'));
+        reject(new Error('Error! Please try again later.'));
       };
       
       xhr.responseType = 'blob';
@@ -963,8 +963,8 @@ export function AddMealScreen({ navigation, route }: any) {
     if (selectedFoods.length >= 5) {
       Toast.show({
         type: 'info',
-        text1: t('addMeal.maxFoodsReached') || 'Limite atingido',
-        text2: t('addMeal.maxFoodsMessage') || 'Podes adicionar no máximo 5 alimentos por refeição',
+        text1: t('addMeal.maxFoodsReached') || 'Limit reached',
+        text2: t('addMeal.maxFoodsMessage') || 'You can add up to 5 foods per meal',
       });
       return;
     }
@@ -1452,8 +1452,8 @@ export function AddMealScreen({ navigation, route }: any) {
     if (!finalMealName) {
       Toast.show({
         type: 'info',
-        text1: t('addMeal.mealNameRequired') || 'Nome da refeição necessário',
-        text2: t('addMeal.pleaseEnterMealName') || 'Por favor, insira um nome para a refeição',
+        text1: t('addMeal.mealNameRequired') || 'Meal name required',
+        text2: t('addMeal.pleaseEnterMealName') || 'Please enter a meal name',
       });
       return;
     }
@@ -1474,8 +1474,8 @@ export function AddMealScreen({ navigation, route }: any) {
 
       Toast.show({
         type: 'success',
-        text1: t('addMeal.mealSaved') || 'Refeição guardada!',
-        text2: t('addMeal.mealSavedMessage') || 'A refeição foi guardada com sucesso',
+        text1: t('addMeal.mealSaved') || 'Meal saved!',
+        text2: t('addMeal.mealSavedMessage') || 'The meal was saved successfully',
       });
 
       // Recarregar lista de refeições guardadas
@@ -1533,7 +1533,7 @@ export function AddMealScreen({ navigation, route }: any) {
     }
 
     // Usar nome do editingFood ou gerar um nome padrão
-    const finalMealName = editingFood.name || t('addMeal.photoMeal') || 'Refeição da foto';
+    const finalMealName = editingFood.name || t('addMeal.photoMeal') || 'Photo meal';
 
     setSavingMeal(true);
     try {
@@ -1551,8 +1551,8 @@ export function AddMealScreen({ navigation, route }: any) {
 
       Toast.show({
         type: 'success',
-        text1: t('addMeal.mealSaved') || 'Refeição guardada!',
-        text2: t('addMeal.mealSavedMessage') || 'A refeição foi guardada com sucesso',
+        text1: t('addMeal.mealSaved') || 'Meal saved!',
+        text2: t('addMeal.mealSavedMessage') || 'The meal was saved successfully',
       });
 
       // Recarregar lista de refeições guardadas
@@ -1703,8 +1703,8 @@ export function AddMealScreen({ navigation, route }: any) {
     if (editingSavedMealFoods.length >= 5) {
       Toast.show({
         type: 'info',
-        text1: t('addMeal.maxFoodsReached') || 'Limite atingido',
-        text2: t('addMeal.maxFoodsMessage') || 'Podes adicionar no máximo 5 alimentos por refeição',
+        text1: t('addMeal.maxFoodsReached') || 'Limit reached',
+        text2: t('addMeal.maxFoodsMessage') || 'You can add up to 5 foods per meal',
       });
       return;
     }
@@ -1744,8 +1744,8 @@ export function AddMealScreen({ navigation, route }: any) {
     if (!finalMealName) {
       Toast.show({
         type: 'info',
-        text1: t('addMeal.mealNameRequired') || 'Nome da refeição necessário',
-        text2: t('addMeal.pleaseEnterMealName') || 'Por favor, insira um nome para a refeição',
+        text1: t('addMeal.mealNameRequired') || 'Meal name required',
+        text2: t('addMeal.pleaseEnterMealName') || 'Please enter a meal name',
       });
       return;
     }
@@ -1786,8 +1786,8 @@ export function AddMealScreen({ navigation, route }: any) {
       console.error('Error saving changes:', error);
       Toast.show({
         type: 'error',
-        text1: t('addMeal.error') || 'Erro',
-        text2: error.message || t('addMeal.couldNotSaveChanges') || 'Não foi possível guardar as alterações',
+        text1: t('addMeal.error') || 'Error',
+        text2: error.message || t('addMeal.couldNotSaveChanges') || 'The changes could not be saved.',
       });
     } finally {
       setSavingChanges(false);
@@ -2272,19 +2272,19 @@ export function AddMealScreen({ navigation, route }: any) {
                 color: theme.colors.text,
                 marginBottom: 8,
               }}>
-                {t('addMeal.adjustDescription') || 'Ajustar com descrição'}
+                {t('addMeal.adjustDescription') || 'Adjust with description'}
               </Text>
               <Text style={{
                 fontSize: 12,
                 color: theme.colors.textSecondary || '#9CA3AF',
                 marginBottom: 8,
               }}>
-                {t('addMeal.adjustDescriptionHint') || 'Descreva alimentos que faltam, erros ou detalhes que não foram detectados na imagem'}
+                {t('addMeal.adjustDescriptionHint') || 'Describe missing foods, errors, or details that were not detected in the image'}
               </Text>
               <TextInput
                 value={foodDescription}
                 onChangeText={setFoodDescription}
-                placeholder={t('addMeal.adjustDescriptionPlaceholder') || 'Ex: Tem também batata frita, o arroz está mais cozido, falta salada...'}
+                placeholder={t('addMeal.adjustDescriptionPlaceholder') || 'Ex: There are also French fries, the rice is more cooked, missing salad...'}
                 placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
                 multiline
                 numberOfLines={4}
@@ -2353,16 +2353,16 @@ export function AddMealScreen({ navigation, route }: any) {
                         
                         Toast.show({
                           type: 'success',
-                          text1: t('addMeal.adjustSuccess') || 'Sucesso',
-                          text2: t('addMeal.adjustSuccessMessage') || 'Alimentos ajustados com sucesso',
+                          text1: t('addMeal.adjustSuccess') || 'Success',
+                          text2: t('addMeal.adjustSuccessMessage') || 'Foods adjusted successfully',
                         });
                       }
                     } catch (error: any) {
                       console.error('Error analyzing description:', error);
                       Toast.show({
                         type: 'error',
-                        text1: t('addMeal.error') || 'Erro',
-                        text2: error.message || t('addMeal.adjustError') || 'Erro ao ajustar alimentos',
+                        text1: t('addMeal.error') || 'Error',
+                        text2: error.message || t('addMeal.adjustError') || 'Error adjusting foods',
                       });
                     } finally {
                       setAnalyzingDescription(false);
@@ -2389,7 +2389,7 @@ export function AddMealScreen({ navigation, route }: any) {
                       fontSize: 14,
                       fontWeight: '600',
                     }}>
-                      {t('addMeal.adjustButton') || 'Ajustar'}
+                      {t('addMeal.adjustButton') || 'Adjust'}
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -2556,7 +2556,7 @@ export function AddMealScreen({ navigation, route }: any) {
             color: theme.colors.text,
                       marginBottom: 8,
           }}>
-                      {t('addMeal.improvementSuggestions') || 'Sugestões de melhorias:'}
+                      {t('addMeal.improvementSuggestions') || 'Suggestions for improvement:'}
           </Text>
                     {getHealthScoreData().suggestions.map((suggestion, index) => (
                       <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 }}>
@@ -2688,7 +2688,7 @@ export function AddMealScreen({ navigation, route }: any) {
                   color: theme.colors.text,
                   marginBottom: 20,
                 }}>
-                  {t('addMeal.selectMealType') || 'Selecionar Tipo de Refeição'}
+                  {t('addMeal.selectMealType') || 'Select Meal Type'}
                 </Text>
 
                 {mealTypes.map((type) => (
@@ -2771,7 +2771,7 @@ export function AddMealScreen({ navigation, route }: any) {
           }}>
             {mode === 'search' ? t('addMeal.searchDescription') : 
              mode === 'camera' ? t('addMeal.cameraDescription') : 
-             mode === 'confirm' ? (t('addMeal.confirmDescription') || 'Confirma e edita a refeição sugerida') :
+             mode === 'confirm' ? (t('addMeal.confirmDescription') || 'Confirm and edit the suggested meal') :
              t('addMeal.barcodeDescription')}
           </Text>
         </View>
@@ -2839,7 +2839,7 @@ export function AddMealScreen({ navigation, route }: any) {
                     fontSize: 16,
                     fontWeight: '500',
                   }}
-                  placeholder={t('addMeal.searchPlaceholder') || 'Pesquisar alimento...'}
+                  placeholder={t('addMeal.searchPlaceholder') || 'Search for food...'}
                   placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
                   value={searchQuery}
                   onChangeText={setSearchQuery}
@@ -2926,7 +2926,7 @@ export function AddMealScreen({ navigation, route }: any) {
                     paddingVertical: 8,
                     borderRadius: 8,
                   }}>
-                    {t('addMeal.scanBarcode') || 'Aponte a câmera para o código de barras'}
+                    {t('addMeal.scanBarcode') || 'Point the camera at the barcode'}
                   </Text>
                   <TouchableOpacity
                     onPress={() => {
@@ -2946,7 +2946,7 @@ export function AddMealScreen({ navigation, route }: any) {
                       fontSize: 16,
                       fontWeight: '600',
                     }}>
-                      {t('common.cancel') || 'Cancelar'}
+                      {t('common.cancel') || 'Cancel'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -2959,8 +2959,8 @@ export function AddMealScreen({ navigation, route }: any) {
                     if (!result.granted) {
                       Toast.show({
                         type: 'error',
-                        text1: t('common.error') || 'Erro',
-                        text2: t('profile.cameraPermissionRequired') || 'Permissão de câmera necessária',
+                        text1: t('common.error') || 'Error',
+                        text2: t('profile.cameraPermissionRequired') || 'Camera permission required',
                       });
                       return;
                     }
@@ -2987,7 +2987,7 @@ export function AddMealScreen({ navigation, route }: any) {
                   marginLeft: 8,
                   fontSize: 16,
                 }}>
-                  📷 {t('addMeal.scanBarcode') || 'Escanear Código de Barras'}
+                  📷 {t('addMeal.scanBarcode') || 'Scan Barcode'}
                 </Text>
               </TouchableOpacity>
             )}
@@ -3013,7 +3013,7 @@ export function AddMealScreen({ navigation, route }: any) {
                     borderColor: theme.colors.border || '#E5E7EB',
                     fontSize: 16,
                   }}
-                  placeholder={t('addMeal.barcodePlaceholder') || 'Ou digite o código de barras...'}
+                  placeholder={t('addMeal.barcodePlaceholder') || 'Or enter the barcode...'}
                   placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
                   value={barcodeInput}
                   onChangeText={setBarcodeInput}
@@ -3082,7 +3082,7 @@ export function AddMealScreen({ navigation, route }: any) {
                 fontWeight: '700',
                 fontSize: 18,
               }}>
-                {t('addMeal.camera') || 'Tirar Foto'}
+                {t('addMeal.camera') || 'Take Photo'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -3122,7 +3122,7 @@ export function AddMealScreen({ navigation, route }: any) {
                   color: theme.colors.text,
                   marginBottom: 16,
                 }}>
-                  {t('addMeal.popularFoods') || 'Alimentos Populares'}
+                  {t('addMeal.popularFoods') || 'Popular Foods'}
                 </Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                   {popularFoods.map((food) => {
@@ -3170,7 +3170,7 @@ export function AddMealScreen({ navigation, route }: any) {
                       color: theme.colors.text,
                       marginLeft: 8,
                     }}>
-                      {t('addMeal.searchTip') || 'Dica de Pesquisa'}
+                      {t('addMeal.searchTip') || 'Search Tip'}
                     </Text>
                   </View>
                   <Text style={{
@@ -3178,7 +3178,7 @@ export function AddMealScreen({ navigation, route }: any) {
                     color: theme.colors.textSecondary || '#9CA3AF',
                     lineHeight: 20,
                   }}>
-                    {t('addMeal.searchTipMessage') || 'Pesquise por nome do alimento, tipo de comida ou ingrediente. Podes pesquisar em qualquer idioma!'}
+                    {t('addMeal.searchTipMessage') || 'Search by food name, type of cuisine, or ingredient. You can search in any language!'}
                   </Text>
                 </View>
               </View>
@@ -3205,7 +3205,7 @@ export function AddMealScreen({ navigation, route }: any) {
               fontWeight: '700',
               color: theme.colors.text,
             }}>
-              {t('addMeal.results') || 'Resultados'}
+              {t('addMeal.results') || 'Results'}
             </Text>
               <View style={{
                 backgroundColor: theme.colors.primary + '20',
@@ -3376,7 +3376,7 @@ export function AddMealScreen({ navigation, route }: any) {
                 color: theme.colors.text,
                 marginBottom: 12,
               }}>
-                {t('addMeal.mealName') || 'Nome da Refeição'}
+                {t('addMeal.mealName') || 'Meal Name'}
               </Text>
               <TextInput
                 style={{
@@ -3388,7 +3388,7 @@ export function AddMealScreen({ navigation, route }: any) {
                   fontSize: 16,
                   color: theme.colors.text,
                 }}
-                placeholder={t('addMeal.mealNamePlaceholder') || 'Ex: Almoço, Jantar, Lanche...'}
+                placeholder={t('addMeal.mealNamePlaceholder') || 'Example: Lunch, Dinner, Snack...'}
                 placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
                 value={mealName}
                 onChangeText={setMealName}
@@ -3440,7 +3440,7 @@ export function AddMealScreen({ navigation, route }: any) {
                 fontWeight: '700',
                 color: theme.colors.text,
               }}>
-                {t('addMeal.selectedFoods') || 'Alimentos Selecionados'}
+                {t('addMeal.selectedFoods') || 'Selected Foods'}
               </Text>
               <TouchableOpacity
                 onPress={() => setSelectedFoods([])}
@@ -3708,7 +3708,7 @@ export function AddMealScreen({ navigation, route }: any) {
                         color: theme.colors.text,
                         marginBottom: 8,
                       }}>
-                        {t('addMeal.improvementSuggestions') || 'Sugestões de melhorias:'}
+                        {t('addMeal.improvementSuggestions') || 'Suggestions for improvement:'}
                       </Text>
                       {healthScoreData.suggestions.map((suggestion, index) => (
                         <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 }}>
@@ -3937,14 +3937,14 @@ export function AddMealScreen({ navigation, route }: any) {
                   fontWeight: '700',
                   color: theme.colors.text,
                 }}>
-                  {t('addMeal.savedMeals') || 'Refeições Guardadas'}
+                  {t('addMeal.savedMeals') || 'Stored Meals'}
                 </Text>
                 <Text style={{
                   fontSize: 13,
                   color: theme.colors.textSecondary || '#9CA3AF',
                   marginTop: 4,
                 }}>
-                  {t('addMeal.savedMealsDescription') || 'Adicione rapidamente refeições que guardou anteriormente'}
+                  {t('addMeal.savedMealsDescription') || 'Quickly add meals you have stored previously'}
                 </Text>
               </View>
               <TouchableOpacity
@@ -3971,14 +3971,14 @@ export function AddMealScreen({ navigation, route }: any) {
                     marginTop: 16,
                     marginBottom: 8,
                   }}>
-                    {t('addMeal.noSavedMeals') || 'Nenhuma refeição guardada'}
+                    {t('addMeal.noSavedMeals') || 'No saved meals'}
                   </Text>
                   <Text style={{
                     fontSize: 14,
                     color: theme.colors.textSecondary || '#9CA3AF',
                     textAlign: 'center',
                   }}>
-                    {t('addMeal.noSavedMealsDescription') || 'Guarde refeições para adicioná-las rapidamente mais tarde'}
+                    {t('addMeal.noSavedMealsDescription') || 'Save meals to add them quickly later'}
                   </Text>
                 </View>
               ) : (
@@ -4188,7 +4188,7 @@ export function AddMealScreen({ navigation, route }: any) {
                   fontSize: 13,
                   color: theme.colors.textSecondary || '#9CA3AF',
                 }}>
-                  {t('addMeal.editSavedMeal') || 'Editar e adicionar refeição'}
+                  {t('addMeal.editSavedMeal') || 'Edit and add meal'}
                 </Text>
               </View>
               {/* Botão de Salvar (aparece apenas quando há alterações) */}
@@ -4225,12 +4225,12 @@ export function AddMealScreen({ navigation, route }: any) {
                   color: theme.colors.text,
                   marginBottom: 12,
                 }}>
-                  {t('addMeal.mealName') || 'Nome da Refeição'}
+                  {t('addMeal.mealName') || 'Meal Name'}
                 </Text>
                 <TextInput
                   value={editingSavedMealName}
                   onChangeText={setEditingSavedMealName}
-                  placeholder={t('addMeal.mealNamePlaceholder') || 'Nome da refeição'}
+                  placeholder={t('addMeal.mealNamePlaceholder') || 'Example: Lunch, Dinner, Snack...'}
                   style={{
                     backgroundColor: theme.colors.card,
                     borderRadius: 12,
@@ -4344,7 +4344,7 @@ export function AddMealScreen({ navigation, route }: any) {
                     fontWeight: '600',
                     color: theme.colors.text,
                   }}>
-                    {t('addMeal.selectedFoods') || 'Alimentos'}
+                    {t('addMeal.selectedFoods') || 'Food'}
                   </Text>
                 </View>
                 {editingSavedMealFoods.map((food) => {
@@ -4415,7 +4415,7 @@ export function AddMealScreen({ navigation, route }: any) {
                             color: theme.colors.textSecondary || '#9CA3AF',
                             fontWeight: '500',
                           }}>
-                            {t('addMeal.quantity') || 'Quantidade'}
+                            {t('addMeal.quantity') || 'Quantity'}
                           </Text>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, width: 110 }}>
                             <TouchableOpacity
@@ -4690,7 +4690,7 @@ export function AddMealScreen({ navigation, route }: any) {
                     marginBottom: 20,
                     paddingHorizontal: 24,
                   }}>
-                    {t('addMeal.selectIcon') || 'Selecionar Ícone'}
+                    {t('addMeal.selectIcon') || 'Select Icon'}
                   </Text>
 
                   <ScrollView 
@@ -4805,7 +4805,7 @@ export function AddMealScreen({ navigation, route }: any) {
                     textAlign: 'center',
                     marginBottom: 12,
                   }}>
-                    {t('addMeal.deleteSavedMeal') || 'Eliminar refeição guardada'}
+                    {t('addMeal.deleteSavedMeal') || 'Discard stored meal'}
                   </Text>
 
                   {/* Mensagem */}
@@ -4816,7 +4816,7 @@ export function AddMealScreen({ navigation, route }: any) {
                     marginBottom: 24,
                     lineHeight: 22,
                   }}>
-                    {t('addMeal.deleteSavedMealConfirm') || 'Tens a certeza que queres eliminar esta refeição guardada?'}
+                    {t('addMeal.deleteSavedMealConfirm') || 'Are you sure you want to discard this stored meal?'}
                   </Text>
 
                   {/* Botões */}
@@ -4837,7 +4837,7 @@ export function AddMealScreen({ navigation, route }: any) {
                         fontWeight: '600',
                         color: theme.colors.text,
                       }}>
-                        {t('common.cancel') || 'Cancelar'}
+                        {t('common.cancel') || 'Cancel'}
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -4848,8 +4848,8 @@ export function AddMealScreen({ navigation, route }: any) {
                           await deleteDoc(doc(db, 'savedMeals', editingSavedMeal.id));
                           Toast.show({
                             type: 'success',
-                            text1: t('addMeal.savedMealDeleted') || 'Refeição eliminada',
-                            text2: t('addMeal.savedMealDeletedMessage') || 'A refeição guardada foi eliminada com sucesso',
+                            text1: t('addMeal.savedMealDeleted') || 'Stored meal discarded',
+                            text2: t('addMeal.savedMealDeletedMessage') || 'The stored meal was successfully discarded',
                           });
                           setEditingSavedMeal(null);
                           setEditingSavedMealFoods([]);
@@ -4864,8 +4864,8 @@ export function AddMealScreen({ navigation, route }: any) {
                           console.error('Error deleting saved meal:', error);
                           Toast.show({
                             type: 'error',
-                            text1: t('addMeal.error') || 'Erro',
-                            text2: error.message || t('addMeal.couldNotDeleteSavedMeal') || 'Não foi possível eliminar a refeição',
+                            text1: t('addMeal.error') || 'Error',
+                            text2: error.message || t('addMeal.couldNotDeleteSavedMeal') || 'Could not discard the meal',
                           });
                         }
                       }}
@@ -4883,7 +4883,7 @@ export function AddMealScreen({ navigation, route }: any) {
                         fontWeight: '600',
                         color: '#FFFFFF',
                       }}>
-                        {t('common.delete') || 'Eliminar'}
+                        {t('common.delete') || 'Discard'}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -4934,7 +4934,7 @@ export function AddMealScreen({ navigation, route }: any) {
                     color: theme.colors.text,
                     marginBottom: 20,
                   }}>
-                    {t('addMeal.selectMealType') || 'Selecionar Tipo de Refeição'}
+                    {t('addMeal.selectMealType') || 'Select Meal Type'}
                   </Text>
 
                   {mealTypes.map((type) => (
@@ -5024,7 +5024,7 @@ export function AddMealScreen({ navigation, route }: any) {
               color: theme.colors.text,
               marginBottom: 20,
             }}>
-              {t('addMeal.selectMealType') || 'Selecionar Tipo de Refeição'}
+              {t('addMeal.selectMealType') || 'Select Meal Type'}
             </Text>
 
             {mealTypes.map((type) => (

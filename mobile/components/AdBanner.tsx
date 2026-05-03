@@ -1,8 +1,8 @@
 /**
  * AdBanner
  * 
- * Componente reutilizável para exibir banners de anúncios
- * Apenas para usuários free
+ * Reusable component for displaying banner ads
+ * For free users only
  */
 
 import React from 'react';
@@ -13,18 +13,18 @@ import { getAdUnitId } from '../config/ads';
 
 interface AdBannerProps {
   /**
-   * Tipo de banner
-   * - 'banner': Banner padrão (320x50)
-   * - 'largeBanner': Banner grande (320x100)
-   * - 'mediumRectangle': Retângulo médio (300x250)
+   * Type of banner
+   * - 'banner': Default banner (320x50)
+   * - 'largeBanner': Large banner (320x100)
+   * - 'mediumRectangle': Medium rectangle (300x250)
    */
   adSize?: 'banner' | 'largeBanner' | 'mediumRectangle';
   
   /**
-   * Posição do ad
-   * - 'top': Topo da tela
-   * - 'bottom': Rodapé da tela
-   * - 'inline': Entre conteúdo
+   * Position of the ad
+   * - 'top': Top of the screen
+   * - 'bottom': Bottom of the screen
+   * - 'inline': Between content
    */
   position?: 'top' | 'bottom' | 'inline';
 }
@@ -35,12 +35,12 @@ export function AdBanner({
 }: AdBannerProps) {
   const { isPremium, adsEnabled, isInitialized } = useAds();
 
-  // Não mostrar ads para usuários premium ou se não estiver inicializado
+  // Do not show ads for premium users or if not initialized
   if (isPremium || !adsEnabled || !isInitialized) {
     return null;
   }
 
-  // Definir tamanho do banner
+  // Define banner size
   const getBannerSize = () => {
     switch (adSize) {
       case 'banner':
@@ -54,7 +54,7 @@ export function AdBanner({
     }
   };
 
-  // Obter o ID do ad unit
+  // Get the ad unit ID
   const unitId = getAdUnitId(adSize === 'mediumRectangle' ? 'mediumRectangle' : 'banner');
 
   return (

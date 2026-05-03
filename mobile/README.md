@@ -1,74 +1,76 @@
-/**
- * README.md
- * 
- * Documentação do projeto Nuti Mobile
- */
+
+# Nuti - Mobile App
+
+Native mobile app developed with Expo, React Native, NativeWind, Firebase, and Groq API.
 
 # Nuti - App Mobile
 
 App mobile nativa desenvolvida com Expo + React Native + NativeWind + Firebase + Groq API.
 
-## 🚀 Stack Técnica
+<p align="center">
+   <img src="assets/frame-welkome-video.png" alt="Nuti app screenshot" width="720" />
+</p>
 
-- **Framework**: React Native com Expo
-- **Estilos**: NativeWind (Tailwind para React Native)
-- **Base de dados**: Firebase Firestore
-- **Autenticação**: Firebase Authentication (email + Google Sign-In)
-- **Estado global**: Context API + AsyncStorage
-- **APIs externas**:
-  - Groq API para chat IA (modelo mixtral-8x7b)
-  - Open Food Facts API para pesquisa de alimentos
+
+## 🚀 Tech Stack
+
+- **Framework**: React Native with Expo
+- **Styling**: NativeWind (Tailwind for React Native)
+- **Database**: Firebase Firestore
+- **Authentication**: Firebase Authentication (email + Google Sign-In)
+- **Global State**: Context API + AsyncStorage
+- **External APIs**:
+   - Groq API for AI chat (mixtral-8x7b model)
+   - Open Food Facts API for food search
 - **Push Notifications**: expo-notifications
-- **Câmara e código de barras**: expo-camera + expo-barcode-scanner
-- **Animações**: react-native-reanimated e moti
-- **Navegação**: @react-navigation/native-stack
+- **Camera & Barcode**: expo-camera + expo-barcode-scanner
+- **Animations**: react-native-reanimated and moti
+- **Navigation**: @react-navigation/native-stack
 
-## 📦 Instalação
 
-1. Instalar dependências:
+## 📦 Installation
+
+1. Install dependencies:
 ```bash
 cd mobile
 npm install
 ```
 
-2. Configurar variáveis de ambiente:
-Criar arquivo `.env` na raiz da pasta `mobile/`:
+2. Configure environment variables:
+Copy the `.env.example` file to `.env` in the `mobile/` folder and fill in your credentials:
 ```
-EXPO_PUBLIC_FIREBASE_API_KEY=your-api-key
-EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-EXPO_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
-EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=123456789
-EXPO_PUBLIC_FIREBASE_APP_ID=your-app-id
-EXPO_PUBLIC_GROQ_API_KEY=your-groq-api-key
-EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=your-google-web-client-id.apps.googleusercontent.com
+cp .env.example .env
 ```
+**Never commit your real `.env` file to a public repository!**
 
-**Importante - Configuração do Google Sign-In:**
-1. Acesse o [Google Cloud Console](https://console.cloud.google.com/)
-2. Crie um projeto ou selecione um existente
-3. Ative a API "Google+ API" ou "Google Identity"
-4. Vá em "Credenciais" > "Criar credenciais" > "ID do cliente OAuth 2.0"
-5. Selecione "Aplicativo Web" como tipo
-6. Adicione os URIs de redirecionamento autorizados:
-   - Para Expo Go: `https://auth.expo.io/@your-expo-username/nuti`
-   - Para desenvolvimento local: `https://auth.expo.io/@anonymous/nuti`
-   - (O Expo gera automaticamente o URI correto no runtime)
-7. Copie o "ID do cliente" e cole em `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` no `.env`
-8. No Firebase Console, vá em Authentication > Sign-in method > Google
-9. Ative o método de login do Google e use o mesmo Client ID do passo 7
-10. Adicione o mesmo Client ID em "Web SDK configuration"
 
-3. Iniciar o projeto:
+**Important - Google Sign-In Configuration:**
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select an existing one
+3. Enable the "Google+ API" or "Google Identity" API
+4. Go to "Credentials" > "Create Credentials" > "OAuth 2.0 Client ID"
+5. Select "Web Application" as the type
+6. Add the following authorized redirect URIs:
+   - For Expo Go: `https://auth.expo.io/@your-expo-username/nuti`
+   - For local development: `https://auth.expo.io/@anonymous/nuti`
+   - (Expo automatically generates the correct URI at runtime)
+7. Copy the "Client ID" and paste it into `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` in your `.env`
+8. In the Firebase Console, go to Authentication > Sign-in method > Google
+9. Enable the Google sign-in method and use the same Client ID from step 7
+10. Add the same Client ID in the "Web SDK configuration"
+
+
+3. Start the project:
 ```bash
 npm start
 ```
 
-## 🏗️ Estrutura do Projeto
+## 🏗️ Project Structure
 
 ```
 mobile/
-├── App.tsx                 # Componente principal
-├── screens/               # Telas da aplicação
+├── App.tsx                 # Main app component
+├── screens/                # Application screens
 │   ├── LoginScreen.tsx
 │   ├── RegisterScreen.tsx
 │   ├── DashboardScreen.tsx
@@ -76,91 +78,95 @@ mobile/
 │   ├── ChatScreen.tsx
 │   ├── ProfileScreen.tsx
 │   └── PremiumOnboardingScreen.tsx
-├── components/           # Componentes reutilizáveis
+├── components/             # Reusable components
 │   ├── MealCard.tsx
 │   ├── BadgeItem.tsx
 │   └── ChartCircle.tsx
-├── services/            # Serviços e APIs
+├── services/               # Services and APIs
 │   ├── firebase.ts
 │   ├── api.ts
 │   └── gamification.ts
-├── context/            # Context API
+├── context/                # Context API
 │   └── UserContext.tsx
-├── utils/              # Utilitários
+├── utils/                  # Utilities
 │   ├── streakUtils.ts
 │   └── formatters.ts
-└── assets/             # Recursos (imagens, ícones)
+└── assets/                 # Assets (images, icons)
 ```
 
-## 🔥 Funcionalidades
+## 🔥 Features
 
-### Autenticação
-- Login e registo com email/password
-- Login com Google Sign-In
-- Gestão de sessão com AsyncStorage
+### Authentication
+- Login and registration with email/password
+- Google Sign-In support
+- Session management with AsyncStorage
 
 ### Dashboard
-- Gráfico circular de calorias consumidas / meta diária
-- Lista de refeições recentes
-- Streak atual (dias consecutivos)
-- Badges desbloqueadas
-- Botão flutuante para adicionar refeição
+- Circular chart for calories consumed / daily goal
+- List of recent meals
+- Current streak (consecutive days)
+- Unlocked badges
+- Floating button to add a meal
 
-### Refeições
-- Pesquisa de alimentos (Open Food Facts API)
-- Tirar foto de refeição (expo-camera)
-- Ler código de barras (expo-barcode-scanner)
-- Guardar refeição no Firestore
+### Meals
+- Food search (Open Food Facts API)
+- Take meal photo (expo-camera)
+- Barcode scanning (expo-barcode-scanner)
+- Save meal to Firestore
 
-### Chat IA
-- Chat interativo com IA via Groq API
-- Histórico guardado no Firestore
-- Limite de mensagens para utilizadores free (5/dia)
-- Ilimitado para Premium
+### AI Chat
+- Interactive chat with AI via Groq API
+- History saved in Firestore
+- Message limit for free users (5/day)
+- Unlimited for Premium users
 
-### Gamificação
-- Streaks: +1 dia se ≥3 refeições registadas
-- Badges automáticas:
-  - Primeira Refeição
-  - 3 Dias Seguidos
-  - Semana Perfeita (7 dias)
-  - Mês Perfeito (30 dias)
-  - 10 Refeições
-  - 50 Refeições
+### Gamification
+- Streaks: +1 day if ≥3 meals registered
 
-### Perfil
-- Visualizar e editar dados pessoais
-- Ver streak e badges
-- Ativar Premium (simulação)
+   - Automatic badges:
+      - First Meal
+      - 3 Days in a Row
+      - Perfect Week (7 days)
+      - Perfect Month (30 days)
+      - 10 Meals
+      - 50 Meals
 
-## 🏗️ Testar no Android
 
-### Opção 1: Expo Go (Mais Rápido - Recomendado para começar)
+### Profile
+- View and edit personal data
+- View streak and badges
+- Activate Premium (simulation)
 
-1. **Instala Expo Go no teu telefone Android** (Google Play Store)
 
-2. **Inicia o servidor:**
+## 🏗️ Testing on Android
+
+### Option 1: Expo Go (Faster - Recommended for getting started)
+
+1. **Install Expo Go on your Android phone** (Google Play Store)
+
+2. **Start the server:**
 ```bash
 cd mobile
 npm start
 ```
 
-3. **Conecta o telefone:**
-   - Certifica-te que telefone e computador estão na mesma rede Wi-Fi
-   - Escaneia o QR code com Expo Go OU
-   - Digita o URL manualmente no Expo Go
+3. **Connect your phone:**
+   - Make sure your phone and computer are on the same Wi-Fi network
+   - Scan the QR code with Expo Go OR
+   - Enter the URL manually in Expo Go
 
-4. **Google Sign-In funciona automaticamente** via web proxy (não precisa de SHA-1)
+4. **Google Sign-In works automatically** via web proxy (no SHA-1 needed)
 
-### Opção 2: Dev Client (Mais Completo - Para produção)
+### Option 2: Dev Client (Full Experience - For production)
 
-**Para Google Sign-In nativo funcionar, precisas do SHA-1:**
+**To enable native Google Sign-In, you need the SHA-1:**
 
 **Windows:**
 ```powershell
 cd mobile/android
-.\get-sha1.ps1
+./get-sha1.ps1
 ```
+
 
 **Linux/Mac:**
 ```bash
@@ -175,21 +181,21 @@ cd mobile/android/app
 keytool -list -v -keystore debug.keystore -alias androiddebugkey -storepass android -keypass android
 ```
 
-**Depois configura no Google Cloud Console:**
-1. Cria OAuth 2.0 Client ID (tipo Android)
+**Then configure in Google Cloud Console:**
+1. Create OAuth 2.0 Client ID (Android type)
 2. Package name: `com.nuti.app`
-3. SHA-1: (colar o SHA-1 obtido)
-4. Adiciona `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` no `.env`
+3. SHA-1: (paste the SHA-1 obtained)
+4. Add `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` to your `.env`
 
-**Build do Dev Client:**
+**Dev Client Build:**
 
-**Local (requer Android Studio):**
+**Local (requires Android Studio):**
 ```bash
 cd mobile
 npx expo run:android
 ```
 
-**Com EAS (mais fácil):**
+**With EAS (easier):**
 ```bash
 npm install -g eas-cli
 eas login
@@ -197,40 +203,40 @@ cd mobile
 eas build --platform android --profile development
 ```
 
-📖 **Guia completo:** Ver `TESTE_ANDROID.md` para instruções detalhadas
+📖 **Full guide:** See `TESTE_ANDROID.md` for detailed instructions
 
-## 📝 Notas Importantes
+## 📝 Important Notes
 
-1. **Firebase**: Configurar projeto Firebase e adicionar credenciais no `.env`
-2. **Groq API**: Obter API key em https://console.groq.com
+1. **Firebase**: Set up your Firebase project and add credentials to `.env`
+2. **Groq API**: Get your API key at https://console.groq.com
 3. **Google Sign-In**: 
-   - Para Expo Go: Usa o proxy do Expo (`auth.expo.io`) - funciona automaticamente com `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`
-   - Para dev-client/standalone: Pode usar login nativo (requer configuração adicional no Google Console)
-   - O redirect URI é gerado automaticamente pelo Expo no runtime
-   - Certifique-se de que o mesmo Client ID está configurado no Firebase Console
-4. **Badges**: As badges são inicializadas automaticamente na primeira execução
-5. **Variáveis de Ambiente**: Nunca commitar o ficheiro `.env` - usar `.env.example` como referência
+   - For Expo Go: Uses Expo proxy (`auth.expo.io`) - works automatically with `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`
+   - For dev-client/standalone: Can use native login (requires additional setup in Google Console)
+   - The redirect URI is generated automatically by Expo at runtime
+   - Make sure the same Client ID is configured in the Firebase Console
+4. **Badges**: Badges are initialized automatically on first run
+5. **Environment Variables**: Never commit the `.env` file - use `.env.example` as a reference
 
-## 🎨 Tema
+## 🎨 Theme
 
-- Cor primária: Verde (#3BB273)
-- Modo claro/escuro: Automático baseado no sistema
-- UI moderna e fluida com animações suaves
+- Primary color: Green (#3BB273)
+- Light/dark mode: Automatic based on system
+- Modern and fluid UI with smooth animations
 
-## 📱 Requisitos
+## 📱 Requirements
 
 - Node.js 18+
 - Expo CLI
-- Android Studio (para build Android)
-- Conta Expo (para EAS Build)
+- Android Studio (for Android builds)
+- Expo account (for EAS Build)
 
-## 🔐 Segurança
+## 🔐 Security
 
-- Nunca commitar arquivo `.env`
-- Manter API keys seguras
-- Usar variáveis de ambiente para todas as credenciais
+- Never commit the `.env` file
+- Keep API keys secure
+- Use environment variables for all credentials
 
-## 📄 Licença
+## 📄 License
 
-Projeto privado - Todos os direitos reservados
+Private project - All rights reserved
 

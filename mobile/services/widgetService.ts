@@ -1,7 +1,7 @@
 /**
  * Widget Service
- * 
- * Serviço para atualizar dados do widget nativo
+ *
+ * Service to update native widget data
  */
 
 import { Platform, NativeModules } from 'react-native';
@@ -20,7 +20,7 @@ interface WidgetData {
   waterGoal: number;
 }
 
-// Interface para módulo nativo Android
+// Interface for native Android module
 interface WidgetModule {
   updateWidgetData: (data: WidgetData) => void;
 }
@@ -36,7 +36,7 @@ if (Platform.OS === 'android') {
 }
 
 /**
- * Atualiza os dados do widget
+ * Updates the widget data
  */
 export function updateWidgetData(data: WidgetData): void {
   if (Platform.OS === 'android' && WidgetModule) {
@@ -46,8 +46,8 @@ export function updateWidgetData(data: WidgetData): void {
       console.error('Error updating widget:', error);
     }
   } else if (Platform.OS === 'ios') {
-    // iOS usa App Groups e UserDefaults
-    // Encaminha para serviço iOS (requer implementação nativa para persistir)
+    // iOS uses App Groups and UserDefaults
+    // Forwards to iOS service (requires native implementation to persist)
     try {
       updateWidgetDataIOS(data);
     } catch (error) {
@@ -57,7 +57,7 @@ export function updateWidgetData(data: WidgetData): void {
 }
 
 /**
- * Atualiza widget com dados do dashboard
+ * Updates widget with dashboard data
  */
 export function updateWidgetFromDashboard(
   consumed: number,

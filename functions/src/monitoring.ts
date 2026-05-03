@@ -1,20 +1,20 @@
 /**
- * Monitoring & Logging - Observabilidade
- * 
- * Sistema de logs estruturados e alertas
+ * Monitoring & Logging - Observability
+ *
+ * Structured logging and alert system
  */
 
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import { logger } from "firebase-functions/v1";
 
-// Get db lazily to avoid initialization issues
+// Lazily get db to avoid initialization issues
 function getDb() {
   return admin.firestore();
 }
 
 /**
- * Interface para eventos de log estruturado
+ * Interface for structured log events
  */
 interface LogEvent {
   timestamp: Date;
@@ -23,11 +23,11 @@ interface LogEvent {
   status: "success" | "error" | "warning";
   details?: any;
   errorMessage?: string;
-  duration?: number; // em ms
+  duration?: number; // in ms
 }
 
 /**
- * Registar evento estruturado
+ * Register structured log event
  */
 export async function logEvent(event: LogEvent): Promise<void> {
   try {
@@ -38,7 +38,7 @@ export async function logEvent(event: LogEvent): Promise<void> {
       logLevel: event.status.toUpperCase(),
     });
     
-    // Também registar no Cloud Logging
+    // Also log to Cloud Logging
     if (event.status === "error") {
       logger.error(`[${event.action}] ${event.errorMessage}`, event.details);
     } else if (event.status === "warning") {
@@ -52,7 +52,7 @@ export async function logEvent(event: LogEvent): Promise<void> {
 }
 
 /**
- * Cloud Function: Monitorer de performance (a cada 5 minutos)
+ * Cloud Function: Performance monitor (every 5 minutes)
  */
 export const performanceMonitor = functions
   .pubsub
@@ -63,7 +63,7 @@ export const performanceMonitor = functions
       const now = Date.now();
       const fiveMinutesAgo = now - (5 * 60 * 1000);
       
-      // Contar operações recentes
+      // Count recent operations
       const recentLogs = await db
         .collection("logs")
         .where("timestamp", ">=", new Date(fiveMinutesAgo))
@@ -95,20 +95,20 @@ export const performanceMonitor = functions
         stats.avgDuration = Math.round(totalDuration / durationCount);
       }
       
-      // Registar estatísticas
+      // Log statistics
       await db.collection("metrics").add({
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
         period: "5m",
         stats,
       });
       
-      // Alerta se error rate > 5%
+      // Alert if error rate > 5%
       const errorRate = stats.totalEvents > 0 ? (stats.errors / stats.totalEvents) * 100 : 0;
       if (errorRate > 5) {
         logger.warn(`⚠️ High error rate: ${errorRate.toFixed(2)}%`, stats);
       }
       
-      // Alerta se avg duration > 1000ms
+      // Alert if avg duration > 1000ms
       if (stats.avgDuration > 1000) {
         logger.warn(`⚠️ High latency: ${stats.avgDuration}ms average`, stats);
       }
@@ -122,7 +122,7 @@ export const performanceMonitor = functions
   });
 
 /**
- * Cloud Function: Resumo diário de atividades
+ * Cloud Function: Daily activity summary
  */
 export const dailySummary = functions
   .pubsub
@@ -133,7 +133,7 @@ export const dailySummary = functions
       const db = getDb();
       const yesterday = Date.now() - (24 * 60 * 60 * 1000);
       
-      // Contar atividades do dia
+      // Count today's activities
       const mealsAdded = await db
         .collection("meals")
         .where("date", ">=", new Date(yesterday))
@@ -163,7 +163,7 @@ export const dailySummary = functions
         errors: errors.size,
       };
       
-      // Registar resumo
+      // Log summary
       await db.collection("summaries").add({
         ...summary,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
@@ -179,7 +179,7 @@ export const dailySummary = functions
   });
 
 /**
- * Cloud Function: Health check do sistema
+ * Cloud Function: System health check
  */
 export const healthCheck = functions
   .pubsub
@@ -205,7 +205,7 @@ export const healthCheck = functions
         health.checks.firestore = false;
       }
       
-      // Check Auth (verificar se firebase auth está acessível)
+      // Check Auth (verify if firebase auth is accessible)
       try {
         // Se conseguir verificar um token, auth está ok
         health.checks.auth = true;
@@ -213,7 +213,7 @@ export const healthCheck = functions
         health.checks.auth = false;
       }
       
-      // Determinar status geral
+      // Determine overall status
       const checksPass = Object.values(health.checks).filter(v => v).length;
       if (checksPass === 3) {
         health.status = "healthy";
@@ -223,7 +223,7 @@ export const healthCheck = functions
         health.status = "unhealthy";
       }
       
-      // Registar health check
+      // Log health check
       await db.collection("health").add(health);
       
       if (health.status !== "healthy") {
@@ -239,8 +239,8 @@ export const healthCheck = functions
   });
 
 /**
- * Middleware para logging automático de operações críticas
- * Use em callable functions importantes
+ * Middleware for automatic logging of critical operations
+ * Use in important callable functions
  */
 export function withLogging(
   operationName: string,

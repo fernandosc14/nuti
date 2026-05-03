@@ -80,43 +80,43 @@ export function ChatScreen({ navigation }: any) {
     
     if (goal === 'lose') {
       mealSuggestions = [
-        t('chat.suggestionLose1') || 'Como posso perder peso?',
-        t('chat.suggestionLose2') || 'Quais alimentos ajudam a queimar gordura?',
-        t('chat.suggestionLose3') || 'Dá-me dicas para um déficit calórico',
-        t('chat.suggestionLose4') || 'Receitas para perder peso',
+        t('chat.suggestionLose1') || 'How can I lose weight?',
+        t('chat.suggestionLose2') || 'Which foods help burn fat?',
+        t('chat.suggestionLose3') || 'Give me tips for a calorie deficit',
+        t('chat.suggestionLose4') || 'Recipes for losing weight',
       ];
       workoutSuggestions = [
-        t('chat.workoutSuggestionLose1') || 'Que treinos ajudam a queimar gordura?',
-        t('chat.workoutSuggestionLose2') || 'Sugere-me um treino para perder peso',
-        t('chat.workoutSuggestionLose3') || 'Quais exercícios são melhores para emagrecer?',
-        t('chat.workoutSuggestionLose4') || 'Dá-me um plano de treino para queimar calorias',
+        t('chat.workoutSuggestionLose1') || 'Which workouts help burn fat?',
+        t('chat.workoutSuggestionLose2') || 'Suggest a workout to lose weight',
+        t('chat.workoutSuggestionLose3') || 'What exercises are best for weight loss?',
+        t('chat.workoutSuggestionLose4') || 'Give me a workout plan to burn calories',
       ];
     } else if (goal === 'gain') {
       mealSuggestions = [
-        t('chat.suggestionGain1') || 'Como posso ganhar peso?',
-        t('chat.suggestionGain2') || 'Quais alimentos são ricos em calorias?',
-        t('chat.suggestionGain3') || 'Dá-me dicas para ganhar massa muscular',
-        t('chat.suggestionGain4') || 'Receitas para ganhar peso',
+        t('chat.suggestionGain1') || 'How can I gain weight?',
+        t('chat.suggestionGain2') || 'Which foods are high in calories?',
+        t('chat.suggestionGain3') || 'Give me tips to gain muscle mass',
+        t('chat.suggestionGain4') || 'Recipes to gain weight',
       ];
       workoutSuggestions = [
-        t('chat.workoutSuggestionGain1') || 'Que treinos ajudam a ganhar massa muscular?',
-        t('chat.workoutSuggestionGain2') || 'Sugere-me um treino para hipertrofia',
-        t('chat.workoutSuggestionGain3') || 'Quais exercícios são melhores para ganhar massa muscular?',
-        t('chat.workoutSuggestionGain4') || 'Dá-me um plano de treino para ganhar massa',
+        t('chat.workoutSuggestionGain1') || 'Which workouts help gain muscle mass?',
+        t('chat.workoutSuggestionGain2') || 'Suggest a workout for hypertrophy',
+        t('chat.workoutSuggestionGain3') || 'What exercises are best for gaining muscle mass?',
+        t('chat.workoutSuggestionGain4') || 'Give me a workout plan to gain muscle mass',
       ];
     } else {
       // maintain ou sem objetivo definido
       mealSuggestions = [
-        t('chat.suggestionMaintain1') || 'Como manter o meu peso?',
-        t('chat.suggestionMaintain2') || 'Quais são os melhores alimentos para manutenção?',
-        t('chat.suggestionMaintain3') || 'Dá-me dicas para uma dieta equilibrada',
-        t('chat.suggestionMaintain4') || 'Receitas saudáveis',
+        t('chat.suggestionMaintain1') || 'How can I maintain my weight?',
+        t('chat.suggestionMaintain2') || 'What are the best foods for maintenance?',
+        t('chat.suggestionMaintain3') || 'Give me tips for a balanced diet',
+        t('chat.suggestionMaintain4') || 'Healthy recipes',
       ];
       workoutSuggestions = [
-        t('chat.workoutSuggestionMaintain1') || 'Que treinos são melhores para manutenção?',
-        t('chat.workoutSuggestionMaintain2') || 'Sugere-me um treino equilibrado',
-        t('chat.workoutSuggestionMaintain3') || 'Quais exercícios ajudam a manter a forma?',
-        t('chat.workoutSuggestionMaintain4') || 'Dá-me um plano de treino para manutenção',
+        t('chat.workoutSuggestionMaintain1') || 'Which workouts are best for maintenance?',
+        t('chat.workoutSuggestionMaintain2') || 'Suggest a balanced workout',
+        t('chat.workoutSuggestionMaintain3') || 'What exercises help maintain fitness?',
+        t('chat.workoutSuggestionMaintain4') || 'Give me a workout plan for maintenance',
       ];
     }
     
@@ -314,8 +314,8 @@ export function ChatScreen({ navigation }: any) {
     if (!user) {
       Toast.show({
         type: 'error',
-        text1: t('chat.error') || 'Erro',
-        text2: 'Utilizador não autenticado',
+        text1: t('chat.error') || 'Error',
+        text2: 'User not authenticated',
       });
       return;
     }
@@ -323,8 +323,8 @@ export function ChatScreen({ navigation }: any) {
     if (messages.length === 0) {
       Toast.show({
         type: 'info',
-        text1: t('chat.chatCleared') || 'Chat limpo',
-        text2: 'Não há mensagens para eliminar',
+        text1: t('chat.chatCleared') || 'Chat cleared',
+        text2: 'There are no messages to delete',
       });
       setShowOptionsDropdown(false);
       return;
@@ -349,15 +349,15 @@ export function ChatScreen({ navigation }: any) {
       
       Toast.show({
         type: 'success',
-        text1: t('chat.chatCleared') || 'Chat limpo',
-        text2: t('chat.chatClearedMessage') || 'Todas as mensagens foram eliminadas',
+        text1: t('chat.chatCleared') || 'Chat cleared',
+        text2: t('chat.chatClearedMessage') || 'All messages have been deleted',
       });
     } catch (error: any) {
       console.error('Error clearing chat:', error);
       Toast.show({
         type: 'error',
-        text1: t('chat.error') || 'Erro',
-        text2: error.message || t('chat.errorClearingChat') || 'Erro ao limpar o chat',
+        text1: t('chat.error') || 'Error',
+        text2: error.message || t('chat.errorClearingChat') || 'Error clearing chat',
       });
     } finally {
       setClearingChat(false);
@@ -381,8 +381,8 @@ export function ChatScreen({ navigation }: any) {
       if (!permission.granted) {
         Toast.show({
           type: 'error',
-          text1: 'Permissão necessária',
-          text2: 'Precisa de permissão para gravar áudio.',
+          text1: 'Permission required',
+          text2: 'Permission to record audio is needed.',
         });
         return;
       }
@@ -422,16 +422,16 @@ export function ChatScreen({ navigation }: any) {
           if (!audioRecorder.isRecording) {
             Toast.show({
               type: 'error',
-              text1: 'Erro',
-              text2: 'Não foi possível iniciar a gravação. Tenta novamente.',
+              text1: 'Error',
+              text2: 'Unable to start recording. Please try again.',
             });
             return;
           }
         } catch (retryError) {
           Toast.show({
             type: 'error',
-            text1: 'Erro',
-            text2: 'Não foi possível iniciar a gravação. Tenta novamente.',
+            text1: 'Error',
+            text2: 'Unable to start recording. Please try again.',
           });
           return;
         }
@@ -456,8 +456,8 @@ export function ChatScreen({ navigation }: any) {
       console.error('Error starting recording:', error);
       Toast.show({
         type: 'error',
-        text1: 'Erro',
-        text2: error.message || 'Não foi possível iniciar a gravação. Reinicia a app.',
+        text1: 'Error',
+        text2: error.message || 'Unable to start recording. Please restart the app.',
       });
     }
   };
@@ -503,8 +503,8 @@ export function ChatScreen({ navigation }: any) {
         if (recordingDuration < 3) {
           Toast.show({
             type: 'info',
-            text1: t('chat.recordingTooShort') || 'Gravação muito curta',
-            text2: t('chat.recordingTooShortMessage') || 'Grava pelo menos 3 segundos',
+            text1: t('chat.recordingTooShort') || 'Very short recording',
+            text2: t('chat.recordingTooShortMessage') || 'Please record at least 3 seconds',
           });
           return;
         }
@@ -585,8 +585,8 @@ export function ChatScreen({ navigation }: any) {
           if (!trimmedText || trimmedText.length === 0) {
             Toast.show({
               type: 'info',
-              text1: t('chat.noSpeechDetected') || 'Nenhuma fala detectada',
-              text2: t('chat.noSpeechDetectedMessage') || 'Por favor, fala para o microfone',
+              text1: t('chat.noSpeechDetected') || 'No speech detected',
+              text2: t('chat.noSpeechDetectedMessage') || 'Please speak into the microphone',
             });
             return;
           }
@@ -602,15 +602,15 @@ export function ChatScreen({ navigation }: any) {
             // Texto foi detectado mas é ruído ou inválido
             Toast.show({
               type: 'info',
-              text1: t('chat.audioNotRecognized') || 'Áudio não reconhecido',
-              text2: t('chat.audioNotRecognizedMessage') || 'Tenta falar mais claramente',
+              text1: t('chat.audioNotRecognized') || 'Audio not recognized',
+              text2: t('chat.audioNotRecognizedMessage') || 'Please try to speak more clearly',
             });
           }
         } catch (error: any) {
           Toast.show({
             type: 'error',
-            text1: t('chat.error') || 'Erro',
-            text2: error.message || (t('chat.errorMessage') || 'Erro ao transcrever áudio'),
+            text1: t('chat.error') || 'Error',
+            text2: error.message || (t('chat.errorMessage') || 'Error transcribing audio'),
           });
         } finally {
           setTranscribing(false);
@@ -622,15 +622,15 @@ export function ChatScreen({ navigation }: any) {
             await FileSystem.deleteAsync(uri, { idempotent: true });
           }
         } catch (deleteError) {
-          console.warn('Erro ao deletar arquivo temporário:', deleteError);
+          console.warn('Error deleting temporary file:', deleteError);
         }
       }
     } catch (error: any) {
       console.error('Error stopping recording:', error);
       Toast.show({
         type: 'error',
-        text1: 'Erro',
-        text2: 'Erro ao parar a gravação',
+        text1: 'Error',
+        text2: 'Error stopping recording',
       });
     }
   };
@@ -682,8 +682,8 @@ export function ChatScreen({ navigation }: any) {
     if (profile?.plan !== 'premium') {
       Toast.show({
         type: 'info',
-        text1: t('chat.premiumRequired') || 'Premium Necessário',
-        text2: t('chat.premiumRequiredMessage') || 'O chat está disponível apenas para utilizadores Premium. Atualiza para Premium para aceder ao chat!',
+        text1: t('chat.premiumRequired') || 'Premium Required',
+        text2: t('chat.premiumRequiredMessage') || 'Chat is available for Premium users only. Upgrade to Premium to access the chat!',
       });
       // Opcional: navegar para a screen de Premium
       // navigation.navigate('Premium');
@@ -695,8 +695,8 @@ export function ChatScreen({ navigation }: any) {
     if (!canSend) {
       Toast.show({
         type: 'info',
-        text1: t('chat.rateLimitReached') || 'Limite de mensagens atingido',
-        text2: t('chat.rateLimitMessage') || 'Aguarda um momento antes de enviar outra mensagem. Limite: 5 mensagens por minuto.',
+        text1: t('chat.rateLimitReached') || 'Message limit reached',
+        text2: t('chat.rateLimitMessage') || 'Please wait a moment before sending another message. Limit: 5 messages per minute.',
       });
       return;
     }
@@ -708,8 +708,8 @@ export function ChatScreen({ navigation }: any) {
     if (textWithoutSpaces.length < 10) {
       Toast.show({
         type: 'info',
-        text1: t('chat.messageTooShort') || 'Mensagem muito curta',
-        text2: t('chat.messageTooShortMessage') || 'Escreve pelo menos 10 caracteres',
+        text1: t('chat.messageTooShort') || 'Message too short',
+        text2: t('chat.messageTooShortMessage') || 'Please write at least 10 characters',
       });
       return;
     }
@@ -788,7 +788,7 @@ export function ChatScreen({ navigation }: any) {
         const foodsAlreadyListed = firstFoodName && assistantContent.toLowerCase().includes(firstFoodName.toLowerCase());
         
         if (!foodsAlreadyListed && foodsList) {
-          assistantContent = `${assistantContent}\n\n**Alimentos desta refeição:**\n${foodsList}`;
+          assistantContent = `${assistantContent}\n\n**Foods for this meal:**\n${foodsList}`;
         }
       }
       
@@ -830,15 +830,15 @@ export function ChatScreen({ navigation }: any) {
     } catch (error: any) {
       Toast.show({
         type: 'error',
-        text1: 'Erro',
-        text2: error.message || 'Erro ao comunicar com a IA',
+        text1: 'Error',
+        text2: error.message || 'Error communicating with the server',
       });
 
       // Adicionar mensagem de erro
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'Desculpa, ocorreu um erro. Por favor, tenta novamente.',
+        content: 'Sorry, an error occurred. Please try again.',
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -1146,7 +1146,7 @@ export function ChatScreen({ navigation }: any) {
                 fontWeight: '500',
                 textAlign: 'center',
             }}>
-                {clearingChat ? (t('common.loading') || 'A eliminar...') : (t('chat.clearChat') || 'Limpar chat')}
+                {clearingChat ? (t('common.loading') || 'Deleting...') : (t('chat.clearChat') || 'Clear chat')}
             </Text>
             </TouchableOpacity>
           </Pressable>
@@ -1348,7 +1348,7 @@ export function ChatScreen({ navigation }: any) {
                       fontWeight: '600',
                       color: '#FFFFFF',
                     }}>
-                      {t('chat.addMeal') || 'Adicionar Refeição'}
+                      {t('chat.addMeal') || 'Add Meal'}
                     </Text>
                     <Text style={{
                       fontSize: 12,
@@ -1387,7 +1387,7 @@ export function ChatScreen({ navigation }: any) {
                       fontWeight: '600',
                       color: '#FFFFFF',
                     }}>
-                      {t('chat.addExercise') || 'Adicionar Treino'}
+                      {t('chat.addExercise') || 'Add Exercise'}
                     </Text>
                     <Text style={{
                       fontSize: 12,
@@ -1528,7 +1528,7 @@ export function ChatScreen({ navigation }: any) {
                     color: theme.colors.textSecondary || '#9CA3AF',
                     fontWeight: '500',
                   }}>
-                    {t('chat.recording') || 'Gravando...'}
+                    {t('chat.recording') || 'Recording...'}
                   </Text>
                 </View>
 
@@ -1675,7 +1675,7 @@ export function ChatScreen({ navigation }: any) {
               marginBottom: 12,
               textAlign: 'center',
             }}>
-              {t('chat.deleteMessage') || 'Eliminar mensagem'}
+              {t('chat.deleteMessage') || 'Delete message'}
             </Text>
 
             {/* Mensagem de confirmação */}
@@ -1686,7 +1686,7 @@ export function ChatScreen({ navigation }: any) {
               textAlign: 'center',
               lineHeight: 20,
             }}>
-              {t('chat.deleteMessageConfirm') || 'Tens a certeza que queres eliminar esta mensagem?'}
+              {t('chat.deleteMessageConfirm') || 'Are you sure you want to delete this message?'}
             </Text>
 
             {/* Botões */}
@@ -1712,7 +1712,7 @@ export function ChatScreen({ navigation }: any) {
                   fontWeight: '600',
                   color: theme.colors.text,
                 }}>
-                  {t('chat.cancel') || 'Cancelar'}
+                  {t('chat.cancel') || 'Cancel'}
                 </Text>
               </TouchableOpacity>
 
@@ -1765,15 +1765,15 @@ export function ChatScreen({ navigation }: any) {
                     setMessageToDelete(null);
                     Toast.show({
                       type: 'success',
-                      text1: t('chat.messageDeleted') || 'Mensagem eliminada',
-                      text2: t('chat.messageDeletedMessage') || 'A mensagem foi eliminada com sucesso',
+                      text1: t('chat.messageDeleted') || 'Message deleted',
+                      text2: t('chat.messageDeletedMessage') || 'The message was successfully deleted',
                     });
                   } catch (error: any) {
                     console.error('Error deleting message:', error);
                     Toast.show({
                       type: 'error',
-                      text1: t('chat.error') || 'Erro',
-                      text2: t('chat.errorDeletingMessage') || 'Erro ao eliminar mensagem',
+                      text1: t('chat.error') || 'Error',
+                      text2: t('chat.errorDeletingMessage') || 'Error deleting message',
                     });
                   }
                 }}
@@ -1790,7 +1790,7 @@ export function ChatScreen({ navigation }: any) {
                   fontWeight: '600',
                   color: '#FFFFFF',
                 }}>
-                  {t('chat.delete') || 'Eliminar'}
+                  {t('chat.delete') || 'Delete'}
                 </Text>
               </TouchableOpacity>
             </View>

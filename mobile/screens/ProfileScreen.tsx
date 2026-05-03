@@ -90,7 +90,7 @@ export function ProfileScreen({ navigation }: any) {
       if (status !== 'granted') {
         Alert.alert(
           t('common.error') || 'Erro',
-          t('profile.cameraPermissionRequired') || 'Permissão de câmera necessária'
+          t('profile.cameraPermissionRequired') || 'Camera permission required'
         );
         return;
       }
@@ -108,8 +108,8 @@ export function ProfileScreen({ navigation }: any) {
     } catch (error: any) {
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: error.message || t('profile.imageUploadError') || 'Erro ao selecionar imagem',
+        text1: t('common.error') || 'Error',
+        text2: error.message || t('profile.imageUploadError') || 'Error selecting image',
       });
     }
   };
@@ -120,8 +120,8 @@ export function ProfileScreen({ navigation }: any) {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(
-          t('common.error') || 'Erro',
-          t('profile.galleryPermissionRequired') || 'Permissão de galeria necessária'
+          t('common.error') || 'Error',
+          t('profile.galleryPermissionRequired') || 'Gallery permission required'
         );
         return;
       }
@@ -139,8 +139,8 @@ export function ProfileScreen({ navigation }: any) {
     } catch (error: any) {
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: error.message || t('profile.imageUploadError') || 'Erro ao selecionar imagem',
+        text1: t('common.error') || 'Error',
+        text2: error.message || t('profile.imageUploadError') || 'Error selecting image',
       });
     }
   };
@@ -160,27 +160,27 @@ export function ProfileScreen({ navigation }: any) {
               if (base64String) {
                 resolve(base64String);
               } else {
-                reject(new Error('Falha ao converter blob para base64'));
+                reject(new Error('Failed to convert blob to base64'));
               }
             };
             reader.onerror = () => {
-              reject(new Error('Erro ao ler o blob'));
+              reject(new Error('Error reading the blob'));
             };
             reader.readAsDataURL(xhr.response);
           } catch (readError: any) {
-            reject(new Error('Erro ao processar resposta: ' + readError.message));
+            reject(new Error('Error processing response: ' + readError.message));
           }
         } else {
-          reject(new Error(`Falha ao carregar imagem: status ${xhr.status}`));
+          reject(new Error(`Failed to load image: status ${xhr.status}`));
         }
       };
       
       xhr.onerror = function () {
-        reject(new Error('Erro de rede ao carregar imagem'));
+        reject(new Error('Network error while loading image'));
       };
       
       xhr.onabort = function () {
-        reject(new Error('Carregamento da imagem cancelado'));
+        reject(new Error('Image loading aborted'));
       };
       
       xhr.responseType = 'blob';
@@ -193,8 +193,8 @@ export function ProfileScreen({ navigation }: any) {
     if (!user) {
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: 'Usuário não autenticado',
+        text1: t('common.error') || 'Error',
+        text2: 'User not authenticated',
       });
       return;
     }
@@ -213,8 +213,8 @@ export function ProfileScreen({ navigation }: any) {
       if (sizeInKB > 500) {
         Toast.show({
           type: 'error',
-          text1: t('common.error') || 'Erro',
-          text2: 'Imagem muito grande. Por favor, escolha uma imagem menor (máximo 500KB).',
+          text1: t('common.error') || 'Error',
+          text2: 'Image too large. Please choose a smaller image (max 500KB).',
         });
         return;
       }
@@ -227,14 +227,14 @@ export function ProfileScreen({ navigation }: any) {
 
       Toast.show({
         type: 'success',
-        text1: t('profile.updateSuccess') || 'Sucesso',
-        text2: t('profile.imageUpdated') || 'Foto de perfil atualizada com sucesso',
+        text1: t('profile.updateSuccess') || 'Success',
+        text2: t('profile.imageUpdated') || 'Profile photo updated successfully',
       });
     } catch (error: any) {
       console.error('Error uploading profile image:', error);
       console.error('Error message:', error.message);
       
-      let errorMessage = t('profile.imageUploadError') || 'Erro ao fazer upload da imagem';
+      let errorMessage = t('profile.imageUploadError') || 'Error uploading image';
       
       if (error.message) {
         errorMessage = error.message;
@@ -242,7 +242,7 @@ export function ProfileScreen({ navigation }: any) {
       
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
+        text1: t('common.error') || 'Error',
         text2: errorMessage,
       });
     } finally {
@@ -267,15 +267,15 @@ export function ProfileScreen({ navigation }: any) {
       
       Toast.show({
         type: 'success',
-        text1: t('profile.updateSuccess') || 'Sucesso',
-        text2: t('profile.imageRemoved') || 'Foto de perfil removida com sucesso',
+        text1: t('profile.updateSuccess') || 'Success',
+        text2: t('profile.imageRemoved') || 'Profile photo removed successfully',
       });
     } catch (error: any) {
       console.error('Error removing profile image:', error);
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: t('profile.imageRemoveError') || 'Erro ao remover foto de perfil',
+        text1: t('common.error') || 'Error',
+        text2: t('profile.imageRemoveError') || 'Error removing profile photo',
       });
     } finally {
       setUploadingImage(false);
@@ -328,8 +328,8 @@ export function ProfileScreen({ navigation }: any) {
     } catch (error) {
       Toast.show({
         type: 'error',
-        text1: 'Erro',
-        text2: 'Erro ao fazer logout',
+        text1: 'Error',
+        text2: 'Error logging out',
       });
     }
   };
@@ -738,7 +738,7 @@ export function ProfileScreen({ navigation }: any) {
                   marginRight: 8,
                   flex: 1,
                 }}>
-                  {profile?.name || t('profile.name') || 'Digite seu nome'}
+                  {profile?.name || t('profile.name') || 'Enter your name'}
                 </Text>
                 <Ionicons name="pencil-outline" size={18} color={theme.colors.textSecondary || '#9CA3AF'} />
               </View>
@@ -747,7 +747,7 @@ export function ProfileScreen({ navigation }: any) {
                   fontSize: 14,
                   color: theme.colors.textSecondary || '#9CA3AF',
                 }}>
-                  {userAge} {t('profile.ageYears') || 'anos'}
+                  {userAge} {t('profile.ageYears') || 'years'}
                 </Text>
               )}
             </TouchableOpacity>
@@ -788,7 +788,7 @@ export function ProfileScreen({ navigation }: any) {
                   color: '#FFFFFF',
                   marginLeft: 8,
                 }}>
-                  {t('profile.referralCode.title') || 'Invita amici'}
+                  {t('profile.referralCode.title') || 'Invite Friends'}
                 </Text>
               </View>
               <Text style={{
@@ -798,7 +798,7 @@ export function ProfileScreen({ navigation }: any) {
                 marginBottom: 16,
                 opacity: 0.9,
               }}>
-                {t('profile.referralCode.description') || 'Il viaggio è più facile insieme.'}
+                {t('profile.referralCode.description') || 'The journey is easier together.'}
               </Text>
               <TouchableOpacity
                 onPress={handleCopyReferralCode}
@@ -816,7 +816,7 @@ export function ProfileScreen({ navigation }: any) {
                   fontWeight: '700',
                   color: '#9333EA',
                 }}>
-                  {t('profile.referralCode.invite') || `Invita un amico per guadagnare $`}
+                  {t('profile.referralCode.invite') || `Invite a friend to earn $`}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -852,7 +852,7 @@ export function ProfileScreen({ navigation }: any) {
               marginLeft: 12,
               flex: 1,
             }}>
-              {t('profile.personalDetails') || 'Detalhes pessoais'}
+              {t('profile.personalDetails') || 'Personal Details'}
             </Text>
             <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary || '#9CA3AF'} />
           </TouchableOpacity>
@@ -881,7 +881,7 @@ export function ProfileScreen({ navigation }: any) {
               marginLeft: 12,
               flex: 1,
             }}>
-              {t('profile.goalAndWeight') || 'Meta e peso atual'}
+              {t('profile.goalAndWeight') || 'Goal and current weight'}
             </Text>
             <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary || '#9CA3AF'} />
           </TouchableOpacity>
@@ -910,7 +910,7 @@ export function ProfileScreen({ navigation }: any) {
               marginLeft: 12,
               flex: 1,
             }}>
-              {t('profile.caloriesAndMacros') || 'Calorias e Macros'}
+              {t('profile.caloriesAndMacros') || 'Calories and Macros'}
             </Text>
             <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary || '#9CA3AF'} />
           </TouchableOpacity>
@@ -939,7 +939,7 @@ export function ProfileScreen({ navigation }: any) {
               marginLeft: 12,
               flex: 1,
             }}>
-              {t('profile.workoutsPerWeek') || 'Treinos por semana'}
+              {t('profile.workoutsPerWeek') || 'Workouts per week'}
             </Text>
             <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary || '#9CA3AF'} />
           </TouchableOpacity>
@@ -1040,7 +1040,7 @@ export function ProfileScreen({ navigation }: any) {
               marginLeft: 12,
               flex: 1,
             }}>
-              {t('profile.preferences') || 'Preferências'}
+              {t('profile.preferences') || 'Preferences'}
             </Text>
             <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary || '#9CA3AF'} />
           </TouchableOpacity>
@@ -1138,7 +1138,7 @@ export function ProfileScreen({ navigation }: any) {
               marginLeft: 12,
               flex: 1,
             }}>
-              {t('profile.settings.supportEmail') || 'Email de Suporte'}
+              {t('profile.settings.supportEmail') || 'Support Email'}
             </Text>
             <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary || '#9CA3AF'} />
           </TouchableOpacity>
@@ -1167,7 +1167,7 @@ export function ProfileScreen({ navigation }: any) {
               marginLeft: 12,
               flex: 1,
             }}>
-              {t('profile.settings.featureRequest') || 'Solicitação de recurso'}
+              {t('profile.settings.featureRequest') || 'Feature Request'}
             </Text>
             <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary || '#9CA3AF'} />
           </TouchableOpacity>
@@ -1196,7 +1196,7 @@ export function ProfileScreen({ navigation }: any) {
               marginLeft: 12,
               flex: 1,
             }}>
-              {t('profile.settings.deleteAccount') || 'Excluir Conta?'}
+              {t('profile.settings.deleteAccount') || 'Delete Account?'}
             </Text>
             <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary || '#9CA3AF'} />
           </TouchableOpacity>
@@ -1249,7 +1249,7 @@ export function ProfileScreen({ navigation }: any) {
             color: theme.colors.textSecondary || '#9CA3AF',
             fontWeight: '600',
           }}>
-            {t('profile.settings.version') || 'VERSÃO'} {appVersion}
+            {t('profile.settings.version') || 'VERSION'} {appVersion}
           </Text>
         </View>
       </ScrollView>
@@ -1524,7 +1524,7 @@ export function ProfileScreen({ navigation }: any) {
               textAlign: 'center',
               marginBottom: 16,
             }}>
-              {t('profile.settings.deleteAccountTitle') || 'Tem Certeza que Deseja Excluir a Sua Conta?'}
+              {t('profile.settings.deleteAccountTitle') || 'Are you sure you want to delete your account?'}
             </Text>
 
             <Text style={{
@@ -1534,7 +1534,7 @@ export function ProfileScreen({ navigation }: any) {
               fontWeight: '600',
               marginBottom: 16,
             }}>
-              {t('profile.settings.deleteAccountWarning') || 'Esta ação é irreversível.'}
+              {t('profile.settings.deleteAccountWarning') || 'This action is irreversible.'}
             </Text>
 
             <Text style={{
@@ -1544,7 +1544,7 @@ export function ProfileScreen({ navigation }: any) {
               marginBottom: 12,
               fontWeight: '600',
             }}>
-              {t('profile.settings.deleteAccountDataLoss') || 'Tudo o que se segue será eliminado permanentemente e não pode ser recuperado:'}
+              {t('profile.settings.deleteAccountDataLoss') || 'Everything below will be permanently deleted and cannot be recovered:'}
             </Text>
 
             <View style={{ marginBottom: 20 }}>
@@ -1555,7 +1555,7 @@ export function ProfileScreen({ navigation }: any) {
                 marginBottom: 8,
                 lineHeight: 20,
               }}>
-                {t('profile.settings.deleteAccountDataLoss1') || '• Todo o seu histórico de tracking de calorias'}
+                {t('profile.settings.deleteAccountDataLoss1') || '• All your calorie tracking history'}
               </Text>
               <Text style={{
                 fontSize: 14,
@@ -1564,7 +1564,7 @@ export function ProfileScreen({ navigation }: any) {
                 marginBottom: 8,
                 lineHeight: 20,
               }}>
-                {t('profile.settings.deleteAccountDataLoss2') || '• O seu progresso de metas e peso'}
+                {t('profile.settings.deleteAccountDataLoss2') || '• Your goal and weight progress'}
               </Text>
               <Text style={{
                 fontSize: 14,
@@ -1573,7 +1573,7 @@ export function ProfileScreen({ navigation }: any) {
                 marginBottom: 8,
                 lineHeight: 20,
               }}>
-                {t('profile.settings.deleteAccountDataLoss3') || '• Todos os seus dados de refeições e exercícios'}
+                {t('profile.settings.deleteAccountDataLoss3') || '• All your meals and exercises data'}
               </Text>
               <Text style={{
                 fontSize: 14,
@@ -1582,7 +1582,7 @@ export function ProfileScreen({ navigation }: any) {
                 marginBottom: 8,
                 lineHeight: 20,
               }}>
-                {t('profile.settings.deleteAccountDataLoss4') || '• O seu histórico de chat e interações'}
+                {t('profile.settings.deleteAccountDataLoss4') || '• Your chat history and interactions'}
               </Text>
             </View>
 
@@ -1608,7 +1608,7 @@ export function ProfileScreen({ navigation }: any) {
                   fontWeight: '600',
                   color: theme.colors.text,
                 }}>
-                  {t('profile.cancel') || 'Cancelar'}
+                  {t('profile.cancel') || 'Cancel'}
                 </Text>
               </TouchableOpacity>
 
@@ -1640,7 +1640,7 @@ export function ProfileScreen({ navigation }: any) {
                     color: '#FFFFFF',
                     textAlign: 'center',
                   }} numberOfLines={1}>
-                    {t('profile.settings.confirmDeletion') || 'Confirmar Exclusão'}
+                    {t('profile.settings.confirmDeletion') || 'Confirm Deletion'}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -1697,7 +1697,7 @@ export function ProfileScreen({ navigation }: any) {
               textAlign: 'center',
               marginBottom: 24,
             }}>
-              {t('profile.selectPhoto') || 'Selecionar foto'}
+              {t('profile.selectPhoto') || 'Select photo'}
             </Text>
 
             <View style={{
@@ -1735,7 +1735,7 @@ export function ProfileScreen({ navigation }: any) {
                   fontWeight: '600',
                   color: theme.colors.text,
                 }}>
-                  {t('profile.camera') || 'Câmera'}
+                  {t('profile.camera') || 'Camera'}
                 </Text>
               </TouchableOpacity>
 
@@ -1769,7 +1769,7 @@ export function ProfileScreen({ navigation }: any) {
                   fontWeight: '600',
                   color: theme.colors.text,
                 }}>
-                  {t('profile.gallery') || 'Galeria'}
+                  {t('profile.gallery') || 'Gallery'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1801,7 +1801,7 @@ export function ProfileScreen({ navigation }: any) {
                     fontWeight: '600',
                     color: '#EF4444',
                   }}>
-                    {t('profile.removePhoto') || 'Remover foto'}
+                    {t('profile.removePhoto') || 'Remove photo'}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -1825,7 +1825,7 @@ export function ProfileScreen({ navigation }: any) {
                 fontWeight: '600',
                 color: theme.colors.text,
               }}>
-                {t('common.cancel') || 'Cancelar'}
+                {t('common.cancel') || 'Cancel'}
               </Text>
             </TouchableOpacity>
           </Pressable>

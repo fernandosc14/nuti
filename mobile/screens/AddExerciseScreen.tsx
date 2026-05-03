@@ -59,7 +59,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
 
   const exerciseDate = selectedDate || new Date();
 
-  // Carregar tipos de exercício customizados do usuário
+  // Carregar tipos de exercício customizados do user
   useEffect(() => {
     if (user) {
       loadCustomExerciseTypes();
@@ -126,14 +126,14 @@ export function AddExerciseScreen({ navigation, route }: any) {
       setExerciseTypeToDelete(null);
       Toast.show({
         type: 'success',
-        text1: t('dashboard.exerciseTypeDeleted') || 'Tipo de exercício eliminado',
+        text1: t('dashboard.exerciseTypeDeleted') || 'Exercise type deleted',
       });
     } catch (error) {
       console.error('Error deleting custom exercise type:', error);
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: t('dashboard.errorDeletingExerciseType') || 'Erro ao eliminar tipo de exercício',
+        text1: t('common.error') || 'Error',
+        text2: t('dashboard.errorDeletingExerciseType') || 'Error deleting exercise type',
       });
     }
   };
@@ -421,8 +421,8 @@ export function AddExerciseScreen({ navigation, route }: any) {
     if (duration <= 0) {
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: t('dashboard.invalidDuration') || 'Duração deve ser maior que 0',
+        text1: t('common.error') || 'Error',
+        text2: t('dashboard.invalidDuration') || 'Duration must be greater than 0.',
       });
       return;
     }
@@ -452,8 +452,8 @@ export function AddExerciseScreen({ navigation, route }: any) {
         if (!isCustomType && !customExerciseName.trim()) {
           Toast.show({
             type: 'error',
-            text1: t('common.error') || 'Erro',
-            text2: t('dashboard.enterExerciseName') || 'Por favor, insira o nome do exercício',
+            text1: t('common.error') || 'Error',
+            text2: t('dashboard.enterExerciseName') || 'Please enter the exercise name',
           });
           return;
         }
@@ -461,8 +461,8 @@ export function AddExerciseScreen({ navigation, route }: any) {
         if (!exerciseFields.perceivedIntensity || exerciseFields.perceivedIntensity < 1 || exerciseFields.perceivedIntensity > 10) {
           Toast.show({
             type: 'error',
-            text1: t('common.error') || 'Erro',
-            text2: 'Por favor, insira a intensidade percebida (1-10)',
+            text1: t('common.error') || 'Error',
+            text2: 'Please enter the perceived intensity (1-10)',
           });
           return;
         }
@@ -470,8 +470,8 @@ export function AddExerciseScreen({ navigation, route }: any) {
         if (!exerciseFields.distance || exerciseFields.distance <= 0) {
           Toast.show({
             type: 'error',
-            text1: t('common.error') || 'Erro',
-            text2: t('exercise.distanceRequired') || 'Por favor, insira a distância',
+            text1: t('common.error') || 'Error',
+            text2: t('exercise.distanceRequired') || 'Please enter the distance',
           });
           return;
         }
@@ -479,8 +479,8 @@ export function AddExerciseScreen({ navigation, route }: any) {
         if (!exerciseFields.elevationGain || exerciseFields.elevationGain <= 0) {
           Toast.show({
             type: 'error',
-            text1: t('common.error') || 'Erro',
-            text2: t('exercise.elevationRequired') || 'Por favor, insira o ganho de elevação',
+            text1: t('common.error') || 'Error',
+            text2: t('exercise.elevationRequired') || 'Please enter the elevation gain',
           });
           return;
         }
@@ -488,8 +488,8 @@ export function AddExerciseScreen({ navigation, route }: any) {
         if (!exerciseFields.perceivedIntensity || exerciseFields.perceivedIntensity < 1 || exerciseFields.perceivedIntensity > 10) {
           Toast.show({
             type: 'error',
-            text1: t('common.error') || 'Erro',
-            text2: t('exercise.intensityRequired') || 'Por favor, insira a intensidade percebida (1-10)',
+            text1: t('common.error') || 'Error',
+            text2: t('exercise.intensityRequired') || 'Please enter the perceived intensity (1-10)',
           });
           return;
         }
@@ -556,7 +556,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
 
       Toast.show({
         type: 'success',
-        text1: t('dashboard.exerciseAdded') || 'Exercício adicionado',
+        text1: t('dashboard.exerciseAdded') || 'Added exercise',
         text2: `${exerciseName} - ${duration} min`,
       });
       
@@ -572,8 +572,8 @@ export function AddExerciseScreen({ navigation, route }: any) {
       console.error('Error adding exercise:', error);
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: t('dashboard.exerciseError') || 'Erro ao adicionar exercício',
+        text1: t('common.error') || 'Error',
+        text2: t('dashboard.exerciseError') || 'Error adding exercise',
       });
     }
   };
@@ -632,7 +632,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
               color: theme.colors.text,
               flex: 1,
             }}>
-              {t('dashboard.addExercise') || 'Adicionar Exercício'}
+              {t('dashboard.addExercise') || 'Add Exercise'}
             </Text>
           </View>
 
@@ -649,19 +649,19 @@ export function AddExerciseScreen({ navigation, route }: any) {
             <>
               <View style={{ marginBottom: 24 }}>
                 {[
-                  { type: 'running', name: t('dashboard.exercise.running') || 'Corrida', icon: 'walk', isCustom: false },
-                  { type: 'walking', name: t('dashboard.exercise.walking') || 'Caminhada', icon: 'walk-outline', isCustom: false },
-                  { type: 'cycling', name: t('dashboard.exercise.cycling') || 'Ciclismo', icon: 'bicycle', isCustom: false },
-                  { type: 'swimming', name: t('dashboard.exercise.swimming') || 'Natação', icon: 'water', isCustom: false },
-                  { type: 'gym', name: t('dashboard.exercise.gym') || 'Ginásio', icon: 'barbell', isCustom: false },
+                  { type: 'running', name: t('dashboard.exercise.running') || 'Running', icon: 'walk', isCustom: false },
+                  { type: 'walking', name: t('dashboard.exercise.walking') || 'Walking', icon: 'walk-outline', isCustom: false },
+                  { type: 'cycling', name: t('dashboard.exercise.cycling') || 'Cycling', icon: 'bicycle', isCustom: false },
+                  { type: 'swimming', name: t('dashboard.exercise.swimming') || 'Swimming', icon: 'water', isCustom: false },
+                  { type: 'gym', name: t('dashboard.exercise.gym') || 'Gym', icon: 'barbell', isCustom: false },
                   { type: 'yoga', name: t('dashboard.exercise.yoga') || 'Yoga', icon: 'leaf', isCustom: false },
                   { type: 'pilates', name: t('dashboard.exercise.pilates') || 'Pilates', icon: 'body', isCustom: false },
-                  { type: 'dance', name: t('dashboard.exercise.dance') || 'Dança', icon: 'musical-notes', isCustom: false },
-                  { type: 'hiking', name: t('dashboard.exercise.hiking') || 'Caminhada', icon: 'trail-sign', isCustom: false },
-                  { type: 'tennis', name: t('dashboard.exercise.tennis') || 'Ténis', icon: 'tennisball', isCustom: false },
-                  { type: 'football', name: t('dashboard.exercise.football') || 'Futebol', icon: 'football', isCustom: false },
-                  { type: 'basketball', name: t('dashboard.exercise.basketball') || 'Basquetebol', icon: 'basketball', isCustom: false },
-                  { type: 'other', name: t('dashboard.exercise.other') || 'Outro', icon: 'ellipse', isCustom: false },
+                  { type: 'dance', name: t('dashboard.exercise.dance') || 'Dance', icon: 'musical-notes', isCustom: false },
+                  { type: 'hiking', name: t('dashboard.exercise.hiking') || 'Hiking', icon: 'trail-sign', isCustom: false },
+                  { type: 'tennis', name: t('dashboard.exercise.tennis') || 'Tennis', icon: 'tennisball', isCustom: false },
+                  { type: 'football', name: t('dashboard.exercise.football') || 'Football', icon: 'football', isCustom: false },
+                  { type: 'basketball', name: t('dashboard.exercise.basketball') || 'Basketball', icon: 'basketball', isCustom: false },
+                  { type: 'other', name: t('dashboard.exercise.other') || 'Other', icon: 'ellipse', isCustom: false },
                 ].map((exercise) => (
                   <TouchableOpacity
                     key={exercise.type}
@@ -790,7 +790,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
                       color: theme.colors.primary || '#3BB273',
                       flex: 1,
                     }}>
-                      {t('dashboard.createNewExerciseType') || 'Criar Novo Tipo de Exercício'}
+                      {t('dashboard.createNewExerciseType') || 'Create a New Exercise Type'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -821,19 +821,19 @@ export function AddExerciseScreen({ navigation, route }: any) {
                     <Ionicons
                       name={(() => {
                         const exercise = [
-                          { name: t('dashboard.exercise.running') || 'Corrida', icon: 'walk' },
-                          { name: t('dashboard.exercise.walking') || 'Caminhada', icon: 'walk-outline' },
-                          { name: t('dashboard.exercise.cycling') || 'Ciclismo', icon: 'bicycle' },
-                          { name: t('dashboard.exercise.swimming') || 'Natação', icon: 'water' },
-                          { name: t('dashboard.exercise.gym') || 'Ginásio', icon: 'barbell' },
+                          { name: t('dashboard.exercise.running') || 'Running', icon: 'walk' },
+                          { name: t('dashboard.exercise.walking') || 'Walking', icon: 'walk-outline' },
+                          { name: t('dashboard.exercise.cycling') || 'Cycling', icon: 'bicycle' },
+                          { name: t('dashboard.exercise.swimming') || 'Swimming', icon: 'water' },
+                          { name: t('dashboard.exercise.gym') || 'Gym', icon: 'barbell' },
                           { name: t('dashboard.exercise.yoga') || 'Yoga', icon: 'leaf' },
                           { name: t('dashboard.exercise.pilates') || 'Pilates', icon: 'body' },
-                          { name: t('dashboard.exercise.dance') || 'Dança', icon: 'musical-notes' },
-                          { name: t('dashboard.exercise.hiking') || 'Caminhada', icon: 'trail-sign' },
-                          { name: t('dashboard.exercise.tennis') || 'Ténis', icon: 'tennisball' },
-                          { name: t('dashboard.exercise.football') || 'Futebol', icon: 'football' },
-                          { name: t('dashboard.exercise.basketball') || 'Basquetebol', icon: 'basketball' },
-                          { name: t('dashboard.exercise.other') || 'Outro', icon: 'ellipse' },
+                          { name: t('dashboard.exercise.dance') || 'Dance', icon: 'musical-notes' },
+                          { name: t('dashboard.exercise.hiking') || 'Hiking', icon: 'trail-sign' },
+                          { name: t('dashboard.exercise.tennis') || 'Tennis', icon: 'tennisball' },
+                          { name: t('dashboard.exercise.football') || 'Football', icon: 'football' },
+                          { name: t('dashboard.exercise.basketball') || 'Basketball', icon: 'basketball' },
+                          { name: t('dashboard.exercise.other') || 'Other', icon: 'ellipse' },
                         ].find(e => e.name === selectedExerciseType);
                         return exercise?.icon || 'ellipse';
                       })() as any}
@@ -888,7 +888,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
                     fontWeight: '700',
                     color: theme.colors.text,
                   }}>
-                    {t('dashboard.basicInfo') || 'Informações Básicas'}
+                    {t('dashboard.basicInfo') || 'Basic Information'}
                   </Text>
                 </View>
 
@@ -907,7 +907,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
                       marginBottom: 8,
                       fontWeight: '600',
                     }}>
-                      {t('dashboard.exerciseName') || 'Nome do exercício'}
+                      {t('dashboard.exerciseName') || 'Exercise Name'}
                     </Text>
                     <View style={{
                       flexDirection: 'row',
@@ -934,7 +934,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
                         }}
                         value={customExerciseName}
                         onChangeText={setCustomExerciseName}
-                        placeholder={t('dashboard.enterExerciseName') || 'Ex: Crossfit, Natação, etc.'}
+                        placeholder={t('dashboard.enterExerciseName') || 'Examples: Crossfit, Swimming, etc.'}
                         placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
                         autoFocus={true}
                       />
@@ -950,7 +950,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
                     marginBottom: 8,
                     fontWeight: '600',
                   }}>
-                    {t('dashboard.duration') || 'Duração'}
+                    {t('dashboard.duration') || 'Duration'}
                   </Text>
                   <View style={{
                     flexDirection: 'row',
@@ -1067,7 +1067,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
                         fontWeight: '700',
                         color: theme.colors.text,
                       }}>
-                        {t('dashboard.additionalDetails') || 'Detalhes Adicionais'}
+                        {t('dashboard.additionalDetails') || 'Additional Details'}
                       </Text>
                     </View>
                     {allFields.map((field) => {
@@ -1398,7 +1398,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
                         fontWeight: '700',
                         color: theme.colors.text,
                       }}>
-                        {t('dashboard.caloriesBurned') || 'Calorias Queimadas'}
+                        {t('dashboard.caloriesBurned') || 'Calories Burned'}
                       </Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -1545,7 +1545,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
                       textAlign: 'center',
                       marginTop: 8,
                     }}>
-                      {t('dashboard.tapToEdit') || 'Toque para editar'}
+                      {t('dashboard.tapToEdit') || 'Tap to edit'}
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -1581,7 +1581,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
                 fontWeight: '600',
                 color: theme.colors.text,
               }}>
-                {t('common.cancel') || 'Cancelar'}
+                {t('common.cancel') || 'Cancel'}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -1814,7 +1814,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
                   fontWeight: '700',
                   color: '#FFFFFF',
                 }}>
-                  {t('common.add') || 'Adicionar'}
+                  {t('common.add') || 'Add'}
                 </Text>
               )}
             </TouchableOpacity>
@@ -1850,7 +1850,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
               color: theme.colors.text,
               marginBottom: 20,
             }}>
-              {t('dashboard.createNewExerciseType') || 'Criar Novo Tipo de Exercício'}
+              {t('dashboard.createNewExerciseType') || 'Create New Exercise Type'}
             </Text>
             
             <Text style={{
@@ -1858,7 +1858,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
               color: theme.colors.textSecondary || '#9CA3AF',
               marginBottom: 16,
             }}>
-              {t('dashboard.enterNewExerciseTypeName') || 'Digite o nome do novo tipo de exercício:'}
+              {t('dashboard.enterNewExerciseTypeName') || 'Enter the name of the new exercise type:'}
             </Text>
             
             <TextInput
@@ -1875,7 +1875,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
               }}
               value={newExerciseTypeName}
               onChangeText={setNewExerciseTypeName}
-              placeholder={t('dashboard.exerciseName') || 'Nome do exercício'}
+              placeholder={t('dashboard.exerciseName') || 'Exercise Name'}
               placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
               autoFocus={true}
             />
@@ -1885,7 +1885,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
               color: theme.colors.textSecondary || '#9CA3AF',
               marginBottom: 8,
             }}>
-              {t('dashboard.caloriesPerHour') || 'Calorias por hora (opcional):'}
+              {t('dashboard.caloriesPerHour') || 'Calories per hour (optional):'}
             </Text>
             
             <View style={{
@@ -1907,7 +1907,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
                 }}
                 value={newExerciseCaloriesPerHour}
                 onChangeText={setNewExerciseCaloriesPerHour}
-                placeholder={t('dashboard.enterCaloriesPerHour') || 'Ex: 300'}
+                placeholder={t('dashboard.enterCaloriesPerHour') || 'Example: 300'}
                 placeholderTextColor={theme.colors.textSecondary || '#9CA3AF'}
                 keyboardType="numeric"
               />
@@ -1942,7 +1942,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
                   fontWeight: '600',
                   color: theme.colors.text,
                 }}>
-                  {t('common.cancel') || 'Cancelar'}
+                  {t('common.cancel') || 'Cancel'}
                 </Text>
               </TouchableOpacity>
               
@@ -1993,14 +1993,14 @@ export function AddExerciseScreen({ navigation, route }: any) {
                       
                       Toast.show({
                         type: 'success',
-                        text1: t('dashboard.exerciseTypeCreated') || 'Tipo de exercício criado',
+                        text1: t('dashboard.exerciseTypeCreated') || 'Type of exercise created',
                       });
                     } catch (error) {
                       console.error('Error creating custom exercise type:', error);
                       Toast.show({
                         type: 'error',
-                        text1: t('common.error') || 'Erro',
-                        text2: t('dashboard.errorCreatingExerciseType') || 'Erro ao criar tipo de exercício',
+                        text1: t('common.error') || 'Error',
+                        text2: t('dashboard.errorCreatingExerciseType') || 'Error creating exercise type',
                       });
                     }
                   }
@@ -2022,7 +2022,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
                   fontWeight: '700',
                   color: newExerciseTypeName.trim() ? '#FFFFFF' : theme.colors.text,
                 }}>
-                  {t('common.create') || 'Criar'}
+                  {t('common.create') || 'Create'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -2060,7 +2060,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
               color: theme.colors.text,
               marginBottom: 16,
             }}>
-              {t('dashboard.confirmDeleteExerciseType') || 'Confirmar Eliminação'}
+              {t('dashboard.confirmDeleteExerciseType') || 'Confirm Delete'}
             </Text>
             
             <Text style={{
@@ -2069,7 +2069,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
               marginBottom: 24,
               lineHeight: 22,
             }}>
-              {t('dashboard.confirmDeleteExerciseTypeMessage') || 'Tem certeza que deseja eliminar o tipo de exercício'} "{exerciseTypeToDelete?.name}"? {t('dashboard.confirmDeleteExerciseTypeWarning') || 'Esta ação não pode ser desfeita.'}
+              {t('dashboard.confirmDeleteExerciseTypeMessage') || 'Are you sure you want to delete the exercise type'} "{exerciseTypeToDelete?.name}"? {t('dashboard.confirmDeleteExerciseTypeWarning') || 'This action cannot be undone.'}
             </Text>
             
             <View style={{ flexDirection: 'row', gap: 12 }}>
@@ -2092,7 +2092,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
                   fontWeight: '600',
                   color: theme.colors.text,
                 }}>
-                  {t('common.cancel') || 'Cancelar'}
+                  {t('common.cancel') || 'Cancel'}
                 </Text>
               </TouchableOpacity>
               
@@ -2112,7 +2112,7 @@ export function AddExerciseScreen({ navigation, route }: any) {
                   fontWeight: '700',
                   color: '#FFFFFF',
                 }}>
-                  {t('common.delete') || 'Eliminar'}
+                  {t('common.delete') || 'Delete'}
                 </Text>
               </TouchableOpacity>
             </View>

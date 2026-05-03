@@ -1,7 +1,7 @@
 /**
  * BadgeNotificationModal
  * 
- * Modal animado para mostrar quando o utilizador ganha uma badge
+ * Animated modal to show when the user earns a badge.
  */
 
 import React, { useEffect } from 'react';
@@ -42,7 +42,7 @@ export function BadgeNotificationModal({ visible, badge, onClose }: BadgeNotific
 
   useEffect(() => {
     if (visible && badge) {
-      // Animação de entrada
+      // Entrance animation
       Animated.parallel([
         Animated.spring(scaleAnim, {
           toValue: 1,
@@ -57,14 +57,14 @@ export function BadgeNotificationModal({ visible, badge, onClose }: BadgeNotific
         }),
       ]).start();
 
-      // Fechar automaticamente após 3 segundos
+      // Automatically close after 3 seconds.
       const timer = setTimeout(() => {
         handleClose();
       }, 3000);
 
       return () => clearTimeout(timer);
     } else {
-      // Reset animações
+      // Reset animations
       scaleAnim.setValue(0);
       opacityAnim.setValue(0);
     }
@@ -129,7 +129,7 @@ export function BadgeNotificationModal({ visible, badge, onClose }: BadgeNotific
 
           <View style={styles.content}>
             <Text style={[styles.title, { color: theme.colors.text }]}>
-              {t('badges.earned') || 'Badge Desbloqueada!'}
+              {t('badges.earned') || 'Badge Unlocked!'}
             </Text>
             <Text style={[styles.badgeName, { color: theme.colors.text }]}>
               {badge.name}

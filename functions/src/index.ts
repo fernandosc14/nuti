@@ -1,6 +1,6 @@
 /**
  * Cloud Functions for Nuti
- * 
+ *
  * Functions for sending emails and other server-side operations
  */
 
@@ -8,7 +8,7 @@ import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import { Resend } from "resend";
 
-// Import new modules
+// Import modules
 import { checkRateLimit, cleanupRateLimits, monitorRateLimits } from "./rateLimit";
 import { cleanupOldData, deleteUserData, exportUserData, cleanupOldMessages } from "./dataRetention";
 import { performanceMonitor, dailySummary, healthCheck, logEvent, withLogging } from "./monitoring";
@@ -21,9 +21,9 @@ admin.initializeApp();
 
 /**
  * Send account deletion confirmation email
- * 
+ *
  * This is a callable function that can be called from the client app
- * 
+ *
  * IMPORTANT: The RESEND_API_KEY secret must be configured before deploying:
  * firebase functions:secrets:set RESEND_API_KEY
  */
@@ -177,7 +177,7 @@ For support, contact us at support@nuti.app
 // Rate Limiting functions
 export { cleanupRateLimits, monitorRateLimits };
 
-// Data Retention & GDPR functions  
+// Data Retention & GDPR functions
 export { cleanupOldData, deleteUserData, exportUserData, cleanupOldMessages };
 
 // Monitoring & Logging functions

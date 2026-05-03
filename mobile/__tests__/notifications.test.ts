@@ -1,5 +1,5 @@
 /**
- * Testes para serviços de notificações locais
+ * Tests for local notification services
  */
 
 jest.mock('expo-notifications', () => {
@@ -69,28 +69,28 @@ const storageMock = AsyncStorage as jest.Mocked<typeof AsyncStorage>;
 describe('notifications service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Garantir que permissões estão concedidas por padrão
+    // Ensure permissions are granted by default
     notificationsMock.getPermissionsAsync.mockResolvedValue({ status: 'granted' } as any);
     notificationsMock.requestPermissionsAsync.mockResolvedValue({ status: 'granted' } as any);
     storageMock.getItem.mockResolvedValue(null);
   });
 
-  test('ativa lembretes de refeição agenda notificações e persiste preferência', async () => {
-    // scheduleNotificationAsync deve devolver ids
+  test('enables meal reminders, schedules notifications and persists preference', async () => {
+    // scheduleNotificationAsync should return ids
     notificationsMock.scheduleNotificationAsync.mockResolvedValueOnce('m1');
 
     await applyReminderPreference('meal', true);
 
     expect(storageMock.setItem).toHaveBeenCalledWith('prefs_meal_reminders_enabled', '1');
-    // Cancela agendamentos antigos (nenhum) e cria um novo (14h)
+    // Cancels old schedules (none) and creates a new one (14h)
     expect(notificationsMock.cancelScheduledNotificationAsync).toHaveBeenCalledTimes(0);
     expect(notificationsMock.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
-    // Armazena ids dos agendamentos criados
+    // Stores ids of created schedules
     expect(storageMock.setItem).toHaveBeenCalledWith('prefs_meal_reminder_ids', JSON.stringify(['m1']));
   });
 
-  test('desativa lembretes de refeição cancela notificações', async () => {
-    // Simular ids previamente guardados
+  test('disables meal reminders, cancels notifications', async () => {
+    // Simulate previously stored ids
     storageMock.getItem.mockResolvedValueOnce(JSON.stringify(['x1', 'x2']));
 
     await applyReminderPreference('meal', false);
@@ -101,8 +101,8 @@ describe('notifications service', () => {
     expect(storageMock.setItem).toHaveBeenCalledWith('prefs_meal_reminder_ids', JSON.stringify([]));
   });
 
-  test('bootstrapNotifications reconfigura canais e reprograma agendamentos quando permissões e prefs estão ativos', async () => {
-    // meal e water ativados; primeiro dois gets são prefs, depois ids (vazios)
+  test('bootstrapNotifications reconfigures channels and reschedules when permissions and prefs are active', async () => {
+    // meal and water enabled; first two gets are prefs, then ids (empty)
     storageMock.getItem
       .mockResolvedValueOnce('1') // meal enabled
       .mockResolvedValueOnce('1') // water enabled
@@ -115,9 +115,9 @@ describe('notifications service', () => {
 
     await bootstrapNotifications();
 
-    // Canal criado para Android
+    // Channel created for Android
     expect(notificationsMock.setNotificationChannelAsync).toHaveBeenCalledWith('default', expect.any(Object));
-    // Cancela antigos (nenhum) e agenda novos: 1 refeição (14h) + 1 água (17h)
+    // Cancels old (none) and schedules new: 1 meal (14h) + 1 water (17h)
     expect(notificationsMock.cancelScheduledNotificationAsync).toHaveBeenCalledTimes(0);
     expect(notificationsMock.scheduleNotificationAsync).toHaveBeenCalledTimes(2);
   });

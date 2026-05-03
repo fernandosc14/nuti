@@ -52,19 +52,19 @@ export function LoginScreen({ navigation }: any) {
           {/* Consent: Terms & Privacy */}
           <View className="items-center mb-3 px-4">
             <Text className="text-xs text-gray-500 dark:text-gray-400 text-center">
-              {(t('auth.byContinuingAgree') as string) || 'Ao continuar, concordas com os '}
+              {(t('auth.byContinuingAgree') as string) || 'By continuing, you agree to the '}
               <Text
                 className="text-xs text-green-600 dark:text-green-400"
                 onPress={() => Linking.openURL('https://nuti.app/terms-and-conditions')}
               >
-                {t('profile.settings.terms') || 'Termos e Condições'}
+                {t('profile.settings.terms') || 'Terms and Conditions'}
               </Text>
-              {' e '}
+              {' and '}
               <Text
                 className="text-xs text-green-600 dark:text-green-400"
                 onPress={() => Linking.openURL('https://nuti.app/privacy-policy')}
               >
-                {t('profile.settings.privacyPolicy') || 'Política de Privacidade'}
+                {t('profile.settings.privacyPolicy') || 'Privacy Policy'}
               </Text>
               {'.'}
             </Text>

@@ -1,7 +1,14 @@
 <resources>
   <string name="app_name">Nuti</string>
   <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
-  <string name="expo_splash_screen_status_bar_translatable" translatable="false">false</string>
-  <string name="widget_water_description">Track daily water intake</string>
-  <string name="widget_macros_description">Track daily calories and macros</string>
+  <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
+  <string name="expo_system_ui_user_interface_style" translatable="false">automatic</string>
+  
+  <!-- Widget titles and descriptions -->
+  <string name="nuti_widget_macros_title">Daily Macros</string>
+  <string name="nuti_widget_macros_dark_title">Daily Macros (Dark)</string>
+  <string name="nuti_widget_macros_description">Track your daily nutritional intake: Calories, Protein, Fat, and Carbohydrates with progress indicators</string>
+  <string name="nuti_widget_water_title">Water Intake</string>
+  <string name="nuti_widget_water_dark_title">Water Intake (Dark)</string>
+  <string name="nuti_widget_water_description">Monitor your daily water consumption with a progress bar and milliliter counter</string>
 </resources>

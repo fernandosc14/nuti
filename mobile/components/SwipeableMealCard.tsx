@@ -1,7 +1,7 @@
 /**
  * SwipeableMealCard Component
  * 
- * Componente que envolve MealCard com funcionalidade de swipe para eliminar
+ * Component that includes MealCard with swipe functionality to delete.
  */
 
 import React from 'react';
@@ -30,7 +30,7 @@ interface SwipeableMealCardProps {
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SWIPE_THRESHOLD = -80; // Distância mínima para ativar o delete
+const SWIPE_THRESHOLD = -80; // Minimum distance to activate delete.
 const DELETE_BUTTON_WIDTH = 80;
 
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
@@ -49,28 +49,28 @@ export function SwipeableMealCard(props: SwipeableMealCardProps) {
   const startX = useSharedValue(0);
 
   const panGesture = Gesture.Pan()
-    .activeOffsetX([-10, 10]) // Só ativa quando arrastar horizontalmente pelo menos 10px
-    .failOffsetY([-20, 20]) // Falha se arrastar verticalmente mais de 20px (permite scroll)
+    .activeOffsetX([-10, 10]) // It only activates when you drag horizontally at least 10px.
+    .failOffsetY([-20, 20]) // Fail if dragging vertically more than 20px (allows scroll)
     .onStart(() => {
       startX.value = translateX.value;
     })
     .onUpdate((event) => {
-      // Só permite arrastar para a esquerda (valores negativos)
+      // It only activates when you drag horizontally at least 10px.
       const newValue = startX.value + event.translationX;
       if (newValue <= 0) {
         translateX.value = newValue;
       } else {
-        // Se tentar arrastar para a direita, manter em 0
+        // If trying to drag to the right, keep at 0
         translateX.value = 0;
       }
     })
     .onEnd(() => {
       if (translateX.value < SWIPE_THRESHOLD) {
-        // Se arrastou o suficiente, mostrar botão de delete
+        // If swiped enough, show delete button
         translateX.value = withSpring(-DELETE_BUTTON_WIDTH);
         runOnJS(setIsSwiped)(true);
       } else {
-        // Se não arrastou o suficiente, voltar à posição original
+        // If not swiped enough, return to original position
         translateX.value = withSpring(0);
         runOnJS(setIsSwiped)(false);
       }
@@ -90,7 +90,7 @@ export function SwipeableMealCard(props: SwipeableMealCardProps) {
   });
 
   const handleDeletePress = () => {
-    // Animar para fora da tela antes de eliminar
+    // Animate to the left before deleting
     translateX.value = withTiming(-SCREEN_WIDTH, { duration: 300 }, () => {
       runOnJS(handleDelete)();
     });
@@ -98,7 +98,7 @@ export function SwipeableMealCard(props: SwipeableMealCardProps) {
 
   return (
     <View style={styles.container}>
-      {/* Botão de eliminar (visível quando arrastado) */}
+      {/* Delete Button (visible when swiped) */}
       <Animated.View
         style={[
           styles.deleteButton,
@@ -114,14 +114,14 @@ export function SwipeableMealCard(props: SwipeableMealCardProps) {
         </AnimatedTouchableOpacity>
       </Animated.View>
 
-      {/* Card principal */}
+      {/* Main Card */}
       <GestureDetector gesture={panGesture}>
         <Animated.View style={[styles.cardContainer, animatedCardStyle]}>
           <MealCard
             {...props}
-            onDelete={undefined} // Remover o botão de delete do MealCard
+            onDelete={undefined} // Remove the delete button from MealCard
             onPress={() => {
-              // Se o card estiver arrastado, fechar primeiro
+              // If the card is swiped, close it first
               if (isSwiped) {
                 translateX.value = withSpring(0);
                 setIsSwiped(false);
@@ -133,7 +133,7 @@ export function SwipeableMealCard(props: SwipeableMealCardProps) {
         </Animated.View>
       </GestureDetector>
       
-      {/* Indicador de swipe (seta para a esquerda) - sempre visível quando não arrastado */}
+      {/* Swipe Indicator (arrow to the left) - always visible when not swiped */}
       {!isSwiped && (
         <View style={styles.swipeIndicator}>
           <Ionicons name="chevron-back" size={12} color={theme?.colors?.textSecondary || '#9CA3AF'} />

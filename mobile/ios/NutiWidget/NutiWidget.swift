@@ -2,7 +2,7 @@
 //  NutiWidget.swift
 //  NutiWidget
 //
-//  Widget para iOS usando WidgetKit
+//  iOS Widget using WidgetKit
 //
 
 import WidgetKit
@@ -52,7 +52,7 @@ struct NutiWidgetProvider: TimelineProvider {
     }
 
     private func loadWidgetData() -> NutiWidgetEntry {
-        // Carregar dados do UserDefaults compartilhado via App Group
+        // Load data from UserDefaults shared via App Group
         let sharedDefaults = UserDefaults(suiteName: "group.com.nuti.app")
         
         let calories = sharedDefaults?.integer(forKey: "calories") ?? 0
@@ -108,7 +108,7 @@ struct SmallWidgetView: View {
                 .foregroundColor(Color(red: 0.23, green: 0.70, blue: 0.45)) // #3BB273
             
             VStack(alignment: .leading, spacing: 4) {
-                Text("Calorias")
+                Text("Calories")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
@@ -141,10 +141,10 @@ struct MediumWidgetView: View {
                 .font(.headline)
                 .foregroundColor(Color(red: 0.23, green: 0.70, blue: 0.45))
             
-            // Calorias
+            // Calories
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("Calorias")
+                    Text("Calories")
                         .font(.subheadline)
                         .foregroundColor(.primary)
                     
@@ -167,28 +167,28 @@ struct MediumWidgetView: View {
             // Macros
             HStack(spacing: 12) {
                 MacroView(
-                    name: "Proteína",
+                    name: "Protein",
                     value: entry.protein,
                     goal: entry.proteinGoal,
                     unit: "g"
                 )
                 
                 MacroView(
-                    name: "Carboidratos",
+                    name: "Carbs",
                     value: entry.carbs,
                     goal: entry.carbsGoal,
                     unit: "g"
                 )
                 
                 MacroView(
-                    name: "Gordura",
+                    name: "Fat",
                     value: entry.fat,
                     goal: entry.fatGoal,
                     unit: "g"
                 )
                 
                 MacroView(
-                    name: "Água",
+                    name: "Water",
                     value: entry.water,
                     goal: entry.waterGoal,
                     unit: "ml"
@@ -238,7 +238,7 @@ struct NutiWidget: Widget {
                 .containerBackground(.fill.tertiary, for: .widget)
         }
         .configurationDisplayName("Nuti")
-        .description("Acompanhe suas calorias e macros do dia")
+        .description("Track your daily calories and macros")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }

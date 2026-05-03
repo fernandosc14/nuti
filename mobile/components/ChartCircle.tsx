@@ -1,7 +1,7 @@
 /**
  * ChartCircle Component
  * 
- * Componente de gráfico circular para exibir progresso de calorias
+ * Pie chart component to display calorie progress.
  */
 
 import React, { useEffect } from 'react';
@@ -43,10 +43,10 @@ export function ChartCircle({ consumed, goal, size = 220, strokeWidth = 24 }: Ch
     };
   });
 
-  // Cores baseadas no progresso
+  // Colors based on progress
   const getColor = () => {
-    if (percentage >= 100) return '#EF4444'; // Vermelho se excedeu
-    return '#3BB273'; // Verde se dentro do limite
+    if (percentage >= 100) return '#EF4444'; // Red if exceeded
+    return '#3BB273'; // Green if within limit
   };
 
   const color = getColor();
@@ -60,10 +60,10 @@ export function ChartCircle({ consumed, goal, size = 220, strokeWidth = 24 }: Ch
         padding: 20,
         alignItems: 'center',
       }]}>
-        {/* Círculo em destaque - principal */}
+        {/* Highlighted circle - main */}
         <View style={styles.circleWrapper}>
           <Svg width={size} height={size} style={styles.svgContainer}>
-            {/* Círculo de fundo */}
+            {/* Background circle */}
             <Circle
               cx={size / 2}
               cy={size / 2}
@@ -73,7 +73,7 @@ export function ChartCircle({ consumed, goal, size = 220, strokeWidth = 24 }: Ch
               fill="transparent"
               opacity={theme.mode === 'dark' ? 0.5 : 0.7}
             />
-            {/* Círculo de progresso */}
+            {/* Progress circle */}
             <AnimatedCircle
               cx={size / 2}
               cy={size / 2}
@@ -88,7 +88,7 @@ export function ChartCircle({ consumed, goal, size = 220, strokeWidth = 24 }: Ch
             />
           </Svg>
 
-          {/* Texto central - Valor consumido em destaque */}
+          {/* Central text - Highlighted consumed value */}
           <View style={styles.textContainer}>
             <View style={styles.valueContainer}>
               <Text style={[styles.consumedText, { color: color }]}>{consumed}</Text>
@@ -105,7 +105,7 @@ export function ChartCircle({ consumed, goal, size = 220, strokeWidth = 24 }: Ch
           </View>
         </View>
 
-        {/* Informações discretas abaixo */}
+        {/* Discrete information below */}
         <View style={styles.infoContainer}>
           <View style={styles.infoRow}>
             <View style={styles.infoItem}>

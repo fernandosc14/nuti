@@ -752,7 +752,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
         // Tentar novamente
         const retryUser = getAuth().currentUser;
         if (!retryUser) {
-          throw new Error('Utilizador não está disponível após login');
+          throw new Error('User is unavailable after login.');
         }
       }
       
@@ -856,7 +856,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#3BB273" />
           <Text style={{ marginTop: 16, color: theme.colors.textSecondary || '#9CA3AF' }}>
-            {t('onboarding.redirecting') || 'A redireccionar...'}
+            {t('onboarding.redirecting') || 'Redirecting...'}
           </Text>
         </View>
       </SafeAreaView>
@@ -1296,7 +1296,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                         ? '#FFFFFF' 
                         : '#9CA3AF',
                     }}>
-                      {t('onboarding.metric') || 'Métrico'}
+                      {t('onboarding.metric') || 'Metric'}
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -1540,7 +1540,7 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                         ? '#FFFFFF' 
                         : '#9CA3AF',
                     }}>
-                      {t('onboarding.metric') || 'Métrico'}
+                      {t('onboarding.metric') || 'Metric'}
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -3308,19 +3308,19 @@ export function OnboardingScreen({ navigation: _navigation, onClose }: { navigat
                 {/* Consent: Terms & Privacy */}
                 <View style={{ alignItems: 'center', marginTop: 10, paddingHorizontal: 8 }}>
                   <Text style={{ fontSize: 12, color: theme.colors.textSecondary || '#9CA3AF', textAlign: 'center' }}>
-                    {(t('auth.byContinuingAgree') as string) || 'Ao continuar, concordas com os '}
+                    {(t('auth.byContinuingAgree') as string) || 'By continuing, you agree to the '}
                     <Text
                       style={{ fontSize: 12, color: theme.colors.primary || '#3BB273' }}
                       onPress={() => Linking.openURL('https://nuti.app/terms-and-conditions')}
                     >
-                      {t('profile.settings.terms') || 'Termos e Condições'}
+                      {t('profile.settings.terms') || 'Terms and Conditions'}
                     </Text>
-                    {' e '}
+                    {' and '}
                     <Text
                       style={{ fontSize: 12, color: theme.colors.primary || '#3BB273' }}
                       onPress={() => Linking.openURL('https://nuti.app/privacy-policy')}
                     >
-                      {t('profile.settings.privacyPolicy') || 'Política de Privacidade'}
+                      {t('profile.settings.privacyPolicy') || 'Privacy Policy'}
                     </Text>
                     {'.'}
                   </Text>

@@ -1,7 +1,7 @@
 /**
  * App.tsx
  * 
- * Componente principal da aplicação com navegação
+ * Main component of the application with navigation.
  */
 
 import React, { useEffect, useState, useRef, ErrorInfo, useCallback } from 'react';
@@ -24,8 +24,8 @@ import { AdProvider } from './context/AdContext';
 import { WelcomeScreen } from './screens/WelcomeScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { RegisterScreen } from './screens/RegisterScreen';
-// Não importar OnboardingScreen diretamente - será importado dinamicamente apenas quando necessário
-// Isto evita que o react-native-css-interop tente processá-lo antes do NavigationContainer estar pronto
+// Do not import OnboardingScreen directly - it will only be imported dynamically when needed.
+// This avoids having react-native-css-interop try to process it before the NavigationContainer is ready
 import { DashboardScreen } from './screens/DashboardScreen';
 import { AddMealScreen } from './screens/AddMealScreen';
 import { ChatScreen } from './screens/ChatScreen';
@@ -49,16 +49,16 @@ import './global.css';
 import { initializeBadges } from './services/gamification';
 import { bootstrapNotifications } from './services/notifications';
 
-// Suprimir warning de SafeAreaView deprecated de dependências internas
+// Suppress the SafeAreaView deprecated warning for internal dependencies.
 LogBox.ignoreLogs(['SafeAreaView has been deprecated']);
 
-// Garantir que o OAuth flow pode completar (importante para deep linking)
+// Ensure that the OAuth flow can complete (important for deep linking)
 WebBrowser.maybeCompleteAuthSession();
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// Context para controlar quando mostrar onboarding (evita usar navegação que causa pré-carregamento)
+// Context to control when to show onboarding (avoids using navigation that causes pre-loading)
 const OnboardingContext = React.createContext<{
   showOnboarding: () => void;
   hideOnboarding: () => void;
@@ -67,7 +67,7 @@ const OnboardingContext = React.createContext<{
 function AuthStack() {
   const { showOnboarding } = React.useContext(OnboardingContext);
   
-  // Wrapper para WelcomeScreen que injeta showOnboarding
+  // WelcomeScreen wrapper that injects showOnboarding
   const WelcomeScreenWithOnboarding = React.useCallback((props: any) => {
     return <WelcomeScreen {...props} showOnboarding={showOnboarding} />;
   }, [showOnboarding]);
@@ -80,7 +80,7 @@ function AuthStack() {
       <Stack.Screen name="Welcome" component={WelcomeScreenWithOnboarding} />
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Register" component={RegisterScreen} />
-      {/* Onboarding não está aqui para evitar pré-carregamento pelo react-native-css-interop */}
+      {/* Onboarding is not here to avoid preloading by react-native-css-interop. */}
     </Stack.Navigator>
   );
 }
@@ -90,7 +90,7 @@ function AddButton() {
   try {
     navigation = useNavigation();
   } catch (error: any) {
-    console.error('❌ AddButton - Erro ao obter navigation:', error.message);
+    console.error('❌ AddButton - Error getting navigation:', error.message);
     return null;
   }
   
@@ -105,12 +105,12 @@ function AddButton() {
   const isPremium = profile?.plan === 'premium';
   
   const handleOption = (mode: 'camera' | 'barcode' | 'search') => {
-    // Fechar menu imediatamente
+    // Close menu immediately
     setShowMenu(false);
     
-    // Se não for premium e tentar usar camera ou barcode, redirecionar para Premium
+    // If not premium and trying to use camera or barcode, redirect to Premium
     if (!isPremium && (mode === 'camera' || mode === 'barcode')) {
-      // Navegar diretamente para Premium screen (menu já foi fechado)
+      // Navigate directly to Premium screen (menu already closed)
       requestAnimationFrame(() => {
         (navigation as any).getParent()?.navigate('PremiumOnboarding');
       });
@@ -179,7 +179,7 @@ function AddButton() {
                 gap: 8,
               }}
             >
-              {/* Câmera */}
+              {/* Camera */}
               <TouchableOpacity
                 onPress={() => handleOption('camera')}
                 activeOpacity={0.7}
@@ -203,7 +203,7 @@ function AddButton() {
                 </View>
               </TouchableOpacity>
 
-              {/* Código de Barras */}
+              {/* Barcode */}
               <TouchableOpacity
                 onPress={() => handleOption('barcode')}
                 activeOpacity={0.7}
@@ -227,7 +227,7 @@ function AddButton() {
                 </View>
               </TouchableOpacity>
 
-              {/* Pesquisar Alimento */}
+              {/* Search Food */}
               <TouchableOpacity
                 onPress={() => handleOption('search')}
                 activeOpacity={0.7}
@@ -391,10 +391,10 @@ function AppStack() {
   const { profile } = useUser();
   const navigation = useNavigation<any>();
   
-  // Navegar automaticamente para PremiumOnboarding se necessário
+  // Navigate automatically to PremiumOnboarding if necessary.
   useEffect(() => {
     if (profile?.shouldShowPremiumOnboarding === true && navigation) {
-      // Aguardar um momento para garantir que a navegação está pronta
+      // Wait a moment to ensure navigation is ready.
       setTimeout(() => {
         navigation.navigate('PremiumOnboarding');
       }, 300);
@@ -443,7 +443,7 @@ function RootNavigator() {
   const { user, profile, loading, blockProfile } = useUser();
   const { theme } = useTheme();
   
-  // TODOS OS HOOKS DEVEM ESTAR NO TOPO, ANTES DE QUALQUER LÓGICA CONDICIONAL
+  // All hooks must be at the top, before any conditional logic.
   const [navigationReady, setNavigationReady] = useState(false);
   const [showOnboardingFromWelcome, setShowOnboardingFromWelcome] = useState(false);
   const [checkingOnboarding, setCheckingOnboarding] = useState(false);
@@ -453,12 +453,12 @@ function RootNavigator() {
   
   const hideOnboarding = useCallback(() => {
     setShowOnboardingFromWelcome(false);
-    setOnboardingCancelled(true); // Marcar que o utilizador cancelou o onboarding
+    setOnboardingCancelled(true); // Mark that the user cancelled the onboarding
   }, []);
 
   useEffect(() => {
-    // Inicializar badges padrão
-    // Nota: Pode falhar se as regras do Firestore não permitirem criação
+    // Initialize default badges
+    // Note: May fail if Firestore rules do not allow creation
     // Nesse caso, cria as badges manualmente no Firebase Console
     initializeBadges().catch((error) => {
       console.warn('[Badges] Could not initialize badges automatically. Create them manually in Firebase Console.');
@@ -467,12 +467,12 @@ function RootNavigator() {
   }, []);
 
 
-  // Verificar se precisa de onboarding (apenas se já tem conta E perfil completo)
-  // IMPORTANTE: Verificar explicitamente se onboardingCompleted é true
+  // Verify if onboarding is needed (only if the user has an account and a complete profile)
+  // IMPORTANT: Explicitly check if onboardingCompleted is true
   const onboardingCompleted = profile?.onboardingCompleted === true;
   
-  // Verificar imediatamente quando o perfil é carregado
-  // Calcular se deve mostrar loading ANTES do useEffect para evitar flash
+  // Check immediately when the profile is loaded.
+  // Calculate if loading should be shown BEFORE useEffect to avoid flash
   const shouldCheckOnboarding = user && profile && profile.onboardingCompleted === undefined;
   const isProfileRecent = shouldCheckOnboarding && profile?.createdAt ? 
     ((new Date().getTime() - new Date(profile.createdAt).getTime()) / 1000 < 5) : 
@@ -480,9 +480,9 @@ function RootNavigator() {
   
   useEffect(() => {
     if (user && profile) {
-      // Se o perfil existe mas onboardingCompleted é undefined, pode estar a ser criado
+      // If the profile exists but onboardingCompleted is undefined, it may be being created.
       if (profile.onboardingCompleted === undefined) {
-        // Verificar se o perfil foi criado recentemente
+        // Verify if the profile was created recently
         const createdAt = profile.createdAt;
         let isRecent = false;
         
@@ -491,23 +491,23 @@ function RootNavigator() {
           const created = new Date(createdAt);
           const diffSeconds = (now.getTime() - created.getTime()) / 1000;
           
-          // Se foi criado há menos de 5 segundos, considerar que está a ser criado
+          // If it was created less than 5 seconds ago, consider it being created
           isRecent = diffSeconds < 5;
         }
         
-        // Se é recente ou não tem createdAt, considerar que está a ser criado
+        // If it is recent or doesn't have createdAt, consider it being created
         if (isRecent || !createdAt) {
-          // Definir imediatamente para evitar flash
+          // Set immediately to avoid flash
           setProfileCreatedRecently(true);
           setCheckingOnboarding(true);
-          // Aguardar mais tempo para garantir que o onboardingCompleted é guardado
+          // Wait more time to ensure onboardingCompleted is saved
           const timer = setTimeout(() => {
             setProfileCreatedRecently(false);
             setCheckingOnboarding(false);
           }, 3000);
           return () => clearTimeout(timer);
         } else {
-          // Se não é recente, aguardar um pouco
+          // If it is not recent, wait a bit
           setCheckingOnboarding(true);
           const timer = setTimeout(() => {
             setCheckingOnboarding(false);
@@ -524,42 +524,42 @@ function RootNavigator() {
     }
   }, [user, profile]);
   
-  // Não mostrar onboarding se está a verificar ou se o perfil foi criado recentemente
-  // Usar também o cálculo síncrono para evitar flash
-  // Também não mostrar se o utilizador cancelou o onboarding
+  // Do not show onboarding if you are verifying or if the profile was recently created.
+  // Use also the synchronous calculation to avoid flash
+  // Also do not show if the user cancelled the onboarding
   const needsOnboarding = user && profile && !onboardingCompleted && !checkingOnboarding && !profileCreatedRecently && !isProfileRecent && !onboardingCancelled;
   
-  // Resetar showOnboardingFromWelcome quando o onboarding está completo
+  // Reset showOnboardingFromWelcome when onboarding is complete.
   useEffect(() => {
     if (user && profile && onboardingCompleted === true && showOnboardingFromWelcome) {
       setShowOnboardingFromWelcome(false);
     }
   }, [user, profile, onboardingCompleted, showOnboardingFromWelcome]);
   
-  // Importar OnboardingScreen dinamicamente quando necessário
-  // IMPORTANTE: Não importar se o onboarding já está completo
+  // Import OnboardingScreen dynamically when necessary
+  // IMPORTANT: Do not import if onboarding is already complete
   useEffect(() => {
     const shouldImportOnboarding = ((user && profile && needsOnboarding) || showOnboardingFromWelcome) && 
                                     !(user && profile && onboardingCompleted === true);
     if (shouldImportOnboarding) {
-      // Importar dinamicamente apenas quando necessário - isto evita pré-processamento pelo react-native-css-interop
+      // Import dynamically only when necessary - this avoids pre-processing by react-native-css-interop.
       import('./screens/OnboardingScreen').then((module) => {
         setOnboardingScreenComponent(() => module.OnboardingScreen);
       }).catch((error) => {
         console.error('❌ RootNavigator - Erro ao importar OnboardingScreen:', error);
       });
     } else if (user && profile && onboardingCompleted === true && OnboardingScreenComponent) {
-      // Limpar o componente se o onboarding está completo
+      // Clear the component if onboarding is complete
       setOnboardingScreenComponent(null);
     }
   }, [user, profile, needsOnboarding, showOnboardingFromWelcome, onboardingCompleted]);
   
 
-  // Mostrar loading se:
-  // 1. Está a carregar (sem user ou profile ainda)
-  // 2. Está a verificar onboarding (apenas por um tempo limitado)
-  // 3. Perfil foi criado recentemente (apenas por um tempo limitado)
-  // 4. Profile está bloqueado (durante verificação de conta existente)
+  // Show loading if:
+  // 1. It's loading (no user or profile yet)
+  // 2. It's checking onboarding (only for a limited time)
+  // 3. The profile was created recently (only for a limited time)
+  // 4. The profile is blocked (during existing account verification)
   const shouldShowLoading = loading || 
                             blockProfile ||
                             (checkingOnboarding && profileCreatedRecently) || 
@@ -573,15 +573,15 @@ function RootNavigator() {
     );
   }
   
-  // Se precisa de onboarding, renderizar diretamente (fora do NavigationContainer)
-  // IMPORTANTE: Não renderizar OnboardingScreen se o onboarding já está completo ou foi cancelado
+  // If needs onboarding, render directly (outside of NavigationContainer)
+  // IMPORTANT: Do not render OnboardingScreen if onboarding is already complete or cancelled
   const shouldShowOnboarding = ((user && profile && needsOnboarding) || showOnboardingFromWelcome) && 
                                 !(user && profile && onboardingCompleted === true) &&
                                 !onboardingCancelled;
   
   if (shouldShowOnboarding) {
     if (!OnboardingScreenComponent) {
-      // Mostrar loading enquanto importa dinamicamente
+      // Show loading while importing dynamically
       return (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111827' }}>
           <ActivityIndicator size="large" color="#3BB273" />
@@ -591,14 +591,14 @@ function RootNavigator() {
     return <OnboardingScreenComponent navigation={null} onClose={hideOnboarding} />;
   }
   
-  // Caso contrário, renderizar NavigationContainer normalmente
-  // IMPORTANTE: NavigationContainer deve ser renderizado mesmo se navigationReady for false
-  // porque o onReady só é chamado quando o NavigationContainer é montado
+  // Otherwise, render NavigationContainer normally
+  // IMPORTANT: NavigationContainer must be rendered even if navigationReady is false
+  // because onReady is only called when the NavigationContainer is mounted
   return (
     <OnboardingContext.Provider value={{
       showOnboarding: () => {
         setShowOnboardingFromWelcome(true);
-        setOnboardingCancelled(false); // Resetar o estado de cancelamento quando o utilizador quer começar novamente
+        setOnboardingCancelled(false); // Reset the cancellation state when the user wants to start over
       },
       hideOnboarding: hideOnboarding,
     }}>
@@ -619,10 +619,10 @@ function RootNavigator() {
                }}
       >
         {user && profile && (onboardingCompleted || onboardingCancelled) ? (
-          // User autenticado e onboarding completo ou cancelado - mostrar AppStack
+          // User authenticated and onboarding complete or canceled - show AppStack
           <AppStack />
         ) : (
-          // Sem user ou onboarding não completo - mostrar AuthStack
+          // No user or onboarding not complete - show AuthStack
           <AuthStack />
         )}
       </NavigationContainer>
@@ -660,13 +660,13 @@ const styles = StyleSheet.create({
         // iOS shadow
       },
       android: {
-        // Android elevation já está acima
+        // Android elevation is already above
       },
     }),
   },
 });
 
-// Error Boundary para capturar erros de navegação
+// Error Boundary to capture navigation errors.
 class NavigationErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { hasError: boolean; error: Error | null }
@@ -677,7 +677,7 @@ class NavigationErrorBoundary extends React.Component<
   }
 
   static getDerivedStateFromError(error: Error) {
-    console.error('❌ NavigationErrorBoundary - Erro capturado:', error.message);
+    console.error('❌ NavigationErrorBoundary - Error captured:', error.message);
     console.error('❌ NavigationErrorBoundary - Stack:', error.stack);
     return { hasError: true, error };
   }
@@ -697,10 +697,10 @@ class NavigationErrorBoundary extends React.Component<
   }
 }
 
-// Componente para configurar StatusBar baseado no tema
+// Component to configure StatusBar based on theme
 function StatusBarConfig() {
   const { theme } = useTheme();
-  // Sempre usar texto claro (branco) para ser visível no gradiente verde quando app está em modo claro
+  // Always use light text (white) to be visible on the green gradient when the app is in light mode
   return <StatusBar style="light" />;
 }
 

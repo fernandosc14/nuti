@@ -139,8 +139,8 @@ export function EditWorkoutsPerWeekScreen({ navigation }: any) {
       setLoading(false);
       Toast.show({
         type: 'success',
-        text1: t('profile.updateSuccess') || 'Sucesso',
-        text2: t('profile.detailsUpdated') || 'Detalhes atualizados com sucesso',
+        text1: t('profile.updateSuccess') || 'Success',
+        text2: t('profile.detailsUpdated') || 'Details updated successfully',
       });
       setTimeout(() => {
         navigation.goBack();
@@ -149,8 +149,8 @@ export function EditWorkoutsPerWeekScreen({ navigation }: any) {
       setLoading(false);
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: error.message || t('profile.updateError') || 'Erro ao atualizar detalhes',
+        text1: t('common.error') || 'Error',
+        text2: error.message || t('profile.updateError') || 'Error updating details',
       });
     }
   };
@@ -203,7 +203,7 @@ export function EditWorkoutsPerWeekScreen({ navigation }: any) {
           marginBottom: 24,
           lineHeight: 20,
         }}>
-          {t('onboarding.workoutsPerWeekDescription') || 'Isto ajuda-nos a calcular as tuas necessidades calóricas'}
+          {t('onboarding.workoutsPerWeekDescription') || 'This helps us calculate your calorie needs.'}
         </Text>
 
         <View style={{ gap: 12 }}>
@@ -327,7 +327,7 @@ export function EditWorkoutsPerWeekScreen({ navigation }: any) {
                 ? theme.colors.textSecondary || '#9CA3AF'
                 : '#FFFFFF',
             }}>
-              {t('profile.save') || 'Salvar'}
+              {t('profile.save') || 'Save'}
             </Text>
           )}
         </TouchableOpacity>

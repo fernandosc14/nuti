@@ -1,8 +1,8 @@
 /**
  * AdContext
  * 
- * Contexto para gerenciar anúncios na aplicação
- * Controla quando mostrar ads baseado no plano do usuário
+ * Context for managing ads in the application.
+ * Controls when to show ads based on the user's plan.
  */
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
@@ -11,17 +11,17 @@ import { useUser } from './UserContext';
 
 interface AdContextType {
   /**
-   * Se o usuário é premium (não deve ver ads)
+   * If the user is a premium member (they shouldn't see ads)
    */
   isPremium: boolean;
   
   /**
-   * Se os ads estão habilitados
+   * If ads are enabled
    */
   adsEnabled: boolean;
   
   /**
-   * Se o AdMob foi inicializado
+   * If AdMob has been initialized
    */
   isInitialized: boolean;
 }
@@ -35,7 +35,7 @@ export function AdProvider({ children }: { children: React.ReactNode }) {
 
   const isPremium = profile?.plan === 'premium';
 
-  // Inicializar AdMob
+  // Initialize AdMob
   useEffect(() => {
     const initializeAds = async () => {
       try {
@@ -49,7 +49,7 @@ export function AdProvider({ children }: { children: React.ReactNode }) {
     initializeAds();
   }, []);
 
-  // Desabilitar ads se o usuário for premium
+  // Disable ads if the user is premium
   useEffect(() => {
     setAdsEnabled(!isPremium);
   }, [isPremium]);

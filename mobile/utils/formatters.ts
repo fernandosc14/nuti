@@ -1,18 +1,18 @@
 /**
  * Utility Functions
- * 
- * Funções auxiliares para formatação e cálculos
+ *
+ * Helper functions for formatting and calculations
  */
 
 /**
- * Formata número para exibição com separador de milhares
+ * Formats number for display with thousands separator
  */
 export function formatNumber(num: number): string {
   return num.toLocaleString('pt-PT');
 }
 
 /**
- * Formata data para exibição
+ * Formats date for display
  */
 export function formatDate(date: Date): string {
   return date.toLocaleDateString('pt-PT', {
@@ -23,7 +23,7 @@ export function formatDate(date: Date): string {
 }
 
 /**
- * Formata hora para exibição
+ * Formats time for display
  */
 export function formatTime(date: Date): string {
   return date.toLocaleTimeString('pt-PT', {
@@ -33,14 +33,14 @@ export function formatTime(date: Date): string {
 }
 
 /**
- * Calcula calorias restantes
+ * Calculates remaining calories
  */
 export function calculateRemaining(consumed: number, goal: number): number {
   return Math.max(0, goal - consumed);
 }
 
 /**
- * Calcula percentagem de progresso
+ * Calculates progress percentage
  */
 export function calculatePercentage(consumed: number, goal: number): number {
   return Math.min(100, Math.max(0, (consumed / goal) * 100));

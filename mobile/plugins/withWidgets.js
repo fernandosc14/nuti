@@ -1,13 +1,13 @@
-const { withAndroidManifest, withInfoPlist } = require('@expo/config-plugins');
+const { withAndroidManifest, withInfoPlist } = require('expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
 /**
- * Config Plugin para Widgets
- * Configura widgets nativos para iOS e Android
+ * Config Plugin for Widgets
+ * Configures native widgets for iOS and Android
  */
 const withWidgets = (config) => {
-  // Android: Adicionar receiver de widget ao AndroidManifest
+  // Android: Add widget receiver to AndroidManifest
   config = withAndroidManifest(config, (config) => {
     const androidManifest = config.modResults;
     const { manifest } = androidManifest;
@@ -18,12 +18,12 @@ const withWidgets = (config) => {
 
     const application = manifest.application[0];
     
-    // Adicionar receiver para widget
+    // Add receiver for widget
     if (!application.receiver) {
       application.receiver = [];
     }
 
-    // Verificar se já existe o receiver
+    // Check if the receiver already exists
     const hasWidgetReceiver = application.receiver.some(
       (receiver) => receiver.$?.['android:name'] === '.widget.NutiWidgetProvider'
     );
@@ -59,11 +59,11 @@ const withWidgets = (config) => {
     return config;
   });
 
-  // iOS: Adicionar App Groups para compartilhar dados
+  // iOS: Add App Groups to share data
   config = withInfoPlist(config, (config) => {
     const infoPlist = config.modResults;
     
-    // Adicionar App Group
+    // Add App Group
     if (!infoPlist['AppGroups']) {
       infoPlist['AppGroups'] = [];
     }
@@ -74,7 +74,7 @@ const withWidgets = (config) => {
       infoPlist['AppGroups'].push(appGroupId);
     }
 
-    // Adicionar WidgetKit capability
+    // Add WidgetKit capability
     if (!infoPlist['NSSupportsLiveActivities']) {
       infoPlist['NSSupportsLiveActivities'] = true;
     }

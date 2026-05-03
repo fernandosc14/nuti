@@ -1,7 +1,7 @@
 /**
  * Units Context
  * 
- * Context API para gerenciar unidades de medida
+ * Context API for managing units of measurement.
  */
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
@@ -21,8 +21,8 @@ interface UnitsContextType {
   setHeightUnit: (unit: HeightUnit) => Promise<void>;
   convertWeight: (value: number, from: WeightUnit, to: WeightUnit) => number;
   convertHeight: (value: number, from: HeightUnit, to: HeightUnit) => number;
-  formatHeight: (value: number, unit: HeightUnit) => string; // Formatar altura para exibição
-  parseHeight: (value: string, unit: HeightUnit) => number; // Converter string de altura para cm
+  formatHeight: (value: number, unit: HeightUnit) => string; // Format height for display
+  parseHeight: (value: string, unit: HeightUnit) => number; // Convert height string to cm
 }
 
 const UnitsContext = createContext<UnitsContextType | undefined>(undefined);
@@ -30,7 +30,7 @@ const UnitsContext = createContext<UnitsContextType | undefined>(undefined);
 export function UnitsProvider({ children }: { children: ReactNode }) {
   const [units, setUnits] = useState<Units>({ weight: 'kg', height: 'cm' });
 
-  // Carregar preferências salvas
+  // Load saved preferences
   useEffect(() => {
     const loadUnits = async () => {
       try {
@@ -75,19 +75,19 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
 
   const convertHeight = (value: number, from: HeightUnit, to: HeightUnit): number => {
     if (from === to) return value;
-    // Converter cm para inches
+    // Convert cm to inches
     if (from === 'cm' && to === 'in') return value / 2.54;
-    // Converter inches para cm
+    // Convert inches to cm
     if (from === 'in' && to === 'cm') return value * 2.54;
     return value;
   };
 
-  // Formatar altura para exibição (cm -> número, in -> ft'in")
+  // Format height for display (cm -> number, in -> ft'in")
   const formatHeight = (value: number, unit: HeightUnit): string => {
     if (unit === 'cm') {
       return Math.round(value).toString();
     } else {
-      // Converter cm para inches, depois para ft'in"
+      // Convert cm to inches, then to ft'in"
       const inches = value / 2.54;
       const feet = Math.floor(inches / 12);
       const remainingInches = Math.round(inches % 12);
@@ -95,24 +95,23 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Converter string de altura para cm (aceita cm, ft'in", ou apenas inches)
+  // Convert height string to cm (accepts cm, ft'in", or just inches)
   const parseHeight = (value: string, unit: HeightUnit): number => {
     if (unit === 'cm') {
       const num = parseFloat(value.replace(/[^0-9.]/g, ''));
       return isNaN(num) ? 0 : num;
     } else {
-      // Tentar parsear formato ft'in" ou apenas inches
       const cleanText = value.replace(/[^0-9'"]/g, '');
       const match = cleanText.match(/(\d+)'(\d+)/);
       if (match) {
         const feet = parseInt(match[1]) || 0;
         const inches = parseInt(match[2]) || 0;
         const totalInches = feet * 12 + inches;
-        return totalInches * 2.54; // Converter para cm
+        return totalInches * 2.54; // Convert to cm
       } else {
-        // Se não for formato ft'in", assumir que são apenas inches
+        // If not in ft'in" format, assume it's just inches
         const inches = parseFloat(cleanText.replace(/[^0-9.]/g, ''));
-        return isNaN(inches) ? 0 : inches * 2.54; // Converter para cm
+        return isNaN(inches) ? 0 : inches * 2.54; // Convert to cm
       }
     }
   };

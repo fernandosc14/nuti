@@ -1,8 +1,8 @@
 /**
  * SelectedDateContext
  * 
- * Contexto para compartilhar a data selecionada no dashboard
- * Permite que refeições sejam adicionadas para dias anteriores
+ * Context for sharing the selected date on the dashboard.
+ * Allows meals to be added for previous days
  */
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';

@@ -1,7 +1,7 @@
 /**
  * BadgeItem Component
  * 
- * Componente para exibir uma badge desbloqueada
+ * Component for displaying an unlocked badge.
  */
 
 import React from 'react';

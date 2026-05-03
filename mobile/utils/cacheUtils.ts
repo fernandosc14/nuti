@@ -1,13 +1,13 @@
 /**
  * Cache Utilities
- * 
- * Funções para gerenciar cache local usando AsyncStorage
+ *
+ * Functions to manage local cache using AsyncStorage
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const CACHE_PREFIX = '@nuti_cache_';
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutos em milissegundos
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
 
 interface CachedData<T> {
   data: T;
@@ -16,7 +16,7 @@ interface CachedData<T> {
 }
 
 /**
- * Guarda dados no cache com timestamp
+ * Stores data in cache with timestamp
  */
 export async function setCache<T>(key: string, data: T, ttl: number = CACHE_TTL): Promise<void> {
   try {
@@ -32,7 +32,7 @@ export async function setCache<T>(key: string, data: T, ttl: number = CACHE_TTL)
 }
 
 /**
- * Obtém dados do cache se ainda válidos
+ * Gets data from cache if still valid
  */
 export async function getCache<T>(key: string): Promise<T | null> {
   try {
@@ -45,12 +45,12 @@ export async function getCache<T>(key: string): Promise<T | null> {
     const now = Date.now();
     const age = now - cacheData.timestamp;
 
-    // Verificar se o cache ainda é válido
+    // Check if the cache is still valid
     if (age < cacheData.ttl) {
       return cacheData.data;
     }
 
-    // Cache expirado, remover
+    // Cache expired, remove
     await AsyncStorage.removeItem(`${CACHE_PREFIX}${key}`);
     return null;
   } catch (error) {
@@ -60,7 +60,7 @@ export async function getCache<T>(key: string): Promise<T | null> {
 }
 
 /**
- * Remove dados do cache
+ * Removes data from cache
  */
 export async function removeCache(key: string): Promise<void> {
   try {
@@ -71,7 +71,7 @@ export async function removeCache(key: string): Promise<void> {
 }
 
 /**
- * Limpa todo o cache
+ * Clears all cache
  */
 export async function clearAllCache(): Promise<void> {
   try {
@@ -84,7 +84,7 @@ export async function clearAllCache(): Promise<void> {
 }
 
 /**
- * Invalida cache relacionado a um utilizador
+ * Invalidates cache related to a user
  */
 export async function invalidateUserCache(userId: string): Promise<void> {
   try {
@@ -99,7 +99,7 @@ export async function invalidateUserCache(userId: string): Promise<void> {
 }
 
 /**
- * Limpa apenas o cache de pesquisas de alimentos
+ * Clears only the food search cache
  */
 export async function clearFoodSearchCache(): Promise<void> {
   try {

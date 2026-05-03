@@ -60,7 +60,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [isDark, setIsDark] = useState(systemColorScheme === 'dark');
   const [themeMode, setThemeModeState] = useState<ThemeMode>('system');
 
-  // Carregar preferência salva
+  // Load saved preference
   useEffect(() => {
     const loadThemePreference = async () => {
       try {
@@ -72,11 +72,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
           } else if (savedMode === 'dark') {
             setIsDark(true);
           } else {
-            // Se for 'system', seguir o sistema
+            // If it's 'system', follow the system
             setIsDark(systemColorScheme === 'dark');
           }
         } else {
-          // Se não tem preferência salva, seguir o sistema
+          // If there's no saved preference, follow the system
           setThemeModeState('system');
           setIsDark(systemColorScheme === 'dark');
         }
@@ -89,7 +89,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     loadThemePreference();
   }, []);
 
-  // Se o modo for 'system', seguir o sistema
+  // If the mode is 'system', follow the system
   useEffect(() => {
     if (themeMode === 'system') {
       setIsDark(systemColorScheme === 'dark');

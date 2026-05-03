@@ -121,8 +121,8 @@ export function PreferencesScreen({ navigation }: any) {
       if (type === 'meal') setMealReminders(previousValue);
       if (type === 'water') setWaterReminders(previousValue);
       Alert.alert(
-        t('notifications.error_title') || 'Erro ao atualizar',
-        t('notifications.error_body') || 'Não foi possível atualizar os lembretes. Tenta novamente.',
+        t('notifications.error_title') || 'Error updating',
+        t('notifications.error_body') || 'Could not update reminders. Please try again.',
       );
     }
     finally {
@@ -290,7 +290,7 @@ export function PreferencesScreen({ navigation }: any) {
               color: theme.colors.textSecondary || '#9CA3AF',
               marginBottom: 12,
             }}>
-              {t('preferences.notifications') || 'Notificações'}
+              {t('preferences.notifications') || 'Notifications'}
             </Text>
             
             {/* Notificações de Refeições */}
@@ -309,7 +309,7 @@ export function PreferencesScreen({ navigation }: any) {
                   fontWeight: '500',
                   color: theme.colors.text,
                 }}>
-                  {t('preferences.mealReminders') || 'Lembretes de refeições'}
+                  {t('preferences.mealReminders') || 'Meal reminders'}
                 </Text>
               </View>
               <PlainToggle
@@ -333,7 +333,7 @@ export function PreferencesScreen({ navigation }: any) {
                   fontWeight: '500',
                   color: theme.colors.text,
                 }}>
-                  {t('preferences.waterReminders') || 'Lembretes de água'}
+                  {t('preferences.waterReminders') || 'Water reminders'}
                 </Text>
               </View>
               <PlainToggle
@@ -365,7 +365,7 @@ export function PreferencesScreen({ navigation }: any) {
               color: theme.colors.textSecondary || '#9CA3AF',
               marginBottom: 12,
             }}>
-              {t('preferences.units') || 'Unidades'}
+              {t('preferences.units') || 'Units'}
             </Text>
             
             <TouchableOpacity
@@ -385,7 +385,7 @@ export function PreferencesScreen({ navigation }: any) {
                   fontWeight: '500',
                   color: theme.colors.text,
                 }}>
-                  {t('preferences.weightUnit') || 'Unidade de peso'}
+                  {t('preferences.weightUnit') || 'Weight unit'}
                 </Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -424,7 +424,7 @@ export function PreferencesScreen({ navigation }: any) {
                   fontWeight: '500',
                   color: theme.colors.text,
                 }}>
-                  {t('preferences.heightUnit') || 'Unidade de altura'}
+                  {t('preferences.heightUnit') || 'Height unit'}
                 </Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -484,7 +484,7 @@ export function PreferencesScreen({ navigation }: any) {
               paddingHorizontal: 24,
               marginBottom: 20,
             }}>
-              {t('profile.selectLanguage') || 'Selecionar Idioma'}
+              {t('profile.selectLanguage') || 'Select Language'}
             </Text>
             <ScrollView>
               {languages.map((lang) => (
@@ -563,7 +563,7 @@ export function PreferencesScreen({ navigation }: any) {
               paddingHorizontal: 24,
               marginBottom: 20,
             }}>
-              {t('preferences.selectWeightUnit') || 'Selecionar Unidade de Peso'}
+              {t('preferences.selectWeightUnit') || 'Select Weight Unit'}
             </Text>
             <ScrollView>
               {(['kg', 'lb'] as const).map((unit) => (
@@ -590,7 +590,7 @@ export function PreferencesScreen({ navigation }: any) {
                     color: theme.colors.text,
                     flex: 1,
                   }}>
-                    {unit === 'kg' ? 'Quilogramas (kg)' : 'Libras (lb)'}
+                    {unit === 'kg' ? 'Kilograms (kg)' : 'Pounds (lb)'}
                   </Text>
                   {units.weight === unit && (
                     <Ionicons name="checkmark" size={24} color={theme.colors.primary || '#3BB273'} />
@@ -644,7 +644,7 @@ export function PreferencesScreen({ navigation }: any) {
               paddingHorizontal: 24,
               marginBottom: 20,
             }}>
-              {t('preferences.selectHeightUnit') || 'Selecionar Unidade de Altura'}
+              {t('preferences.selectHeightUnit') || 'Select Height Unit'}
             </Text>
             <ScrollView>
               {(['cm', 'in'] as const).map((unit) => (
@@ -725,7 +725,7 @@ export function PreferencesScreen({ navigation }: any) {
               paddingHorizontal: 24,
               marginBottom: 20,
             }}>
-              {t('profile.theme') || 'Tema'}
+              {t('profile.theme') || 'Theme'}
             </Text>
             <ScrollView>
               {(['light', 'dark', 'system'] as const).map((mode) => (
@@ -753,10 +753,10 @@ export function PreferencesScreen({ navigation }: any) {
                     flex: 1,
                   }}>
                     {mode === 'dark'
-                      ? (t('profile.darkMode') || 'Modo escuro')
+                      ? (t('profile.darkMode') || 'Dark mode')
                       : mode === 'light'
-                      ? (t('profile.lightMode') || 'Modo claro')
-                      : (t('profile.systemMode') || 'Sistema')}
+                      ? (t('profile.lightMode') || 'Light mode')
+                      : (t('profile.systemMode') || 'System')}
                   </Text>
                   {themeMode === mode && (
                     <Ionicons name="checkmark" size={24} color={theme.colors.primary || '#3BB273'} />

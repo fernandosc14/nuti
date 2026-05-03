@@ -152,8 +152,8 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
     if (!weight) {
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: t('profile.fillAllFields') || 'Por favor, preencha todos os campos',
+        text1: t('common.error') || 'Error',
+        text2: t('profile.fillAllFields') || 'Please fill in all fields',
       });
       return;
     }
@@ -217,8 +217,8 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
               : formatWeight(minAllowed);
             Toast.show({
               type: 'error',
-              text1: t('common.error') || 'Erro',
-              text2: `Para manter o peso, deve estar entre ${displayMin} e ${displayMax} ${units.weight}`,
+              text1: t('common.error') || 'Error',
+              text2: `To maintain weight, you should be between ${displayMin} and ${displayMax} ${units.weight}`,
             });
             return;
           }
@@ -231,8 +231,8 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
               : formatWeight(currentWeightKg);
             Toast.show({
               type: 'error',
-              text1: t('common.error') || 'Erro',
-              text2: `Para ganhar peso, deve ser maior que o peso atual (${displayCurrent} ${units.weight})`,
+              text1: t('common.error') || 'Error',
+              text2: `To gain weight, it should be greater than your current weight (${displayCurrent} ${units.weight})`,
             });
             return;
           }
@@ -245,8 +245,8 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
               : formatWeight(currentWeightKg);
             Toast.show({
               type: 'error',
-              text1: t('common.error') || 'Erro',
-              text2: `Para perder peso, deve ser menor que o peso atual (${displayCurrent} ${units.weight})`,
+              text1: t('common.error') || 'Error',
+              text2: `To lose weight, it should be less than your current weight (${displayCurrent} ${units.weight})`,
             });
             return;
           }
@@ -293,8 +293,8 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
       setLoading(false);
       Toast.show({
         type: 'success',
-        text1: t('profile.updateSuccess') || 'Sucesso',
-        text2: t('profile.detailsUpdated') || 'Detalhes atualizados com sucesso',
+        text1: t('profile.updateSuccess') || 'Success',
+        text2: t('profile.detailsUpdated') || 'Details updated successfully',
       });
       // Pequeno delay para garantir que o Toast seja visível
       setTimeout(() => {
@@ -304,8 +304,8 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
       setLoading(false);
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: error.message || t('profile.updateError') || 'Erro ao atualizar detalhes',
+        text1: t('common.error') || 'Error',
+        text2: error.message || t('profile.updateError') || 'Error updating details',
       });
     }
   };
@@ -346,7 +346,7 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
             textAlign: 'center',
             marginRight: 40,
           }}>
-            {t('profile.goal') || 'Meta'}
+            {t('profile.goal') || 'Goal'}
           </Text>
         </View>
 
@@ -371,7 +371,7 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
                 fontWeight: '700',
                 color: theme.colors.text,
               }}>
-                {t('profile.desiredWeight') || 'Peso desejado'}
+                {t('profile.desiredWeight') || 'Desired weight'}
               </Text>
               <View style={{
                 backgroundColor: (theme.colors.primary || '#3BB273') + '15',
@@ -634,7 +634,7 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
                     fontWeight: '700',
                     color: theme.colors.text,
                   }}>
-                    {t('profile.recommendedWeight') || 'Peso Recomendado'}
+                    {t('profile.recommendedWeight') || 'Recommended Weight'}
                   </Text>
                 </View>
                 <Text style={{
@@ -642,7 +642,7 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
                   color: theme.colors.textSecondary || '#6B7280',
                   marginTop: 4,
                 }}>
-                  {t('profile.recommendedWeightDescription') || 'Baseado no teu IMC saudável (18.5-25)'}
+                  {t('profile.recommendedWeightDescription') || 'Based on your healthy BMI (18.5-25)'}
                 </Text>
               </View>
               <View style={{
@@ -685,7 +685,7 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
                 color: theme.colors.text,
                 marginBottom: 8,
               }}>
-                {t('onboarding.goalSpeed.title') || 'Rapidez por semana'}
+                {t('onboarding.goalSpeed.title') || 'Rate per week'}
               </Text>
               <Text style={{
                 fontSize: 14,
@@ -694,8 +694,8 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
                 lineHeight: 20,
               }}>
                 {goal === 'gain' 
-                  ? t('onboarding.goalSpeed.descriptionGain') || 'Quanto peso queres ganhar por semana?'
-                  : t('onboarding.goalSpeed.descriptionLose') || 'Quanto peso queres perder por semana?'}
+                  ? t('onboarding.goalSpeed.descriptionGain') || 'How much weight do you want to gain per week?'
+                  : t('onboarding.goalSpeed.descriptionLose') || 'How much weight do you want to lose per week?'}
               </Text>
 
               {/* Valor atual destacado */}
@@ -719,7 +719,7 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
                   color: theme.colors.textSecondary || '#6B7280',
                   fontWeight: '500',
                 }}>
-                  {t('onboarding.goalSpeed.perWeek') || 'por semana'}
+                  {t('onboarding.goalSpeed.perWeek') || 'per week'}
                 </Text>
               </View>
 
@@ -758,7 +758,7 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
                 textAlign: 'center',
                 fontStyle: 'italic',
               }}>
-                {t('onboarding.goalSpeed.safetyNote') || 'Para a tua segurança, o ajuste calórico real pode ser limitado para garantir uma ingestão diária segura, mesmo que velocidades mais altas sejam selecionadas.'}
+                {t('onboarding.goalSpeed.safetyNote') || 'For your safety, the actual caloric adjustment may be limited to ensure safe daily intake, even if higher speeds are selected.'}
               </Text>
 
               {/* Botão Recommended */}
@@ -780,7 +780,7 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
                   fontSize: 14,
                   fontWeight: '600',
                 }}>
-                  {t('onboarding.goalSpeed.recommended') || 'Recomendado'} ({(units.weight === 'lb' ? 0.5 * 2.20462 : 0.5).toFixed(1)} {units.weight === 'lb' ? 'lbs' : 'kg'})
+                  {t('onboarding.goalSpeed.recommended') || 'Recommended'} ({(units.weight === 'lb' ? 0.5 * 2.20462 : 0.5).toFixed(1)} {units.weight === 'lb' ? 'lbs' : 'kg'})
                 </Text>
               </TouchableOpacity>
             </View>
@@ -820,7 +820,7 @@ export function EditGoalAndWeightScreen({ navigation }: any) {
                   ? theme.colors.textSecondary || '#9CA3AF'
                   : '#FFFFFF',
               }}>
-                {t('profile.save') || 'Salvar'}
+                {t('profile.save') || 'Save'}
               </Text>
             )}
           </TouchableOpacity>

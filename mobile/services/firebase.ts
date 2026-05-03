@@ -1,7 +1,7 @@
 /**
  * Firebase Configuration and Services
- * 
- * Configuração do Firebase para autenticação e Firestore
+ *
+ * Firebase setup for authentication and Firestore
  */
 
 import { initializeApp } from 'firebase/app';
@@ -10,8 +10,8 @@ import { getFirestore } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Configuração do Firebase
-// IMPORTANTE: Substitua estas variáveis pelas suas credenciais do Firebase
+// Firebase configuration
+// IMPORTANT: Replace these variables with your Firebase credentials
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "your-api-key",
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || "your-project.firebaseapp.com",
@@ -20,11 +20,11 @@ const firebaseConfig = {
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || "your-app-id"
 };
 
-// Inicializar Firebase
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Inicializar Auth com persistência usando AsyncStorage
-// Isto garante que o estado de autenticação persiste entre sessões
+// Initialize Auth with persistence using AsyncStorage
+// This ensures authentication state persists between sessions
 export const auth = initializeAuth(app, {
   persistence: getReactNativePersistence(AsyncStorage)
 });
@@ -42,12 +42,12 @@ export const auth = initializeAuth(app, {
 // - If you'd like, I can switch this project to a dev-client flow and enable
 //   persistence properly (I can add the code and instructions).
 
-// Exportar outros serviços
+// Export other services
 export const db = getFirestore(app);
 export const functions = getFunctions(app);
 export const googleProvider = new GoogleAuthProvider();
 
-// Log para debug
+// Debug log
 console.log('=== Firebase Configuration ===');
 console.log('Project ID:', firebaseConfig.projectId);
 console.log('============================');

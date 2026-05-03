@@ -1,7 +1,7 @@
 /**
  * Exercise Types
- * 
- * Tipos e interfaces para os diferentes tipos de exercícios e seus campos específicos
+ *
+ * Types and interfaces for different exercise types and their specific fields
  */
 
 export type ExerciseType = 
@@ -19,61 +19,61 @@ export type ExerciseType =
   | 'basketball'
   | 'other';
 
-// Campos base comuns a todos os exercícios
+// Base fields common to all exercises
 export interface BaseExercise {
   userId: string;
   type: ExerciseType;
-  name: string; // Nome do exercício (pode ser o tipo ou nome customizado)
-  duration: number; // Duração em minutos (obrigatório para todos)
+  name: string; // Exercise name (can be the type or a custom name)
+  duration: number; // Duration in minutes (required for all)
   date: Date;
   addedAt: Date;
 }
 
-// Running (Corrida)
+// Running
 export interface RunningExercise extends BaseExercise {
   type: 'running';
-  distance?: number; // km ou mi
+  distance?: number; // km or mi
   distanceUnit?: 'km' | 'mi';
   averageHeartRate?: number; // bpm
-  // Calculados: averagePace, averageSpeed
+  // Calculated: averagePace, averageSpeed
 }
 
-// Walking (Caminhada)
+// Walking
 export interface WalkingExercise extends BaseExercise {
   type: 'walking';
-  distance?: number; // km ou mi
+  distance?: number; // km or mi
   distanceUnit?: 'km' | 'mi';
-  steps?: number; // opcional
+  steps?: number; // optional
   averageHeartRate?: number; // bpm
-  // Calculados: averagePace
+  // Calculated: averagePace
 }
 
-// Cycling (Bicicleta)
+// Cycling
 export interface CyclingExercise extends BaseExercise {
   type: 'cycling';
-  distance?: number; // km ou mi
+  distance?: number; // km or mi
   distanceUnit?: 'km' | 'mi';
-  averageSpeed?: number; // km/h ou mph (se não fornecido, calculado)
+  averageSpeed?: number; // km/h or mph (if not provided, calculated)
   speedUnit?: 'km/h' | 'mph';
   averageHeartRate?: number; // bpm
-  // Calculados: averageSpeed (se não fornecido), averagePower (avançado)
+  // Calculated: averageSpeed (if not provided), averagePower (advanced)
 }
 
-// Swimming (Natação)
+// Swimming
 export interface SwimmingExercise extends BaseExercise {
   type: 'swimming';
-  distance?: number; // metros ou jardas
+  distance?: number; // meters or yards
   distanceUnit?: 'm' | 'yd';
   style?: 'freestyle' | 'backstroke' | 'breaststroke' | 'butterfly' | 'mixed';
-  perceivedIntensity?: number; // 1-10 (opcional)
+  perceivedIntensity?: number; // 1-10 (optional)
   averageHeartRate?: number; // bpm
 }
 
-// GYM (Treino com Pesos)
+// GYM (Weight Training)
 export interface GymExercise extends BaseExercise {
   type: 'gym';
   trainingType?: 'strength' | 'hypertrophy' | 'cardio';
-  perceivedIntensity?: number; // 1-10 (opcional, mas recomendado)
+  perceivedIntensity?: number; // 1-10 (optional, but recommended)
   averageHeartRate?: number; // bpm
 }
 
@@ -82,7 +82,7 @@ export interface YogaExercise extends BaseExercise {
   type: 'yoga';
   level?: 'beginner' | 'intermediate' | 'advanced';
   style?: 'hatha' | 'vinyasa' | 'power' | 'yin' | 'ashtanga' | 'bikram';
-  perceivedIntensity?: number; // 1-10 (opcional)
+  perceivedIntensity?: number; // 1-10 (optional)
   averageHeartRate?: number; // bpm
 }
 
@@ -90,63 +90,63 @@ export interface YogaExercise extends BaseExercise {
 export interface PilatesExercise extends BaseExercise {
   type: 'pilates';
   pilatesType?: 'mat' | 'machine';
-  perceivedIntensity?: number; // 1-10 (opcional)
+  perceivedIntensity?: number; // 1-10 (optional)
   averageHeartRate?: number; // bpm
 }
 
-// Dance (Dança)
+// Dance
 export interface DanceExercise extends BaseExercise {
   type: 'dance';
   style?: 'zumba' | 'ballet' | 'salsa' | 'hip-hop' | 'free';
-  perceivedIntensity?: number; // 1-10 (recomendado)
+  perceivedIntensity?: number; // 1-10 (recommended)
   averageHeartRate?: number; // bpm
 }
 
-// Hiking (Caminhada)
+// Hiking
 export interface HikingExercise extends BaseExercise {
   type: 'hiking';
-  distance?: number; // km ou mi
+  distance?: number; // km or mi
   distanceUnit?: 'km' | 'mi';
-  elevationGain?: number; // metros ou pés (essencial para cálculo MET)
+  elevationGain?: number; // meters or feet (essential for MET calculation)
   elevationUnit?: 'm' | 'ft';
-  backpackWeight?: number; // kg ou lbs (opcional)
+  backpackWeight?: number; // kg or lbs (optional)
   weightUnit?: 'kg' | 'lbs';
   averageHeartRate?: number; // bpm
 }
 
-// Tennis (Ténis)
+// Tennis
 export interface TennisExercise extends BaseExercise {
   type: 'tennis';
   gameType?: 'individual' | 'doubles';
-  effectiveGameDuration?: number; // minutos (opcional)
+  effectiveGameDuration?: number; // minutes (optional)
   averageHeartRate?: number; // bpm
 }
 
-// Football (Futebol)
+// Football
 export interface FootballExercise extends BaseExercise {
   type: 'football';
   position?: 'forward' | 'midfielder' | 'defender' | 'goalkeeper';
-  perceivedIntensity?: number; // 1-10 (opcional)
+  perceivedIntensity?: number; // 1-10 (optional)
   averageHeartRate?: number; // bpm
 }
 
-// Basketball (Basquetebol)
+// Basketball
 export interface BasketballExercise extends BaseExercise {
   type: 'basketball';
   gameType?: 'game' | 'training';
-  perceivedIntensity?: number; // 1-10 (opcional)
+  perceivedIntensity?: number; // 1-10 (optional)
   averageHeartRate?: number; // bpm
 }
 
-// Other (Outro)
+// Other
 export interface OtherExercise extends BaseExercise {
   type: 'other';
-  customName: string; // obrigatório
-  perceivedIntensity: number; // 1-10 (obrigatório para estimativa calórica)
+  customName: string; // required
+  perceivedIntensity: number; // 1-10 (required for calorie estimate)
   averageHeartRate?: number; // bpm
 }
 
-// Union type para todos os tipos de exercícios
+// Union type for all exercise types
 export type Exercise = 
   | RunningExercise
   | WalkingExercise
@@ -162,7 +162,7 @@ export type Exercise =
   | BasketballExercise
   | OtherExercise;
 
-// Configuração de campos para cada tipo de exercício
+// Field configuration for each exercise type
 export interface ExerciseFieldConfig {
   label: string;
   key: string;
@@ -183,7 +183,7 @@ export interface ExerciseTypeConfig {
   notes?: string;
 }
 
-// Função para obter configurações traduzidas
+// Function to get translated configurations
 export function getExerciseConfigs(t: (key: string) => string): Record<ExerciseType, ExerciseTypeConfig> {
   return {
   running: {

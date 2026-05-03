@@ -1,7 +1,7 @@
 /**
  * User Context
  * 
- * Context API para gerenciar estado global do utilizador
+ * Context API for managing global user state.
  */
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
@@ -15,10 +15,10 @@ import * as Google from 'expo-auth-session/providers/google';
 import { makeRedirectUri } from 'expo-auth-session';
 import Constants from 'expo-constants';
 // Google Sign-In via expo-auth-session -> exchange token with Firebase
-// GoogleSignin é importado dinamicamente apenas quando necessário (não disponível no Expo Go)
+// GoogleSignin is dynamically imported only when needed (not available in Expo Go).
 
 /**
- * Interface do perfil do utilizador
+ * Interface for the user profile
  */
 export interface UserProfile {
   id: string;
@@ -95,28 +95,28 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '';
   const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || '';
 
-  // Determinar o redirect URI correto baseado no ambiente
-  // No Expo Go, precisamos usar o proxy HTTPS diretamente (não exp://)
+  // Determine the correct redirect URI based on the environment.
+  // In Expo Go, we need to use the HTTPS proxy directly (not exp://).
   const slug = 'nuti'; // do app.json
   
-  // Verificar se estamos no Expo Go (appOwnership === 'expo')
+  // Verify if we are in Expo Go (appOwnership === 'expo')
   const isExpoGo = (Constants as any)?.appOwnership === 'expo';
   
-  // No Expo Go, o makeRedirectUri pode retornar exp:// em vez de https://auth.expo.io
-  // Precisamos forçar o uso do proxy HTTPS do Expo
+  // In Expo Go, makeRedirectUri might return exp:// instead of https://auth.expo.io
+  // We need to force the use of the Expo HTTPS proxy
   let expoProxyRedirect: string;
   
   if (useProxyByDefault && isExpoGo) {
-    // Forçar o uso do proxy HTTPS do Expo para Expo Go
-    // O formato é: https://auth.expo.io/@anonymous/[slug]
+    // Force Expo to use HTTPS proxy for Expo Go.
+    // The format is: https://auth.expo.io/@anonymous/[slug]
     expoProxyRedirect = `https://auth.expo.io/@anonymous/${slug}`;
   } else if (useProxyByDefault) {
-    // Tentar usar makeRedirectUri, mas se retornar exp://, usar o proxy HTTPS
+    // Try to use makeRedirectUri, but if it returns exp://, use the HTTPS proxy
     const uri = makeRedirectUri({ useProxy: true });
     if (uri.startsWith('https://')) {
       expoProxyRedirect = uri;
     } else {
-      // Se retornou exp://, forçar o proxy HTTPS
+      // If exp:// was returned, force HTTPS proxy.
       expoProxyRedirect = `https://auth.expo.io/@anonymous/${slug}`;
     }
   } else {
@@ -125,7 +125,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }
   
 
-  // Configurar Google Signin nativo quando o módulo existir (dev-client/standalone)
+  // Configure Google Signin natively when the module is available (dev-client/standalone)
   useEffect(() => {
     (async () => {
     try {
@@ -139,13 +139,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
       });
         }
       } catch {
-        // Módulo não disponível neste ambiente (por ex., Expo Go)
+        // This module is not available in this environment (e.g., Expo Go).
     }
     })();
   }, []);
 
-  // Configurar auth request apenas se webClientId estiver disponível
-  // Se não estiver, o request será null e vamos dar erro claro quando tentar usar
+  // Configure auth request only if webClientId is available
+  // If not, the request will be null and we will show a clear error when trying to use it
   const authRequestConfig = webClientId
     ? (useProxyByDefault
     ? {
@@ -169,7 +169,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [request, response, promptAsync] = Google.useAuthRequest(authRequestConfig as any);
 
-  // Processar resposta automática quando o OAuth retorna (importante para deep linking)
+  // Process automatic responses when OAuth returns (important for deep linking)
   useEffect(() => {
     if (response) {
       if (response.type === 'success') {
@@ -183,7 +183,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
               const credential = GoogleAuthProvider.credential(idToken || undefined, accessToken || undefined);
               const userCredential = await signInWithCredential(auth, credential);
               
-              // Verificar se userCredential e user existem
+              // Verify if userCredential and user exist
               if (!userCredential?.user) {
                 throw new Error('Erro ao fazer login: dados do utilizador não disponíveis');
               }
@@ -193,23 +193,23 @@ export function UserProvider({ children }: { children: ReactNode }) {
                 throw new Error('Erro ao fazer login: dados do utilizador não disponíveis');
               }
               
-              // Verificar se a conta foi criada com email/password
+              // Verify if the account was created with email/password
               const userRef = doc(db, 'users', currentUser.uid);
               const userSnap = await getDoc(userRef);
               
               if (userSnap.exists()) {
                 const data = userSnap.data();
                 if (data.authMethod === 'email') {
-                  // Fazer logout e lançar erro
+                  // Log out and throw an error.
                   await firebaseSignOut(auth);
                   throw new Error('Esta conta foi criada com email e password. Por favor, usa o login com email.');
                 }
-                // Se não tem authMethod, atualizar para google
+                // If no authMethod is present, update it to google
                 if (!data.authMethod) {
                   await setDoc(userRef, { authMethod: 'google' }, { merge: true });
                 }
               } else {
-                // Conta não está registada - fazer logout e lançar erro
+                // Account not registered - log out and generate error.
                 await firebaseSignOut(auth);
                 throw new Error('Esta conta não está registada. Por favor, cria uma conta primeiro.');
               }
@@ -232,7 +232,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   //   });
   // }, []);
 
-  // Carregar perfil do utilizador
+  // Load user profile
   const loadProfile = async (userId: string) => {
     try {
       const userRef = doc(db, 'users', userId);
@@ -264,7 +264,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           diet: data.diet,
           goalSpeed: data.goalSpeed,
           referralCode: data.referralCode,
-          onboardingCompleted: onboardingCompleted, // Garantir que é boolean (true ou false)
+          onboardingCompleted: onboardingCompleted, // Ensure it is a boolean (true or false)
           shouldShowPremiumOnboarding: data.shouldShowPremiumOnboarding === true,
           // Auth method
           authMethod: data.authMethod,
@@ -284,8 +284,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
         
         setProfile(loadedProfile);
       } else {
-        // Não criar perfil automaticamente - apenas as funções explícitas devem criar
-        // Isto previne criação automática durante sign in quando a conta não existe
+        // Do not create a profile automatically - only explicit roles should create one.
+        // This prevents automatic creation during sign in when the account does not exist
         setProfile(null);
       }
     } catch (error: any) {
@@ -296,7 +296,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Observar mudanças de autenticação
+  // Observe authentication changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
@@ -319,41 +319,41 @@ export function UserProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, []);
 
-  // Sign in com email e password
+  // Sign in with email and password
   const signIn = async (email: string, password: string) => {
     try {
-      // Verificar se a conta existe e qual o método de autenticação
-      // Primeiro tentar fazer login para ver se a conta existe
+      // Verify if the account exists and which authentication method is used
+      // First, try to sign in to see if the account exists
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       
-      // Se login funcionou, verificar método de autenticação
+      // If sign in succeeded, verify the authentication method
       const userRef = doc(db, 'users', userCredential.user.uid);
       const userSnap = await getDoc(userRef);
       
       if (userSnap.exists()) {
         const data = userSnap.data();
         if (data.authMethod === 'google') {
-          // Fazer logout e lançar erro
+          // Log out and throw an error.
           await firebaseSignOut(auth);
           throw new Error('Esta conta foi criada com Google. Por favor, usa "Continuar com Google" para fazer login.');
         }
       }
     } catch (error: any) {
-      // Se for erro de credenciais inválidas, verificar se a conta existe
+      // If it's an invalid credentials error, check if the account exists
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-        throw new Error('Email ou password incorretos. Se não tens conta, cria uma nova.');
+        throw new Error('Email or password incorrect. If you don\'t have an account, create a new one.');
       }
-      throw new Error(error.message || 'Erro ao fazer login');
+      throw new Error(error.message || 'Error signing in');
     }
   };
 
-  // Sign up com email e password
+  // Sign up with email and password
   const signUp = async (email: string, password: string, name: string, onboardingData?: any) => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Gerar código de referência único baseado no userId
+          // Generate a unique referral code based on userId
       const generateReferralCode = (userId: string): string => {
         const code = userId.substring(0, 8).toUpperCase().replace(/[^A-Z0-9]/g, '');
         return code || userId.substring(0, 6).toUpperCase();
@@ -369,7 +369,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         badges: [],
         createdAt: Timestamp.fromDate(new Date()),
         authMethod: 'email',
-        referralCode: generateReferralCode(user.uid), // Gerar código automaticamente
+        referralCode: generateReferralCode(user.uid), // Automatically generate code
       };
       
       if (onboardingData) {
@@ -399,10 +399,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
         }
       }
       
-      // Carregar perfil imediatamente (o onAuthStateChanged também vai chamar, mas garantimos que temos os dados corretos)
+      // Load profile immediately (onAuthStateChanged will also call, but this ensures we have the correct data)
       await loadProfile(user.uid);
     } catch (error: any) {
-      // Se a conta já existe com Google, informar
+      // If the account already exists with Google, inform the user
       if (error.code === 'auth/email-already-in-use') {
         throw new Error('Este email já está registado com Google. Por favor, usa "Continuar com Google" para fazer login.');
       }
@@ -410,21 +410,21 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Sign in com Google - tenta nativo primeiro, depois web
+  // Google Sign-In - tries native first, then falls back to web
   const signInWithGoogle = async (allowCreateAccount: boolean = false) => {
-    // Verificar se temos configuração básica
+    // Check if we have the basic configuration
     if (!webClientId) {
       throw new Error(
         'Google Sign-In não está configurado. Por favor, adicione EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID no ficheiro .env'
       );
     }
 
-    // Verificar se estamos no Expo Go - se sim, usar APENAS web flow
+    // Check if we are running in Expo Go - if so, use ONLY the web flow
     const isExpoGo = (Constants as any)?.appOwnership === 'expo' || !(Constants as any)?.appOwnership;
     
     if (isExpoGo) {
-      // No Expo Go, usar APENAS o método web (expo-auth-session)
-      // Nunca tentar usar GoogleSignin nativo no Expo Go
+      // In Expo Go, use ONLY the web method (expo-auth-session)
+      // Never attempt to use native GoogleSignin in Expo Go
       try {
         await signInWithGoogleWeb(allowCreateAccount);
         return;
@@ -437,25 +437,25 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Se não estamos no Expo Go, tentar nativo primeiro, depois web como fallback
+    // If not in Expo Go, try native first, then fallback to web
     try {
-      // Tentar login nativo primeiro (apenas em dev-client/standalone)
+      // Try native login first (only in dev-client/standalone)
       try {
         await signInWithGoogleNative(allowCreateAccount);
             return;
       } catch (nativeError: any) {
-        // Se não for erro de "não disponível", relançar
+        // If it's not a "not available" error, rethrow
         if (nativeError.message && !nativeError.message.includes('não está disponível')) {
           throw nativeError;
       }
-        // Caso contrário, continuar para web flow
+        // Otherwise, continue to web flow
       }
 
-      // Web/proxy flow (funciona em Expo Go e dev-client)
+      // Web/proxy flow (works in Expo Go and dev-client)
       await signInWithGoogleWeb();
     } catch (error: any) {
       console.error('Google sign-in error:', error);
-      // Se já é um Error com mensagem, relançar diretamente
+      // If it's already an Error with a message, rethrow directly
       if (error instanceof Error) {
         throw error;
       }
@@ -465,21 +465,21 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   // Native-only Google sign-in (dev-client / standalone)
   const signInWithGoogleNative = async (allowCreateAccount: boolean = false) => {
-    // Verificar se temos client ID configurado
+    // Check if we have the client ID configured
     if (!webClientId) {
       throw new Error('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID não está configurado no .env');
     }
 
     try {
-      // Import dinâmico do GoogleSignin (não disponível no Expo Go)
+      // Dynamic import of GoogleSignin (not available in Expo Go)
       const { GoogleSignin: GS } = await import('@react-native-google-signin/google-signin');
 
-      // Verificar se GoogleSignin está disponível
+      // Check if GoogleSignin is available
       if (!GS || typeof GS.hasPlayServices !== 'function') {
         throw new Error('GoogleSignin nativo não está disponível. Garante dev client e plugin configurado.');
     }
 
-      // Forçar seletor de conta: garantir que não há sessão cacheada
+      // Force account selector: ensure there is no cached session
       try {
         if (typeof GS.signOut === 'function') {
           await GS.signOut();
@@ -488,15 +488,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
           await GS.revokeAccess();
         }
       } catch {
-        // Ignorar erros ao limpar sessão
+        // Ignore errors when clearing session
       }
 
-      // Verificar Google Play Services (Android)
+      // Check Google Play Services (Android)
       if (Platform.OS === 'android') {
         await GS.hasPlayServices({ showPlayServicesUpdateDialog: true });
       }
 
-      // Fazer login
+      // Perform login
       const userInfo = await GS.signIn();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const idTokenNative = (userInfo as any)?.idToken;
@@ -511,11 +511,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
         throw new Error('Google Sign-In não retornou idToken');
       }
 
-      // Criar credencial Firebase e fazer login
+      // Create Firebase credential and sign in
       const credentialNative = GoogleAuthProvider.credential(idTokenNative);
       const userCredential = await signInWithCredential(auth, credentialNative);
       
-      // Verificar se userCredential e user existem
+      // Check if userCredential and user exist
       if (!userCredential?.user) {
         throw new Error('Login error: user data not available.');
       }
@@ -525,12 +525,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
         throw new Error('Login error: user data not available.');
       }
       
-      // Verificar se a conta foi criada com email/password
+      // Check if the account was created with email/password
       const userRef = doc(db, 'users', currentUser.uid);
       const userSnap = await getDoc(userRef);
       
       if (userSnap.exists()) {
-        // Se já existe, bloquear criação durante onboarding e obrigar a fazer login
+        // If it already exists, block creation during onboarding and require sign in
         if (allowCreateAccount) {
           await firebaseSignOut(auth);
           throw new Error('This account already exists. Please use "Sign in" instead of creating a new account.');
@@ -542,24 +542,24 @@ export function UserProvider({ children }: { children: ReactNode }) {
           throw new Error('This account was created with an email and password. Please use the login with email.');
         }
 
-        // Se não tem authMethod, atualizar para google
+        // If there is no authMethod, update to google
         if (!data.authMethod) {
           await setDoc(userRef, { authMethod: 'google' }, { merge: true });
         }
       } else {
-        // Se allowCreateAccount for true, criar perfil (usado durante onboarding/registo)
+        // If allowCreateAccount is true, create profile (used during onboarding/registration)
         if (allowCreateAccount) {
-          // Usar dados do Google Sign-In se disponíveis, caso contrário usar do Firebase Auth
+          // Use Google Sign-In data if available, otherwise use Firebase Auth data
           const userName = googleName || currentUser?.displayName || '';
           const userEmail = googleEmail || currentUser?.email || '';
           
           if (!userEmail) {
-            // Se não temos email, fazer logout e lançar erro
+            // If we don't have an email, sign out and throw error
             await firebaseSignOut(auth);
             throw new Error('Unable to get user email from Google Sign-In.');
           }
           
-          // Gerar código de referência único baseado no userId
+          // Generate a unique referral code based on userId
           const generateReferralCode = (userId: string): string => {
             const code = userId.substring(0, 8).toUpperCase().replace(/[^A-Z0-9]/g, '');
             return code || userId.substring(0, 6).toUpperCase();
@@ -573,17 +573,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
             badges: [],
             createdAt: Timestamp.fromDate(new Date()),
             authMethod: 'google',
-            referralCode: generateReferralCode(currentUser.uid), // Gerar código automaticamente
+            referralCode: generateReferralCode(currentUser.uid), // Automatically generate code
           });
         } else {
-          // Conta não está registada - fazer logout e lançar erro
+          // Account is not registered - sign out and throw error
           await firebaseSignOut(auth);
           throw new Error('This account is not registered. Please create an account first.');
         }
       }
     } catch (error: any) {
       console.error('Native Google sign-in error:', error);
-      // Se for erro relacionado com GoogleSignin não disponível, relançar com mensagem clara
+      // If the error is related to GoogleSignin not being available, rethrow with a clear message
       if (error?.message?.includes('null') || error?.message?.includes('undefined') || error?.code === 'MODULE_NOT_FOUND') {
         throw new Error('GoogleSignin não está disponível no Expo Go. Usa dev-client ou standalone build para login nativo.');
       }
@@ -615,7 +615,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           const credential = GoogleAuthProvider.credential(idToken || undefined, accessToken || undefined);
           const userCredential = await signInWithCredential(auth, credential);
           
-          // Verificar se userCredential e user existem
+          // Check if userCredential and user exist
           if (!userCredential?.user) {
             throw new Error('Login error: user data not available.');
           }
@@ -625,12 +625,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
             throw new Error('Login error: user data not available.');
           }
           
-          // Verificar se a conta foi criada com email/password
+          // Check if the account was created with email/password
           const userRef = doc(db, 'users', currentUser.uid);
           const userSnap = await getDoc(userRef);
           
           if (userSnap.exists()) {
-            // Se já existe, bloquear criação durante onboarding e obrigar a fazer login
+            // If it already exists, block creation during onboarding and require sign in
             if (allowCreateAccount) {
               await firebaseSignOut(auth);
               throw new Error('This account already exists. Please use "Sign in" instead of creating a new account.');
@@ -642,23 +642,23 @@ export function UserProvider({ children }: { children: ReactNode }) {
               throw new Error('This account was created with an email and password. Please use the login with email.');
             }
 
-            // Se não tem authMethod, atualizar para google
+            // If there is no authMethod, update to google
             if (!data.authMethod) {
               await setDoc(userRef, { authMethod: 'google' }, { merge: true });
             }
           } else {
-            // Se allowCreateAccount for true, criar perfil (usado durante onboarding/registo)
+            // If allowCreateAccount is true, create profile (used during onboarding/registration)
             if (allowCreateAccount) {
               const userName = currentUser?.displayName || '';
               const userEmail = currentUser?.email || '';
               
               if (!userEmail) {
-                // Se não temos email, fazer logout e lançar erro
+                // If we don't have an email, sign out and throw error
                 await firebaseSignOut(auth);
                 throw new Error('Unable to get user email from Google Sign-In.');
               }
               
-              // Gerar código de referência único baseado no userId
+              // Generate a unique referral code based on userId
               const generateReferralCode = (userId: string): string => {
                 const code = userId.substring(0, 8).toUpperCase().replace(/[^A-Z0-9]/g, '');
                 return code || userId.substring(0, 6).toUpperCase();
@@ -672,10 +672,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
                 badges: [],
                 createdAt: Timestamp.fromDate(new Date()),
                 authMethod: 'google',
-                referralCode: generateReferralCode(currentUser.uid), // Gerar código automaticamente
+                referralCode: generateReferralCode(currentUser.uid), // Automatically generate code
               });
             } else {
-              // Conta não está registada - fazer logout e lançar erro
+              // Account is not registered - sign out and throw error
               await firebaseSignOut(auth);
               throw new Error('This account is not registered. Please create an account first.');
             }

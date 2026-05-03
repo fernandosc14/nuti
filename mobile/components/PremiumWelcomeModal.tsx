@@ -1,7 +1,7 @@
 /**
  * PremiumWelcomeModal
  * 
- * Modal de boas-vindas ao Premium que aparece apenas 1 vez
+ * Premium welcome message that appears only once.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -37,14 +37,14 @@ export function PremiumWelcomeModal() {
 
       const currentPlan = profile.plan || 'free';
 
-      // Se o plano atual é premium
+      // If the current plan is premium
       if (currentPlan === 'premium') {
-        // Verificar se o modal de boas-vindas já foi mostrado
+        // Check if the welcome modal has already been shown
         const welcomeShown = await AsyncStorage.getItem('premium_welcome_shown');
         
-        // Se ainda não foi mostrado, mostrar o modal
+        // If it hasn't been shown yet, display the modal
         if (welcomeShown !== 'true') {
-          // Pequeno delay para garantir que a UI está pronta
+          // Small delay to ensure the UI is ready
           setTimeout(() => {
             setShowModal(true);
           }, 500);
@@ -57,7 +57,7 @@ export function PremiumWelcomeModal() {
 
   const handleClose = async () => {
     setShowModal(false);
-    // Marcar que o modal de boas-vindas já foi mostrado (apenas uma vez)
+    // Mark that the welcome modal has already been shown (only once)
     if (profile?.plan === 'premium') {
       await AsyncStorage.setItem('premium_welcome_shown', 'true');
     }
@@ -77,7 +77,7 @@ export function PremiumWelcomeModal() {
       onRequestClose={handleClose}
     >
       <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}> 
-        {/* Botão Fechar */}
+        {/* Close Button */}
         <TouchableOpacity
           onPress={handleClose}
           style={[styles.closeButton, {
@@ -95,19 +95,19 @@ export function PremiumWelcomeModal() {
           <Ionicons name="close" size={20} color="#111827" />
         </TouchableOpacity>
 
-        {/* Conteúdo */}
+        {/* Content */}
         <View style={styles.content}>
-          {/* Ícone Premium */}
+          {/* Premium Icon */}
           <View style={[styles.iconContainer, { backgroundColor: theme.colors.primary + '20' }]}>
             <Text style={styles.iconEmoji}>⭐</Text>
           </View>
 
-          {/* Título */}
+          {/* Title */}
           <Text style={[styles.title, { color: theme.colors.text }]}>
             {t('premium.welcomeTitle') || 'Bem-vindo ao Premium!'}
           </Text>
 
-          {/* Subtítulo */}
+          {/* Caption */}
           <Text style={[styles.subtitle, { color: theme.colors.textSecondary || '#9CA3AF' }]}>
             {t('premium.welcomeMessage') || 'Parabéns! Agora tens acesso a todas as funcionalidades premium.'}
           </Text>
@@ -140,7 +140,7 @@ export function PremiumWelcomeModal() {
             </View>
           </View>
 
-          {/* Botão Começar */}
+          {/* Start Button */}
           <TouchableOpacity
             onPress={handleClose}
             style={[styles.startButton, { backgroundColor: theme.colors.primary || '#3BB273' }]}

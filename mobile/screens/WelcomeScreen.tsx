@@ -170,19 +170,19 @@ export function WelcomeScreen({ navigation, showOnboarding }: any) {
           {/* Consent: Terms & Privacy */}
           <View style={{ alignItems: 'center', marginTop: 8, paddingHorizontal: 8 }}>
             <Text style={{ fontSize: 12, color: '#9CA3AF', textAlign: 'center' }}>
-              {(t('auth.byContinuingAgree') as string) || 'Ao continuar, concordas com os '}
+              {(t('auth.byContinuingAgree') as string) || 'By continuing, you agree to the '}
               <Text
                 style={{ fontSize: 12, color: '#3BB273' }}
                 onPress={() => Linking.openURL('https://nuti.app/terms-and-conditions')}
               >
-                {t('profile.settings.terms') || 'Termos e Condições'}
+                {t('profile.settings.terms') || 'Terms and Conditions'}
               </Text>
-              {' e '}
+              {' and '}
               <Text
                 style={{ fontSize: 12, color: '#3BB273' }}
                 onPress={() => Linking.openURL('https://nuti.app/privacy-policy')}
               >
-                {t('profile.settings.privacyPolicy') || 'Política de Privacidade'}
+                {t('profile.settings.privacyPolicy') || 'Privacy Policy'}
               </Text>
               {'.'}
             </Text>

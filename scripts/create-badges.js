@@ -1,9 +1,9 @@
 /**
- * Script para criar badges no Firestore
+ * Script to create badges in Firestore
  * 
- * Executa: node scripts/create-badges.js
+ * Execute: node scripts/create-badges.js
  * 
- * NOTA: Requer Firebase Admin SDK ou acesso de admin ao Firestore
+ * NOTE: Requires Firebase Admin SDK or admin access to Firestore
  */
 
 const badges = [
@@ -107,12 +107,12 @@ const badges = [
   },
 ];
 
-console.log('Badges para criar:');
+console.log('Badges to create:');
 console.log(JSON.stringify(badges, null, 2));
-console.log('\nTotal de badges:', badges.length);
-console.log('\nPara criar estas badges:');
-console.log('1. Vai ao Firebase Console > Firestore');
-console.log('2. Cria a coleção "badges" (se não existir)');
-console.log('3. Para cada badge acima, cria um documento com o ID especificado');
-console.log('4. Adiciona os campos: name, description, icon, requirement');
+console.log('\nTotal badges:', badges.length);
+console.log('\nTo create these badges:');
+console.log('1. Go to Firebase Console > Firestore');
+console.log('2. Create the "badges" collection (if it doesn\'t exist)');
+console.log('3. For each badge above, create a document with the specified ID');
+console.log('4. Add the fields: name, description, icon, requirement');
 

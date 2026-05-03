@@ -4,19 +4,19 @@ import { NativeModules, Platform } from 'react-native';
 
 export type Language = 'en' | 'pt' | 'es' | 'fr' | 'de' | 'it';
 
-// Função para detectar o idioma do dispositivo
+// Function to detect the device's language.
 const getDeviceLanguage = (): Language => {
   let locale: string = 'en';
   
   try {
-    // Tentar usar Intl API (mais confiável e funciona em todas as plataformas)
+    // Try using the Intl API (more reliable and works on all platforms).
     if (typeof Intl !== 'undefined' && Intl.DateTimeFormat) {
       const resolved = Intl.DateTimeFormat().resolvedOptions();
       locale = resolved.locale || resolved.language || 'en';
     }
     
-    // Fallback para NativeModules se Intl não funcionar ou retornar 'en'
-    // Mas também tentar sempre NativeModules para ter certeza
+    // Fallback to NativeModules if Intl doesn't work or returns 'en'
+    // But also try NativeModules always to be sure
     if (Platform.OS === 'ios') {
       const SettingsManager = NativeModules.SettingsManager;
       if (SettingsManager?.settings) {

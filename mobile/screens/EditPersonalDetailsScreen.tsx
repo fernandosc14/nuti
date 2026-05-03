@@ -91,8 +91,8 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
     if (!weight || !height) {
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: t('profile.fillAllFields') || 'Por favor, preencha todos os campos',
+        text1: t('common.error') || 'Error',
+        text2: t('profile.fillAllFields') || 'Please fill in all fields',
       });
       return;
     }
@@ -161,8 +161,8 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
       setLoading(false);
       Toast.show({
         type: 'success',
-        text1: t('profile.updateSuccess') || 'Sucesso',
-        text2: t('profile.detailsUpdated') || 'Detalhes atualizados com sucesso',
+        text1: t('profile.updateSuccess') || 'Success',
+        text2: t('profile.detailsUpdated') || 'Details updated successfully',
       });
       // Pequeno delay para garantir que o Toast seja visível
       setTimeout(() => {
@@ -172,8 +172,8 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
       setLoading(false);
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: error.message || t('profile.updateError') || 'Erro ao atualizar detalhes',
+        text1: t('common.error') || 'Error',
+        text2: error.message || t('profile.updateError') || 'Error updating details',
       });
     }
   };
@@ -674,7 +674,7 @@ export function EditPersonalDetailsScreen({ navigation }: any) {
                   ? theme.colors.textSecondary || '#9CA3AF'
                   : '#FFFFFF',
               }}>
-                {t('profile.save') || 'Salvar'}
+                {t('profile.save') || 'Save'}
               </Text>
             )}
           </TouchableOpacity>

@@ -1,7 +1,7 @@
 /**
  * Gamification Service
- * 
- * Serviço para gerenciar badges e gamificação
+ *
+ * Service to manage badges and gamification
  */
 
 import { db } from '../services/firebase';
@@ -17,16 +17,13 @@ export interface Badge {
 }
 
 /**
- * Inicializa badges padrão no Firestore
- */
-/**
- * Inicializa badges padrão no Firestore
- * NOTA: Esta função requer que o utilizador esteja autenticado
- * devido às regras de segurança do Firestore
+ * Initializes default badges in Firestore
+ * NOTE: This function requires the user to be authenticated
+ * due to Firestore security rules
  */
 export async function initializeBadges() {
-  // Verificar se há um utilizador autenticado
-  // Se não houver, as badges devem ser criadas manualmente ou via Cloud Function
+  // Check if there is an authenticated user
+  // If not, badges must be created manually or via Cloud Function
   try {
     const badges: Badge[] = [
     {
@@ -152,18 +149,18 @@ export async function initializeBadges() {
 }
 
 /**
- * Verifica e atribui badges ao utilizador
+ * Checks and awards badges to the user
  */
 export async function checkAndAwardBadges(userId: string): Promise<string[]> {
   try {
-    // Garantir que as badges estão inicializadas (agora permitido pelas regras temporárias)
+    // Ensure badges are initialized (now allowed by temporary rules)
     try {
       await initializeBadges();
     } catch (error) {
       // Continuar mesmo se houver erro na inicialização
     }
     
-    // Buscar perfil do utilizador
+    // Fetch user profile
     const userRef = doc(db, 'users', userId);
     const userSnap = await getDoc(userRef);
 
@@ -175,7 +172,7 @@ export async function checkAndAwardBadges(userId: string): Promise<string[]> {
     const currentBadges = userData.badges || [];
     const streak = userData.streak || 0;
 
-    // Paralelizar queries que não dependem umas das outras
+    // Parallelize queries that do not depend on each other
     const mealsRef = collection(db, 'meals');
     const exercisesRef = collection(db, 'exercises');
     const waterRef = collection(db, 'water');
@@ -189,7 +186,7 @@ export async function checkAndAwardBadges(userId: string): Promise<string[]> {
     const mealCount = mealsSnapshot.size;
     const exerciseCount = exercisesSnapshot.size;
     
-    // Criar Set com datas que têm água (formato: YYYY-MM-DD)
+    // Create a Set with dates that have water (format: YYYY-MM-DD)
     const daysWithWater = new Set<string>();
     waterSnapshot.forEach((doc) => {
       const waterData = doc.data();
@@ -200,13 +197,13 @@ export async function checkAndAwardBadges(userId: string): Promise<string[]> {
       }
     });
 
-    // Calcular streak de água (dias consecutivos com água)
+    // Calculate water streak (consecutive days with water)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     let waterStreak = 0;
     let currentDate = new Date(today);
     
-    // Verificar se hoje tem água
+    // Check if today has water
     const todayStr = today.toISOString().split('T')[0];
     const hasWaterToday = daysWithWater.has(todayStr);
     
@@ -214,7 +211,7 @@ export async function checkAndAwardBadges(userId: string): Promise<string[]> {
       waterStreak = 1;
       currentDate.setDate(currentDate.getDate() - 1);
       
-      // Continuar contando dias anteriores consecutivos
+      // Continue counting previous consecutive days
       while (true) {
         const dateStr = currentDate.toISOString().split('T')[0];
         if (daysWithWater.has(dateStr)) {
@@ -239,11 +236,11 @@ export async function checkAndAwardBadges(userId: string): Promise<string[]> {
       }
     }
 
-    // Verificar se atingiu meta de calorias hoje
+    // Check if calorie goal was reached today
     const caloriePlan = calculateCalorieGoalFromProfile(userData as any);
     const calorieGoal = (userData as any).dailyCalorieGoal || caloriePlan?.calories || 2000;
     
-    // Buscar refeições de hoje e badges em paralelo
+    // Fetch today's meals and badges in parallel
     const todayStart = new Date(today);
     todayStart.setHours(0, 0, 0, 0);
     const todayEnd = new Date(today);
@@ -276,7 +273,7 @@ export async function checkAndAwardBadges(userId: string): Promise<string[]> {
     const newBadges: string[] = [];
 
     for (const badge of allBadges) {
-      // Se já tem a badge, continuar
+      // If the user already has the badge, continue
       if (currentBadges.includes(badge.id)) continue;
 
       let shouldAward = false;
@@ -331,7 +328,7 @@ export async function checkAndAwardBadges(userId: string): Promise<string[]> {
       }
     }
 
-    // Atualizar badges do utilizador
+    // Update user badges
     if (newBadges.length > 0) {
       await setDoc(
         userRef,
@@ -344,19 +341,19 @@ export async function checkAndAwardBadges(userId: string): Promise<string[]> {
 
     return newBadges;
   } catch (error) {
-    // Ignorar erros de permissão quando não autenticado
+    // Ignore permission errors when not authenticated
     const msg = String((error as any)?.message || '').toLowerCase();
     const code = String((error as any)?.code || '').toLowerCase();
     if (code === 'permission-denied' || msg.includes('insufficient permissions')) {
       return [];
     }
-    // Silenciar restantes erros conforme pedido
+    // Silently ignore other errors as requested
     return [];
   }
 }
 
 /**
- * Obtém badges do utilizador
+ * Gets user badges
  */
 export async function getUserBadges(userId: string): Promise<Badge[]> {
   try {
@@ -385,13 +382,13 @@ export async function getUserBadges(userId: string): Promise<Badge[]> {
 
     return badges;
   } catch (error) {
-    // Ignorar erros de permissão quando não autenticado
+    // Ignore permission errors when not authenticated
     const msg = String((error as any)?.message || '').toLowerCase();
     const code = String((error as any)?.code || '').toLowerCase();
     if (code === 'permission-denied' || msg.includes('insufficient permissions')) {
       return [];
     }
-    // Silenciar restantes erros conforme pedido
+    // Silently ignore other errors as requested
     return [];
   }
 }

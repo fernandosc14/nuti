@@ -1,8 +1,8 @@
 /**
  * Food Database
  * 
- * Base de dados local com valores nutricionais reais de alimentos comuns
- * Usado para melhorar a precisão quando a AI não consegue valores exatos
+ * Local database with real nutritional values ​​of common foods
+ * Used to improve accuracy when AI cannot obtain exact values
  */
 
 export interface FoodNutrition {
@@ -14,8 +14,8 @@ export interface FoodNutrition {
 }
 
 /**
- * Base de dados de alimentos comuns com valores nutricionais reais
- * Inclui nomes em Português, Inglês, Espanhol, Francês, Alemão e Italiano
+ * Local database with real nutritional values ​​of common foods
+ * Includes names in Portuguese, English, Spanish, French, German and Italian
  */
 export const FOOD_DATABASE: FoodNutrition[] = [
   // Grãos e Cereais / Grains and Cereals / Granos y Cereales / Céréales / Getreide / Cereali

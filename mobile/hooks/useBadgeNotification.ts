@@ -1,7 +1,7 @@
 /**
  * useBadgeNotification Hook
- * 
- * Hook para gerenciar notificações de badges ganhas
+ *
+ * Hook to manage earned badge notifications
  */
 
 import { useState, useCallback } from 'react';
@@ -15,42 +15,42 @@ export function useBadgeNotification() {
   const checkAndShowBadges = useCallback(async (userId: string) => {
     try {
       if (!userId) {
-        // Sem utilizador autenticado; ignorar silenciosamente
+        // No authenticated user; silently ignore
         return;
       }
-      // Verificar e atribuir badges
+      // Check and award badges
       const newBadgeIds = await checkAndAwardBadges(userId);
       
       if (newBadgeIds.length > 0) {
-        // Buscar informações das badges ganhas
+        // Fetch information for earned badges
         const allUserBadges = await getUserBadges(userId);
         const newBadges = allUserBadges.filter(badge => newBadgeIds.includes(badge.id));
         
-        // Mostrar a primeira badge ganha (se houver múltiplas, mostrar uma de cada vez)
+        // Show the first earned badge (if multiple, show one at a time)
         if (newBadges.length > 0) {
           setEarnedBadge(newBadges[0]);
           setShowModal(true);
-          // Disparar uma notificação local para o badge ganho
+          // Trigger a local notification for the earned badge
           await notifyBadgeUnlocked(newBadges[0].name, newBadges[0].description);
         }
       } else {
-        // Sem novas badges; ignorar
+        // No new badges; ignore
       }
     } catch (error: any) {
-      // Ignorar erros de permissão quando não autenticado
+      // Ignore permission errors when not authenticated
       const msg = String(error?.message || '').toLowerCase();
       const code = String(error?.code || '').toLowerCase();
       if (code === 'permission-denied' || msg.includes('insufficient permissions')) {
         return;
       }
-      // Outros erros: silenciar conforme pedido
+      // Other errors: silently ignore as requested
     }
   }, []);
 
   const closeModal = useCallback(() => {
     setShowModal(false);
-    // Se houver mais badges para mostrar, mostrar a próxima após um delay
-    // Por enquanto, apenas fechar
+    // If there are more badges to show, show the next one after a delay
+    // For now, just close
     setEarnedBadge(null);
   }, []);
 

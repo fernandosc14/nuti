@@ -30,3 +30,9 @@ build/
 .env.local
 .env.*.local
 
+# Firebase config (não subir para repositório público)
+firebase.json
+mobile/firebase.json
+mobile/firestore.rules
+mobile/firestore.indexes.json
+

@@ -51,8 +51,8 @@ export function EditCaloriesAndMacrosScreen({ navigation }: any) {
     if (!profile) {
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: t('profile.profileNotFound') || 'Perfil não encontrado',
+        text1: t('common.error') || 'Error',
+        text2: t('profile.profileNotFound') || 'Profile not found',
       });
       return;
     }
@@ -63,8 +63,8 @@ export function EditCaloriesAndMacrosScreen({ navigation }: any) {
     if (!calculatedPlan) {
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: t('profile.cannotCalculate') || 'Não foi possível calcular os valores. Verifica se tens peso, altura e idade definidos.',
+        text1: t('common.error') || 'Error',
+        text2: t('profile.cannotCalculate') || 'Could not calculate values. Check if weight, height and age are defined.',
       });
       return;
     }
@@ -96,15 +96,15 @@ export function EditCaloriesAndMacrosScreen({ navigation }: any) {
       
       Toast.show({
         type: 'success',
-        text1: t('profile.resetSuccess') || 'Redefinido',
-        text2: t('profile.resetToCalculated') || 'Valores redefinidos e guardados baseados no teu perfil atual',
+        text1: t('profile.resetSuccess') || 'Reset',
+        text2: t('profile.resetToCalculated') || 'Values reset and saved based on your current profile',
       });
     } catch (error: any) {
       setLoading(false);
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: error.message || t('profile.updateError') || 'Erro ao guardar valores',
+        text1: t('common.error') || 'Error',
+        text2: error.message || t('profile.updateError') || 'Error saving values',
       });
     }
   };
@@ -118,8 +118,8 @@ export function EditCaloriesAndMacrosScreen({ navigation }: any) {
     if (caloriesNum < 1200 || caloriesNum > 5000) {
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: t('dashboard.invalidCalories') || 'Calorias devem estar entre 1200 e 5000',
+        text1: t('common.error') || 'Error',
+        text2: t('dashboard.invalidCalories') || 'Calories must be between 1200 and 5000',
       });
       return;
     }
@@ -136,16 +136,16 @@ export function EditCaloriesAndMacrosScreen({ navigation }: any) {
       setLoading(false);
       Toast.show({
         type: 'success',
-        text1: t('profile.updateSuccess') || 'Sucesso',
-        text2: t('dashboard.goalsUpdated') || 'Metas atualizadas com sucesso',
+        text1: t('profile.updateSuccess') || 'Success',
+        text2: t('dashboard.goalsUpdated') || 'Goals updated successfully',
       });
       navigation.goBack();
     } catch (error: any) {
       setLoading(false);
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: error.message || t('profile.updateError') || 'Erro ao atualizar metas',
+        text1: t('common.error') || 'Error',
+        text2: error.message || t('profile.updateError') || 'Error updating goals',
       });
     }
   };
@@ -186,7 +186,7 @@ export function EditCaloriesAndMacrosScreen({ navigation }: any) {
             textAlign: 'center',
             marginRight: 40,
           }}>
-            {t('profile.caloriesAndMacros') || 'Calorias e Macros'}
+            {t('profile.caloriesAndMacros') || 'Calories and Macros'}
           </Text>
         </View>
 
@@ -293,7 +293,7 @@ export function EditCaloriesAndMacrosScreen({ navigation }: any) {
                 fontWeight: '600',
                 color: theme.colors.text,
               }}>
-                {t('dashboard.protein') || 'Proteína'}
+                {t('dashboard.protein') || 'Protein'}
               </Text>
             </View>
             <View style={{
@@ -361,7 +361,7 @@ export function EditCaloriesAndMacrosScreen({ navigation }: any) {
                 fontWeight: '600',
                 color: theme.colors.text,
               }}>
-                {t('dashboard.carbs') || 'Carboidratos'}
+                {t('dashboard.carbs') || 'Carbs'}
               </Text>
             </View>
             <View style={{
@@ -429,7 +429,7 @@ export function EditCaloriesAndMacrosScreen({ navigation }: any) {
                 fontWeight: '600',
                 color: theme.colors.text,
               }}>
-                {t('dashboard.fat') || 'Gordura'}
+                {t('dashboard.fat') || 'Fat'}
               </Text>
             </View>
             <View style={{
@@ -508,7 +508,7 @@ export function EditCaloriesAndMacrosScreen({ navigation }: any) {
                 fontWeight: '600',
                 color: theme.colors.text,
               }}>
-                {t('profile.resetToCalculated') || 'Redefinir para valores calculados'}
+                {t('profile.resetToCalculated') || 'Reset to calculated values'}
               </Text>
             </View>
           </TouchableOpacity>
@@ -537,7 +537,7 @@ export function EditCaloriesAndMacrosScreen({ navigation }: any) {
                 fontWeight: '700',
                 color: '#FFFFFF',
               }}>
-                {t('common.save') || 'Guardar'}
+                {t('common.save') || 'Save'}
               </Text>
             )}
           </TouchableOpacity>

@@ -91,8 +91,8 @@ export function UpdateWeightScreen({ navigation }: any) {
     if (isNaN(rawValue)) {
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: t('profile.fillAllFields') || 'Por favor, preencha todos os campos',
+        text1: t('common.error') || 'Error',
+        text2: t('profile.fillAllFields') || 'Please fill in all fields',
       });
       return;
     }
@@ -100,8 +100,8 @@ export function UpdateWeightScreen({ navigation }: any) {
     if (rawValue < ranges.min || rawValue > ranges.max) {
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: t('profile.invalidWeight') || 'Peso inválido',
+        text1: t('common.error') || 'Error',
+        text2: t('profile.invalidWeight') || 'Invalid weight',
       });
       return;
     }
@@ -150,16 +150,16 @@ export function UpdateWeightScreen({ navigation }: any) {
 
       Toast.show({
         type: 'success',
-        text1: t('profile.updateSuccess') || 'Sucesso',
-        text2: t('profile.detailsUpdated') || 'Detalhes atualizados com sucesso',
+        text1: t('profile.updateSuccess') || 'Success',
+        text2: t('profile.detailsUpdated') || 'Details updated successfully',
       });
 
       navigation.goBack();
     } catch (error: any) {
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: error.message || t('profile.updateError') || 'Erro ao atualizar detalhes',
+        text1: t('common.error') || 'Error',
+        text2: error.message || t('profile.updateError') || 'Error updating details',
       });
     } finally {
       setLoading(false);

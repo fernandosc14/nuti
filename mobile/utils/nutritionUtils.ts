@@ -178,7 +178,7 @@ export const calculateCalorieGoalFromProfile = (profile?: UserProfile | null): C
     goal: profile.goal || 'maintain',
     desiredWeightKg: profile.desiredWeight ?? profile.weight ?? undefined,
     currentWeightKg: profile.weight ?? undefined,
-    goalSpeed: profile.goal === 'maintain' ? undefined : profile.goalSpeed, // Só passar se não for maintain
+    goalSpeed: profile.goal === 'maintain' ? undefined : profile.goalSpeed, // Only pass if not maintain
   };
 
   return calculateCaloriePlan(params);

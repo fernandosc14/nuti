@@ -1,7 +1,7 @@
 /**
  * MealCard Component
  * 
- * Componente para exibir uma refeição em formato de card
+ * Component for displaying a meal in card format.
  */
 
 import React from 'react';
@@ -17,12 +17,12 @@ interface MealCardProps {
   mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
   image?: string;
   time: string;
-  healthScore?: number; // Score de saúde (0-10)
+  healthScore?: number; // Health score (0-10)
   onPress?: () => void;
   onDelete?: () => void;
 }
 
-// Ícones para cada tipo de refeição usando Ionicons
+// Icons for each meal type using Ionicons
 const getMealIcon = (mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack') => {
   switch (mealType) {
     case 'breakfast':
@@ -45,7 +45,7 @@ export function MealCard({ name, calories, mealType, image, time, healthScore, o
     let Icon;
     
     if (!themeContext || !themeContext.theme) {
-      // Usar valores padrão se o theme não estiver disponível
+      // Use default values if the theme is not available
       theme = {
         mode: 'light',
         colors: {
@@ -60,7 +60,7 @@ export function MealCard({ name, calories, mealType, image, time, healthScore, o
       theme = themeContext.theme;
     }
 
-    // Cores diferentes apenas para ícones e calorias
+    // Different colors only for icons and calories
     const getMealStyle = () => {
       switch (mealType) {
         case 'breakfast':

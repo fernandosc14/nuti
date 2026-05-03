@@ -1,32 +1,32 @@
 /**
  * Data Retention Policy - GDPR Compliance
- * 
- * Políticas de retenção automática de dados
- * - Meals: 2 anos
- * - Messages: 1 hora
- * - Exercises: 2 anos
+ *
+ * Automatic data retention policies
+ * - Meals: 2 years
+ * - Messages: 1 hour
+ * - Exercises: 2 years
  */
 
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 
-// Get db lazily to avoid initialization issues
+// Lazily get db to avoid initialization issues
 function getDb() {
   return admin.firestore();
 }
 
-// Períodos de retenção em ms
+// Retention periods in ms
 const RETENTION_PERIODS = {
-  meals: 2 * 365 * 24 * 60 * 60 * 1000,        // 2 anos
-  messages: 1 * 60 * 60 * 1000,                // 1 hora
-  exercises: 2 * 365 * 24 * 60 * 60 * 1000,    // 2 anos
-  water: 1 * 365 * 24 * 60 * 60 * 1000,        // 1 ano
-  steps: 1 * 365 * 24 * 60 * 60 * 1000,        // 1 ano
+  meals: 2 * 365 * 24 * 60 * 60 * 1000,        // 2 years
+  messages: 1 * 60 * 60 * 1000,                // 1 hour
+  exercises: 2 * 365 * 24 * 60 * 60 * 1000,    // 2 years
+  water: 1 * 365 * 24 * 60 * 60 * 1000,        // 1 year
+  steps: 1 * 365 * 24 * 60 * 60 * 1000,        // 1 year
 };
 
 /**
- * Cloud Function: Cleanup de mensagens antigas (cada 15 minutos)
- * Remove mensagens com `createdAt` mais antigas que 1 hora
+ * Cloud Function: Cleanup old messages (every 15 minutes)
+ * Removes messages with `createdAt` older than 1 hour
  */
 export const cleanupOldMessages = functions
   .pubsub
@@ -58,7 +58,7 @@ export const cleanupOldMessages = functions
   });
 
 /**
- * Cloud Function: Cleanup de dados antigos (diário, 3 AM UTC)
+ * Cloud Function: Cleanup old data (daily, 3 AM UTC)
  */
 export const cleanupOldData = functions
   .pubsub
@@ -81,7 +81,7 @@ export const cleanupOldData = functions
       const oldMeals = await db
         .collection("meals")
         .where("date", "<", new Date(now - RETENTION_PERIODS.meals))
-        .limit(500) // Batch em 500 por vez
+        .limit(500) // Batch in 500 per run
         .get();
       
       for (const doc of oldMeals.docs) {
@@ -147,12 +147,12 @@ export const cleanupOldData = functions
   });
 
 /**
- * Cloud Function: Right to be forgotten (apagar conta do utilizador)
+ * Cloud Function: Right to be forgotten (delete user account)
  * Endpoint: DELETE /deleteUserData/{userId}
  */
 export const deleteUserData = functions.https.onCall(async (data, context) => {
   try {
-    // Verificar autenticação
+    // Verify authentication
     if (!context.auth) {
       throw new functions.https.HttpsError("unauthenticated", "User not authenticated");
     }
@@ -160,7 +160,7 @@ export const deleteUserData = functions.https.onCall(async (data, context) => {
     const userId = context.auth.uid;
     const requestingUserId = data.userId;
     
-    // Apenas o próprio utilizador pode apagar seus dados
+    // Only the user themselves can delete their data
     if (userId !== requestingUserId) {
       throw new functions.https.HttpsError("permission-denied", "Cannot delete another user's data");
     }
@@ -170,31 +170,31 @@ export const deleteUserData = functions.https.onCall(async (data, context) => {
     const db = getDb();
     const batch = db.batch();
     
-    // Apagar meals
+    // Delete meals
     const meals = await db.collection("meals").where("userId", "==", userId).get();
     meals.docs.forEach(doc => batch.delete(doc.ref));
     
-    // Apagar exercises
+    // Delete exercises
     const exercises = await db.collection("exercises").where("userId", "==", userId).get();
     exercises.docs.forEach(doc => batch.delete(doc.ref));
     
-    // Apagar messages
+    // Delete messages
     const messages = await db.collection("messages").where("userId", "==", userId).get();
     messages.docs.forEach(doc => batch.delete(doc.ref));
     
-    // Apagar savedMeals
+    // Delete savedMeals
     const savedMeals = await db.collection("savedMeals").where("userId", "==", userId).get();
     savedMeals.docs.forEach(doc => batch.delete(doc.ref));
     
-    // Apagar water
+    // Delete water
     const water = await db.collection("water").where("userId", "==", userId).get();
     water.docs.forEach(doc => batch.delete(doc.ref));
     
-    // Apagar steps
+    // Delete steps
     const steps = await db.collection("steps").where("userId", "==", userId).get();
     steps.docs.forEach(doc => batch.delete(doc.ref));
     
-    // Apagar user document
+    // Delete user document
     batch.delete(db.collection("users").doc(userId));
     
     // Commit batch
@@ -214,12 +214,12 @@ export const deleteUserData = functions.https.onCall(async (data, context) => {
 });
 
 /**
- * Cloud Function: Exportar dados do utilizador (GDPR - Right to portability)
+ * Cloud Function: Export user data (GDPR - Right to portability)
  * Endpoint: GET /exportUserData/{userId}
  */
 export const exportUserData = functions.https.onCall(async (data, context) => {
   try {
-    // Verificar autenticação
+    // Verify authentication
     if (!context.auth) {
       throw new functions.https.HttpsError("unauthenticated", "User not authenticated");
     }
@@ -227,7 +227,7 @@ export const exportUserData = functions.https.onCall(async (data, context) => {
     const userId = context.auth.uid;
     const requestingUserId = data.userId;
     
-    // Apenas o próprio utilizador pode exportar seus dados
+    // Only the user themselves can export their data
     if (userId !== requestingUserId) {
       throw new functions.https.HttpsError("permission-denied", "Cannot export another user's data");
     }
@@ -237,27 +237,27 @@ export const exportUserData = functions.https.onCall(async (data, context) => {
     const db = getDb();
     const exportData: any = {};
     
-    // Exportar user profile
+    // Export user profile
     const userDoc = await db.collection("users").doc(userId).get();
     exportData.profile = userDoc.exists ? userDoc.data() : null;
     
-    // Exportar meals
+    // Export meals
     const meals = await db.collection("meals").where("userId", "==", userId).get();
     exportData.meals = meals.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     
-    // Exportar exercises
+    // Export exercises
     const exercises = await db.collection("exercises").where("userId", "==", userId).get();
     exportData.exercises = exercises.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     
-    // Exportar savedMeals
+    // Export savedMeals
     const savedMeals = await db.collection("savedMeals").where("userId", "==", userId).get();
     exportData.savedMeals = savedMeals.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     
-    // Exportar messages
+    // Export messages
     const messages = await db.collection("messages").where("userId", "==", userId).get();
     exportData.messages = messages.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     
-    // Não exportar water/steps (dados sensíveis diários, manter privado)
+    // Do not export water/steps (sensitive daily data, keep private)
     
     console.log(`✅ User data exported: ${userId}`);
     

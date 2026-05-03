@@ -89,8 +89,8 @@ export function EditDietScreen({ navigation }: any) {
       setLoading(false);
       Toast.show({
         type: 'success',
-        text1: t('profile.updateSuccess') || 'Sucesso',
-        text2: t('profile.detailsUpdated') || 'Detalhes atualizados com sucesso',
+        text1: t('profile.updateSuccess') || 'Success',
+        text2: t('profile.detailsUpdated') || 'Details updated successfully',
       });
       setTimeout(() => {
         navigation.goBack();
@@ -99,8 +99,8 @@ export function EditDietScreen({ navigation }: any) {
       setLoading(false);
       Toast.show({
         type: 'error',
-        text1: t('common.error') || 'Erro',
-        text2: error.message || t('profile.updateError') || 'Erro ao atualizar detalhes',
+        text1: t('common.error') || 'Error',
+        text2: error.message || t('profile.updateError') || 'Error updating details',
       });
     }
   };
@@ -137,7 +137,7 @@ export function EditDietScreen({ navigation }: any) {
           textAlign: 'center',
           marginRight: 40,
         }}>
-          {t('onboarding.diet.title') || 'Qual é a tua dieta?'}
+          {t('onboarding.diet.title') || "What's your diet?"}
         </Text>
       </View>
 
@@ -153,7 +153,7 @@ export function EditDietScreen({ navigation }: any) {
           marginBottom: 24,
           lineHeight: 20,
         }}>
-          {t('onboarding.diet.description') || 'Será utilizado para sugestões de refeições'}
+          {t('onboarding.diet.description') || 'Will be used for meal suggestions'}
         </Text>
 
         <View style={{ gap: 12 }}>
@@ -277,7 +277,7 @@ export function EditDietScreen({ navigation }: any) {
                 ? theme.colors.textSecondary || '#9CA3AF'
                 : '#FFFFFF',
             }}>
-              {t('profile.save') || 'Salvar'}
+              {t('profile.save') || 'Save'}
             </Text>
           )}
         </TouchableOpacity>

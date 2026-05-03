@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth, db } from './firebase';
 import { collection, doc, getDoc, getDocs, limit, query, Timestamp, where } from 'firebase/firestore';
 
-// Chaves de armazenamento para preferências
+// Storage keys for preferences
 const STORAGE_KEYS = {
   mealReminders: 'prefs_meal_reminders_enabled',
   waterReminders: 'prefs_water_reminders_enabled',
@@ -12,7 +12,7 @@ const STORAGE_KEYS = {
   waterScheduleIds: 'prefs_water_reminder_ids',
 };
 
-// Horários de lembrete (24h) – apenas se não houver registo no dia
+// Reminder times (24h) – only if there is no record for the day
 const REMINDER_TIMES = {
   meal: [{ hour: 14, minute: 0 }],
   water: [{ hour: 17, minute: 0 }],
@@ -38,7 +38,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
 }
 
 export function registerNotificationHandlers(): void {
-  // Abrir app ao tocar (placeholder para deeplinks futuros)
+  // Open app on tap (placeholder for future deeplinks)
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowBanner: true,
@@ -96,7 +96,7 @@ function buildDateTrigger(hour: number, minute: number): Notifications.Notificat
   const triggerDate = new Date();
   triggerDate.setHours(hour, minute, 0, 0);
 
-  // Se o horário já passou hoje, agenda para amanhã
+  // If the time has already passed today, schedule for tomorrow
   if (triggerDate.getTime() <= now.getTime()) {
     triggerDate.setDate(triggerDate.getDate() + 1);
   }
@@ -104,7 +104,7 @@ function buildDateTrigger(hour: number, minute: number): Notifications.Notificat
   const trigger: Notifications.NotificationTriggerInput = {
     type: 'date',
     date: triggerDate,
-    // channelId recomendado no Android
+    // channelId recommended on Android
     channelId: Platform.OS === 'android' ? 'default' : undefined,
   } as Notifications.NotificationTriggerInput;
 

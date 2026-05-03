@@ -1,13 +1,13 @@
 /**
  * Exercise Utilities
- * 
- * Funções auxiliares para trabalhar com exercícios
+ *
+ * Helper functions for working with exercises
  */
 
 import { ExerciseType, getExerciseConfigs } from '../types/exercise';
 
 /**
- * Mapeia o nome traduzido do exercício para o tipo de exercício
+ * Maps the translated exercise name to the exercise type
  */
 export function getExerciseTypeFromName(translatedName: string, t: (key: string) => string): ExerciseType | null {
   const exerciseNameMap: Record<string, ExerciseType> = {
@@ -30,7 +30,7 @@ export function getExerciseTypeFromName(translatedName: string, t: (key: string)
 }
 
 /**
- * Obtém o nome traduzido do tipo de exercício
+ * Gets the translated name of the exercise type
  */
 export function getExerciseNameFromType(type: ExerciseType, t: (key: string) => string): string {
   const exerciseTypeMap: Record<ExerciseType, string> = {
@@ -53,7 +53,7 @@ export function getExerciseNameFromType(type: ExerciseType, t: (key: string) => 
 }
 
 /**
- * Obtém a configuração do exercício pelo tipo (com tradução)
+ * Gets the exercise configuration by type (with translation)
  */
 export function getExerciseConfig(type: ExerciseType, t: (key: string) => string) {
   const configs = getExerciseConfigs(t);

@@ -2001,7 +2001,7 @@ export function DashboardScreen({ navigation }: any) {
                 color: theme.colors.text,
                 flex: 1,
               }}>
-                {t('dashboard.exercisesToday') || 'Exercícios de Hoje'}
+                {t('dashboard.exercisesToday') || 'Exercises Today'}
               </Text>
               <TouchableOpacity
                 onPress={() => navigation.navigate('AddExercise')}
@@ -2050,14 +2050,14 @@ export function DashboardScreen({ navigation }: any) {
                   marginBottom: 8,
                   fontWeight: '600',
                 }}>
-                  {t('dashboard.noExercises') || 'Ainda não registaste exercícios hoje'}
+                  {t('dashboard.noExercises') || 'You haven\'t logged any exercises today'}
                 </Text>
                 <Text style={{
                   color: theme.colors.textSecondary || '#9CA3AF',
                   fontSize: 14,
                   textAlign: 'center',
                 }}>
-                  {t('dashboard.addFirstExercise') || 'Adiciona o teu primeiro exercício!'}
+                  {t('dashboard.addFirstExercise') || 'Add your first exercise!'}
                 </Text>
               </View>
             ) : (
@@ -2417,7 +2417,7 @@ export function DashboardScreen({ navigation }: any) {
                             textTransform: 'uppercase',
                             letterSpacing: 0.5,
                           }}>
-                            {t('dashboard.mealType') || 'Tipo de Refeição'}
+                            {t('dashboard.mealType') || 'Meal Type'}
                           </Text>
                         </View>
                         <Text style={{
@@ -2579,7 +2579,7 @@ export function DashboardScreen({ navigation }: any) {
                               marginTop: 4,
                                 fontWeight: '600',
                               }}>
-                              {t('dashboard.protein') || 'Proteína'}
+                              {t('dashboard.protein') || 'Protein'}
                               </Text>
                             </View>
                           )}
@@ -2878,7 +2878,7 @@ export function DashboardScreen({ navigation }: any) {
               textAlign: 'center',
               marginBottom: 12,
             }}>
-              {t('dashboard.deleteExercise') || 'Eliminar Exercício'}
+              {t('dashboard.deleteExercise') || 'Delete Exercise'}
             </Text>
 
             {/* Mensagem */}
@@ -2889,7 +2889,7 @@ export function DashboardScreen({ navigation }: any) {
               marginBottom: 24,
               lineHeight: 22,
             }}>
-              {t('dashboard.deleteExerciseConfirm') || 'Tem certeza que deseja eliminar o exercício'} "{exerciseToDelete?.name}"? {t('dashboard.deleteExerciseWarning') || 'Esta ação não pode ser desfeita.'}
+              {t('dashboard.deleteExerciseConfirm') || 'Are you sure you want to delete the exercise'} "{exerciseToDelete?.name}"? {t('dashboard.deleteExerciseWarning') || 'This action cannot be undone.'}
             </Text>
 
             {/* Botões */}
@@ -2934,13 +2934,13 @@ export function DashboardScreen({ navigation }: any) {
                     setExerciseToDelete(null);
                     Toast.show({
                       type: 'success',
-                      text1: t('dashboard.exerciseDeleted') || 'Exercício eliminado',
+                      text1: t('dashboard.exerciseDeleted') || 'Exercise deleted',
                     });
                   } catch (error: any) {
                     Toast.show({
                       type: 'error',
-                      text1: t('common.error') || 'Erro',
-                      text2: t('dashboard.exerciseDeleteError') || 'Erro ao eliminar exercício',
+                      text1: t('common.error') || 'Error',
+                      text2: t('dashboard.exerciseDeleteError') || 'Error deleting exercise',
                     });
                   }
                 }}
@@ -3074,7 +3074,7 @@ export function DashboardScreen({ navigation }: any) {
                         fontWeight: '600',
                         color: theme.colors.textSecondary || '#9CA3AF',
                       }}>
-                        {t('dashboard.duration') || 'Duração'}
+                        {t('dashboard.duration') || 'Duration'}
                       </Text>
                     </View>
                     <Text style={{
@@ -3659,7 +3659,7 @@ export function DashboardScreen({ navigation }: any) {
                     fontWeight: '600',
                     color: theme.colors.text,
                   }}>
-                    {t('common.cancel') || 'Cancelar'}
+                    {t('common.cancel') || 'Cancel'}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -3668,8 +3668,8 @@ export function DashboardScreen({ navigation }: any) {
                     if (calories < 1200 || calories > 5000) {
                       Toast.show({
                         type: 'error',
-                        text1: t('common.error') || 'Erro',
-                        text2: t('dashboard.invalidCalories') || 'Calorias devem estar entre 1200 e 5000',
+                        text1: t('common.error') || 'Error',
+                        text2: t('dashboard.invalidCalories') || 'Calories must be between 1200 and 5000',
                       });
                       return;
                     }
@@ -3684,15 +3684,15 @@ export function DashboardScreen({ navigation }: any) {
                       setSavingGoals(false);
                       Toast.show({
                         type: 'success',
-                        text1: t('profile.updateSuccess') || 'Sucesso',
-                        text2: t('dashboard.goalsUpdated') || 'Metas atualizadas com sucesso',
+                        text1: t('profile.updateSuccess') || 'Success',
+                        text2: t('dashboard.goalsUpdated') || 'Goals updated successfully',
                       });
                     } catch (error: any) {
                       setSavingGoals(false);
                       Toast.show({
                         type: 'error',
-                        text1: t('common.error') || 'Erro',
-                        text2: error.message || t('profile.updateError') || 'Erro ao atualizar metas',
+                        text1: t('common.error') || 'Error',
+                        text2: error.message || t('profile.updateError') || 'Error updating goals',
                       });
                     }
                   }}
@@ -3794,7 +3794,7 @@ export function DashboardScreen({ navigation }: any) {
                     fontWeight: '700',
                     color: theme.colors.text,
                   }}>
-                    {t('dashboard.protein') || 'Proteína'}
+                    {t('dashboard.protein') || 'Protein'}
                   </Text>
                 </View>
             <TouchableOpacity
@@ -3878,7 +3878,7 @@ export function DashboardScreen({ navigation }: any) {
                     fontWeight: '600',
                     color: theme.colors.text,
                   }}>
-                    {t('common.cancel') || 'Cancelar'}
+                    {t('common.cancel') || 'Cancel'}
                   </Text>
             </TouchableOpacity>
                 <TouchableOpacity
@@ -3894,15 +3894,15 @@ export function DashboardScreen({ navigation }: any) {
                       setSavingGoals(false);
                       Toast.show({
                         type: 'success',
-                        text1: t('profile.updateSuccess') || 'Sucesso',
-                        text2: t('dashboard.goalsUpdated') || 'Metas atualizadas com sucesso',
+                        text1: t('profile.updateSuccess') || 'Success',
+                        text2: t('dashboard.goalsUpdated') || 'Goals updated successfully',
                       });
                     } catch (error: any) {
                       setSavingGoals(false);
                       Toast.show({
                         type: 'error',
-                        text1: t('common.error') || 'Erro',
-                        text2: error.message || t('profile.updateError') || 'Erro ao atualizar metas',
+                        text1: t('common.error') || 'Error',
+                        text2: error.message || t('profile.updateError') || 'Error updating goals',
                       });
                     }
                   }}
@@ -4088,7 +4088,7 @@ export function DashboardScreen({ navigation }: any) {
                     fontWeight: '600',
                     color: theme.colors.text,
                   }}>
-                    {t('common.cancel') || 'Cancelar'}
+                    {t('common.cancel') || 'Cancel'}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -4104,15 +4104,15 @@ export function DashboardScreen({ navigation }: any) {
                       setSavingGoals(false);
                       Toast.show({
                         type: 'success',
-                        text1: t('profile.updateSuccess') || 'Sucesso',
-                        text2: t('dashboard.goalsUpdated') || 'Metas atualizadas com sucesso',
+                        text1: t('profile.updateSuccess') || 'Success',
+                        text2: t('dashboard.goalsUpdated') || 'Goals updated successfully',
                       });
                     } catch (error: any) {
                       setSavingGoals(false);
                       Toast.show({
                         type: 'error',
-                        text1: t('common.error') || 'Erro',
-                        text2: error.message || t('profile.updateError') || 'Erro ao atualizar metas',
+                        text1: t('common.error') || 'Error',
+                        text2: error.message || t('profile.updateError') || 'Error updating goals',
                       });
                     }
                   }}
@@ -4214,7 +4214,7 @@ export function DashboardScreen({ navigation }: any) {
                     fontWeight: '700',
                     color: theme.colors.text,
                   }}>
-                    {t('dashboard.fat') || 'Gordura'}
+                    {t('dashboard.fat') || 'Fat'}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -4298,7 +4298,7 @@ export function DashboardScreen({ navigation }: any) {
                     fontWeight: '600',
                     color: theme.colors.text,
                   }}>
-                    {t('common.cancel') || 'Cancelar'}
+                    {t('common.cancel') || 'Cancel'}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -4314,15 +4314,15 @@ export function DashboardScreen({ navigation }: any) {
                       setSavingGoals(false);
                       Toast.show({
                         type: 'success',
-                        text1: t('profile.updateSuccess') || 'Sucesso',
-                        text2: t('dashboard.goalsUpdated') || 'Metas atualizadas com sucesso',
+                        text1: t('profile.updateSuccess') || 'Success',
+                        text2: t('dashboard.goalsUpdated') || 'Goals updated successfully',
                       });
                     } catch (error: any) {
                       setSavingGoals(false);
                       Toast.show({
                         type: 'error',
-                        text1: t('common.error') || 'Erro',
-                        text2: error.message || t('profile.updateError') || 'Erro ao atualizar metas',
+                        text1: t('common.error') || 'Error',
+                        text2: error.message || t('profile.updateError') || 'Error updating goals',
                       });
                     }
                   }}
@@ -4353,7 +4353,7 @@ export function DashboardScreen({ navigation }: any) {
                       fontWeight: '700',
                       color: '#FFFFFF',
                     }}>
-                      {t('common.save') || 'Guardar'}
+                      {t('common.save') || 'Save'}
                     </Text>
                   )}
                 </TouchableOpacity>

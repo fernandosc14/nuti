@@ -4,17 +4,17 @@ const path = require('path');
 
 const config = getDefaultConfig(__dirname);
 
-// Adicionar resolver customizado para expo-video
+// Add custom resolver for expo-video
 config.resolver = {
   ...config.resolver,
   resolveRequest: (context, moduleName, platform) => {
-    // Ignorar VideoAirPlayButton que não existe em algumas plataformas
+    // Ignore VideoAirPlayButton which does not exist on some platforms.
     if (moduleName.includes('VideoAirPlayButton')) {
       return {
         type: 'empty',
       };
     }
-    // Usar o resolver padrão
+    // Use the default resolver
     return context.resolveRequest(context, moduleName, platform);
   },
 };
