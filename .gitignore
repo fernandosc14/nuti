@@ -36,3 +36,5 @@ mobile/firebase.json
 mobile/firestore.rules
 mobile/firestore.indexes.json
 
+mobile/.env
+
