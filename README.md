@@ -3,7 +3,7 @@
 App mobile nativa desenvolvida com Expo + React Native + NativeWind + Firebase + Groq API.
 
 <p align="center">
-   <img src="mobile/assets/frame-welcome-video.png" alt="Nuti app screenshot" width="720" />
+   <img src="mobile/assets/frame-welcome-video.png" alt="Nuti app screenshot" width="320" />
 </p>
 
 
