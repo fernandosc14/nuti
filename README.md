@@ -1,8 +1,3 @@
-
-# Nuti - Mobile App
-
-Native mobile app developed with Expo, React Native, NativeWind, Firebase, and Groq API.
-
 # Nuti - App Mobile
 
 App mobile nativa desenvolvida com Expo + React Native + NativeWind + Firebase + Groq API.
